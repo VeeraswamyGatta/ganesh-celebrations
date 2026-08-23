@@ -39,9 +39,9 @@ def prasad_seva_tab():
             """
             <div style='max-width:520px;margin:0 auto 18px auto;background:#FFFDE7;border-radius:18px;box-shadow:0 2px 12px #FFD18033;padding:28px 18px;'>
                 <div style='font-size:1.15em;font-weight:600;color:#BF360C;text-align:center;margin-bottom:12px;'>
-                    Thank you everyone for participating in Ganesh Celebrations 2025 and making it a great success.<br>
-                    This would not have been possible without your support and teamwork.<br>
-                    Please see the Laddu Auction winners list below.<br>
+                    Welcome to Ganesh Celebrations 2026! We are delighted to celebrate another year together with our wonderful community.<br>
+                    Thank you for your continued support, enthusiasm, and teamwork in making these celebrations special.<br>
+                    Please see below the Laddu Auction winners from our memorable 2025 celebrations.<br>
                     Congratulations to all who took part, and special wishes to the winners!
                 </div>
             </div>
@@ -83,7 +83,7 @@ def prasad_seva_tab():
         st.session_state["prasad_individual_name"] = ""
         st.session_state["prasad_individual_apartment"] = ""
         st.session_state["prasad_num_people"] = 1
-        min_date = datetime.date(2025, 8, 26)
+        min_date = datetime.date(2026, 9, 14)
         st.session_state["prasad_seva_date"] = min_date
         st.session_state["prasad_pooja_time"] = "Evening Pooja"
         st.session_state["prasad_filter_date"] = None
@@ -94,54 +94,74 @@ def prasad_seva_tab():
 
     if selected_tab == "Add Prasad Seva":
         st.markdown("### ➕ Add Prasad Seva")
-        seva_type = st.radio("Type", ["Group", "Individual"], horizontal=True, key="prasad_seva_type_tab0")
+        prasad_form = st.form("add_prasad_seva_form")
+        prasad_submit_disabled = st.session_state.get("prasad_submission_in_progress", False)
+        seva_type = prasad_form.radio("Type", ["Group", "Individual"], horizontal=True, key="prasad_seva_type_tab0")
         names = []
         item_names = []
         if seva_type == "Group":
-            names_str = st.text_area("Enter Names (comma separated)", key="prasad_group_names", placeholder="e.g. FullName1, FullName2, FullName3")
+            names_str = prasad_form.text_area("Enter Names (comma separated)", key="prasad_group_names", placeholder="e.g. FullName1, FullName2, FullName3")
             names = [n.strip() for n in names_str.split(',') if n.strip()]
-            items_str = st.text_area("Enter Item Names (comma separated)", key="prasad_group_items", placeholder="e.g. Pulihora, Kheer/Payasam, Modak, Puran Poli")
+            items_str = prasad_form.text_area("Enter Item Names (comma separated)", key="prasad_group_items", placeholder="e.g. Pulihora, Kheer/Payasam, Modak, Puran Poli")
             item_names = [i.strip() for i in items_str.split(',') if i.strip()]
-            apartment = st.text_input("Apartment Number", key="prasad_group_apartment", placeholder="e.g. 323")
+            apartment = prasad_form.text_input("Apartment Number", key="prasad_group_apartment", placeholder="e.g. 323")
         else:
-            name = st.text_input("Name", key="prasad_individual_name", placeholder="e.g. Full Name")
+            name = prasad_form.text_input("Name", key="prasad_individual_name", placeholder="e.g. Full Name")
             names = [name.strip()] if name.strip() else []
-            item_name = st.text_input("Item Name", placeholder="e.g. Modak")
+            item_name = prasad_form.text_input("Item Name", placeholder="e.g. Modak")
             item_names = [item_name.strip()] if item_name.strip() else []
-            apartment = st.text_input("Apartment Number", key="prasad_individual_apartment", placeholder="e.g. 1203")
+            apartment = prasad_form.text_input("Apartment Number", key="prasad_individual_apartment", placeholder="e.g. 1203")
 
-        num_people = st.number_input("How many people are you bringing item for?", min_value=1, value=st.session_state.get('prasad_num_people', 1), key="prasad_num_people")
-        today = datetime.date.today()
-        seva_date = st.date_input(
+        num_people = prasad_form.number_input("How many people are you bringing item for?", min_value=1, value=st.session_state.get('prasad_num_people', 1), key="prasad_num_people")
+        min_date = datetime.date(2026, 9, 14)
+        selected_date = st.session_state.get("prasad_seva_date", min_date)
+        if selected_date < min_date:
+            selected_date = min_date
+            st.session_state["prasad_seva_date"] = selected_date
+        seva_date = prasad_form.date_input(
             "Date",
-            value=st.session_state.get('prasad_seva_date', today),
-            min_value=today,
+            value=selected_date,
+            min_value=min_date,
             key="prasad_seva_date"
         )
         pooja_options = ["Morning Pooja", "Evening Pooja"]
-        if seva_date == datetime.date(2025, 8, 26):
+        if seva_date == datetime.date(2026, 9, 14):
             pooja_options = ["Evening Pooja"]
-        pooja_time = st.radio("Pooja Time", pooja_options, horizontal=True, key="prasad_pooja_time")
+        pooja_time = prasad_form.radio("Pooja Time", pooja_options, horizontal=True, key="prasad_pooja_time")
 
-        if st.button("✅ Add Prasad Seva"):
+        if prasad_form.form_submit_button("✅ Add Prasad Seva", disabled=prasad_submit_disabled, type="primary"):
+            st.session_state["prasad_submission_in_progress"] = True
+            prasad_status = st.status("Adding Prasad Seva...", expanded=False)
             if not names:
+                st.session_state["prasad_submission_in_progress"] = False
+                prasad_status.update(label="Please complete the required fields", state="error", expanded=True)
                 st.error("Please enter at least one name.")
             elif not item_names:
+                st.session_state["prasad_submission_in_progress"] = False
+                prasad_status.update(label="Please complete the required fields", state="error", expanded=True)
                 st.error("Please enter at least one item name.")
             elif not apartment.strip():
+                st.session_state["prasad_submission_in_progress"] = False
+                prasad_status.update(label="Please complete the required fields", state="error", expanded=True)
                 st.error("Apartment Number is required.")
             elif not num_people:
+                st.session_state["prasad_submission_in_progress"] = False
+                prasad_status.update(label="Please complete the required fields", state="error", expanded=True)
                 st.error("Number of people is required.")
             elif not seva_date:
+                st.session_state["prasad_submission_in_progress"] = False
+                prasad_status.update(label="Please complete the required fields", state="error", expanded=True)
                 st.error("Date is required.")
             elif not pooja_time:
+                st.session_state["prasad_submission_in_progress"] = False
+                prasad_status.update(label="Please complete the required fields", state="error", expanded=True)
                 st.error("Pooja Time is required.")
             else:
                 st.info("Add Prasad Seva is in progress...")
                 for item in item_names:
                     if hasattr(cursor, 'execute') and hasattr(cursor.connection, 'account'):
                         cursor.execute(
-                            "INSERT INTO prasad_seva (id, seva_type, names, item_name, num_people, apartment, seva_date, pooja_time, created_by, status) VALUES (prasad_seva_id_seq.NEXTVAL, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                            "INSERT INTO prasad_seva (seva_type, names, item_name, num_people, apartment, seva_date, pooja_time, created_by, status) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
                             (seva_type, ', '.join(names), item, num_people, apartment, seva_date, pooja_time, st.session_state.get('admin_full_name', 'User'), 'active')
                         )
                     else:
@@ -160,6 +180,8 @@ def prasad_seva_tab():
                     "Pooja Time": pooja_time
                 }
                 st.session_state["prasad_last_submission"] = submitted_info
+                st.session_state["prasad_submission_in_progress"] = False
+                prasad_status.update(label="Prasad Seva added", state="complete", expanded=False)
                 st.success("✅ Added seva successfully")
                 st.session_state["clear_prasad_form"] = True
                 st.rerun()
@@ -167,8 +189,8 @@ def prasad_seva_tab():
     elif selected_tab == "Prasad Seva Summary":
         cursor.execute("SELECT seva_date, pooja_time, SUM(num_people) FROM prasad_seva WHERE status='active' GROUP BY seva_date, pooja_time")
         metrics_rows = cursor.fetchall()
-        min_date = datetime.date(2025, 8, 26)
-        max_date = datetime.date(2025, 8, 30)
+        min_date = datetime.date(2026, 9, 14)
+        max_date = datetime.date(2026, 9, 20)
         all_dates = pd.date_range(min_date, max_date).date
         pooja_times = ["Morning Pooja", "Evening Pooja"]
         grid = pd.DataFrame([(d, p) for d in all_dates for p in pooja_times], columns=["Date", "Pooja Time"])
@@ -176,7 +198,7 @@ def prasad_seva_tab():
         metrics_df["Date"] = pd.to_datetime(metrics_df["Date"]).dt.date
         merged_df = grid.merge(metrics_df, on=["Date", "Pooja Time"], how="left").fillna({"Total People Served": 0})
         merged_df["Total People Served"] = merged_df["Total People Served"].astype(int)
-        merged_df = merged_df[~((merged_df["Date"] == datetime.date(2025, 8, 26)) & (merged_df["Pooja Time"] == "Morning Pooja"))]
+        merged_df = merged_df[~((merged_df["Date"] == datetime.date(2026, 9, 14)) & (merged_df["Pooja Time"] == "Morning Pooja"))]
         merged_df["Date"] = merged_df["Date"].apply(lambda d: f"<span style='font-size:16px;'>&#128197;</span> <b>{pd.to_datetime(d).strftime('%d-%b-%Y')}</b>")
         merged_df["Pooja Time"] = merged_df["Pooja Time"].apply(lambda t: f"<span style='font-size:18px;'>{'🌅' if t=='Morning Pooja' else '🌇'}</span> <b>{t.replace('Pooja','')}</b>")
         merged_df["Total People Served"] = merged_df["Total People Served"].apply(lambda x: f"<span style='background-color:#FFECB3;color:#6D4C41;padding:4px 12px;border-radius:16px;font-weight:bold;display:inline-block;text-align:center;'>{x}</span>")
@@ -192,10 +214,9 @@ def prasad_seva_tab():
         st.download_button(label="📥", data=csv_summary, file_name="prasad_seva_summary.csv", mime="text/csv", key="download_summary_tab1")
 
     elif selected_tab == "Prasad Seva Sponsors List":
-        min_date = datetime.date(2025, 8, 26)
-        max_date = datetime.date(2025, 8, 30)
+        min_date = datetime.date(2026, 9, 14)
         filter_col1, filter_col2, filter_col3 = st.columns(3)
-        filter_date = filter_col1.date_input("Filter by Date", value=None, min_value=min_date, max_value=max_date, key="prasad_filter_date_tab2")
+        filter_date = filter_col1.date_input("Filter by Date", value=None, min_value=min_date, key="prasad_filter_date_tab2")
         filter_name = filter_col2.text_input("Filter by Name", value="", key="prasad_filter_name_tab2")
         pooja_time_options = ["All", "Morning Pooja", "Evening Pooja"]
         filter_pooja_time = filter_col3.selectbox("Filter by Pooja Time", pooja_time_options, key="prasad_filter_pooja_time_tab2")
@@ -233,7 +254,7 @@ def prasad_seva_tab():
                         df_display = df_tab.drop(columns=["ID", "Created By"])
                         df_display["Date"] = df_display["Date"].apply(lambda d: f"<span style='font-size:16px;'>&#128197;</span> <b>{pd.to_datetime(d).strftime('%d-%b-%Y')}</b>")
                         def pooja_time_display(row):
-                            if row["Date"].startswith("<span") and "26-Aug-2025" in row["Date"] and row["Pooja Time"].find("Morning") != -1:
+                            if row["Date"].startswith("<span") and "14-Sep-2026" in row["Date"] and row["Pooja Time"].find("Morning") != -1:
                                 return ""
                             return f"<span style='font-size:18px;'>{'🌅' if row['Pooja Time']=='Morning Pooja' else '🌇'}</span> <b>{row['Pooja Time'].replace('Pooja','')}</b>"
                         df_display["Pooja Time"] = df_display.apply(pooja_time_display, axis=1)
@@ -328,12 +349,11 @@ def prasad_seva_tab():
                     new_item = st.text_input("Item Name", value=entry["Item Name"], key=f"edit_item_{selected_id}")
                     new_num = st.number_input("How many people are you bringing item for?", min_value=1, value=int(entry["How many people are you bringing item for"]), key=f"edit_num_{selected_id}")
                     st.markdown(f"<b>Apartment Number:</b> <span style='font-size:16px;'>&#127968;</span> <b>{entry['Apartemnt Number']}</b>", unsafe_allow_html=True)
-                    min_date = datetime.date(2025, 8, 26)
-                    max_date = datetime.date(2025, 8, 30)
+                    min_date = datetime.date(2026, 9, 14)
                     current_date = pd.to_datetime(entry["Date"]).date() if pd.notna(entry["Date"]) else min_date
-                    new_date = st.date_input("Date", value=current_date, min_value=min_date, max_value=max_date, key=f"edit_prasad_date_{selected_id}")
+                    new_date = st.date_input("Date", value=current_date, min_value=min_date, key=f"edit_prasad_date_{selected_id}")
                     pooja_options = ["Morning Pooja", "Evening Pooja"]
-                    if new_date == datetime.date(2025, 8, 26):
+                    if new_date == datetime.date(2026, 9, 14):
                         pooja_options = ["Evening Pooja"]
                     if entry["Pooja Time"] in pooja_options:
                         pooja_index = pooja_options.index(entry["Pooja Time"])

@@ -19,7 +19,6 @@ st.markdown('''
 import pandas as pd
 import datetime
 from .db import get_connection
-from .email_utils import send_email
 
 def events_tab():
     st.session_state['active_tab'] = 'Events'
@@ -156,7 +155,7 @@ def events_tab():
                         try:
                             if hasattr(cursor, 'execute') and hasattr(cursor.connection, 'account'):
                                 cursor.execute(
-                                    "INSERT INTO events (id, title, event_date, event_time, link, description) VALUES (events_id_seq.NEXTVAL, %s, %s, %s, %s, %s)",
+                                    "INSERT INTO events (title, event_date, event_time, link, description) VALUES (%s, %s, %s, %s, %s)",
                                     (new_title, new_date, new_time, None, new_description)
                                 )
                             else:
@@ -166,24 +165,6 @@ def events_tab():
                                 )
                             conn.commit()
                             st.success("✅ Event added successfully!")
-                            admin_full_name = st.session_state.get('admin_full_name', 'Unknown')
-                            cursor.execute("SELECT email FROM notification_emails")
-                            notification_emails = [row[0] for row in cursor.fetchall() if row[0]]
-                            html_table = f"""
-                            <table border='1' cellpadding='6' cellspacing='0' style='border-collapse:collapse;'>
-                              <tr><th>Title</th><td>{new_title}</td></tr>
-                              <tr><th>Date</th><td>{new_date}</td></tr>
-                              <tr><th>Time</th><td>{new_time}</td></tr>
-                              <tr><th>Description</th><td>{new_description}</td></tr>
-                            </table>
-                            <br><b>Modified By:</b> {admin_full_name}
-                            """
-                            if notification_emails:
-                                send_email(
-                                    "New Ganesh Chaturthi Event Added",
-                                    f"<b>New Event Added:</b><br><br>{html_table}",
-                                    notification_emails
-                                )
                             st.session_state.refresh_events = True
                             st.rerun()
                         except Exception as e:
@@ -274,24 +255,6 @@ def events_tab():
                                     )
                                     conn.commit()
                                     st.success("✅ Event updated successfully!")
-                                    admin_full_name = st.session_state.get('admin_full_name', 'Unknown')
-                                    cursor.execute("SELECT email FROM notification_emails")
-                                    notification_emails = [row[0] for row in cursor.fetchall() if row[0]]
-                                    html_table = f"""
-                                    <table border='1' cellpadding='6' cellspacing='0' style='border-collapse:collapse;'>
-                                      <tr><th>Title</th><td>{edited_title}</td></tr>
-                                      <tr><th>Date</th><td>{edited_date}</td></tr>
-                                      <tr><th>Time</th><td>{edited_time}</td></tr>
-                                      <tr><th>Description</th><td>{edited_description}</td></tr>
-                                    </table>
-                                    <br><b>Modified By:</b> {admin_full_name}
-                                    """
-                                    if notification_emails:
-                                        send_email(
-                                            "Ganesh Chaturthi Event Updated",
-                                            f"<b>Event Updated:</b><br><br>{html_table}",
-                                            notification_emails
-                                        )
                                     st.session_state.refresh_events = True
                                     st.rerun()
                                 except Exception as e:
@@ -309,23 +272,6 @@ def events_tab():
                                 cursor.execute("DELETE FROM events WHERE id=%s", (selected_event_id,))
                                 conn.commit()
                                 st.success("🗑️ Event deleted successfully!")
-                                admin_full_name = st.session_state.get('admin_full_name', 'Unknown')
-                                cursor.execute("SELECT email FROM notification_emails")
-                                notification_emails = [row[0] for row in cursor.fetchall() if row[0]]
-                                html_table = f"""
-                                <table border='1' cellpadding='6' cellspacing='0' style='border-collapse:collapse;'>
-                                  <tr><th>Title</th><td>{event_row['Event Name']}</td></tr>
-                                  <tr><th>Date</th><td>{event_row['Date']}</td></tr>
-                                  <tr><th>Description</th><td>{event_row['Description']}</td></tr>
-                                </table>
-                                <br><b>Modified By:</b> {admin_full_name}
-                                """
-                                if notification_emails:
-                                    send_email(
-                                        "Ganesh Chaturthi Event Deleted",
-                                        f"<b>Event deleted:</b><br><br>{html_table}",
-                                        notification_emails
-                                    )
                                 st.session_state.refresh_events = True
                                 st.rerun()
                             except Exception as e:

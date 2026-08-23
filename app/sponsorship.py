@@ -22,6 +22,80 @@ def sponsorship_tab():
     st.session_state['active_tab'] = 'Sponsorship'
     conn = get_connection()
     cursor = conn.cursor()
+    st.markdown(
+        """
+        <style>
+        .sponsor-option {
+            background: linear-gradient(135deg, #fffdf5 0%, #f1f8e9 100%);
+            border: 1px solid #c5d9c0;
+            border-left: 5px solid #2e7d32;
+            border-radius: 12px;
+            padding: 14px 16px;
+            margin: 8px 0 4px;
+            box-shadow: 0 3px 10px rgba(46, 125, 50, 0.09);
+        }
+        .sponsor-option-title {
+            color: #3e2723;
+            font-size: 1.08rem;
+            font-weight: 700;
+        }
+        .sponsor-option-price {
+            color: #bf360c;
+            font-size: 1.05rem;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        .sponsor-option-metrics {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 9px;
+        }
+        .sponsor-metric {
+            background: rgba(255, 255, 255, 0.75);
+            border: 1px solid #dce8d8;
+            border-radius: 8px;
+            color: #455a64;
+            font-size: 0.88rem;
+            padding: 5px 8px;
+        }
+        .sponsor-option-names {
+            color: #546e7a;
+            font-size: 0.9rem;
+            margin-top: 10px;
+        }
+        .sponsor-option-names strong { color: #2e7d32; }
+        div[data-testid='stTextInput'] input,
+        div[data-testid='stNumberInput'] input,
+        div[data-testid='stTextArea'] textarea {
+            background: #ffffff !important;
+            border: 1px solid #b8c9b5 !important;
+            border-radius: 9px !important;
+            color: #263238 !important;
+            min-height: 2.7rem;
+            box-shadow: 0 1px 3px rgba(46, 125, 50, 0.08) !important;
+        }
+        div[data-testid='stTextInput'] input:focus,
+        div[data-testid='stNumberInput'] input:focus,
+        div[data-testid='stTextArea'] textarea:focus {
+            border-color: #2e7d32 !important;
+            box-shadow: 0 0 0 2px rgba(46, 125, 50, 0.16) !important;
+        }
+        div[data-testid='stTextInput'] input::placeholder,
+        div[data-testid='stTextArea'] textarea::placeholder {
+            color: #78909c !important;
+            opacity: 1;
+        }
+        @media (max-width: 640px) {
+            .sponsor-option { padding: 12px; }
+            .sponsor-option-title { font-size: 1rem; }
+            .sponsor-option-price { font-size: 0.98rem; }
+            .sponsor-metric { font-size: 0.82rem; }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
 
     # --- Combined PayPal + Zelle Total ---
     # Get PayPal and Zelle totals from payment_details table
@@ -47,10 +121,10 @@ def sponsorship_tab():
     st.markdown("""
     <div style='background:linear-gradient(90deg,#fffde7 60%,#e3f2fd 100%); border-radius:14px; box-shadow:0 2px 12px #e0e0e0; padding:22px 28px; margin-bottom:22px; border:2px solid #ffe082;'>
         <div style='font-size:1.18em; font-family: Times New Roman, Calibri, Verdana, serif; color:#1565c0; font-weight:bold; margin-bottom:8px; text-align:center;'>
-            🙏 Welcome to Terrazzo Ganesh Celebrations 2025!
+            🙏 Welcome to Terrazzo Ganesh Celebrations 2026!
         </div>
         <div style='font-size:1.13em; color: #E65100; margin-bottom:6px; text-align:center;'>
-            <span style='font-size:1.08em; color:#444;'>📅 26th Aug 2025 to 30th Aug 2025 <span style='color:#388e3c;'>(5 days)</span></span><br>
+            <span style='font-size:1.08em; color:#444;'>📅 14th Sep 2026 to 16th Sep 2026 <span style='color:#388e3c;'>(3 days)</span></span><br>
             <span style='font-size:1.08em; color:#1565c0;'>📍 3C Garagge <span style='font-size:1.15em;vertical-align:middle;'>🙏</span> <span style='font-size:0.98em; color:#444;'>(Raghava)</span></span>
         </div>
         <div style='font-size:1.08em; color:#333; margin-bottom:6px;'>
@@ -243,13 +317,14 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
             st.rerun()
         return
 
+    sponsorship_form = st.form("sponsorship_form")
     # Only show submission inputs if allowed
     if show_submission_inputs:
-        name = st.text_input("👤 Your Name", help="Please enter your full name", placeholder="E.g., Raghava Rao")
-        apartment = st.text_input("🏢 Your Apartment Number", help="Apartment number must be between 100 and 1600", placeholder="E.g., 305")
-        email = st.text_input("📧 Email Address (optional)", help="Get notifications and receipts to your email", placeholder="your@email.com")
-        gothram = st.text_input("🪔 Gothram (optional)", help="Enter your family Gothram (optional)", placeholder="E.g., Bharadwaja, Kashyapa, etc.")
-        mobile = st.text_input("📱 Mobile Number (optional)", help="10-digit US phone number (no country code)", placeholder="E.g., 5121234567")
+        name = sponsorship_form.text_input("👤 Your Name", help="Please enter your full name", placeholder="E.g., Raghava Rao")
+        apartment = sponsorship_form.text_input("🏢 Your Apartment Number", help="Apartment number must be between 100 and 1600", placeholder="E.g., 305")
+        email = sponsorship_form.text_input("📧 Email Address (optional)", help="Get notifications and receipts to your email", placeholder="your@email.com")
+        gothram = sponsorship_form.text_input("🪔 Gothram (optional)", help="Enter your family Gothram (optional)", placeholder="E.g., Bharadwaja, Kashyapa, etc.")
+        mobile = sponsorship_form.text_input("📱 Mobile Number (optional)", help="10-digit US phone number (no country code)", placeholder="E.g., 5121234567")
     else:
         name = apartment = email = gothram = mobile = ""
 
@@ -342,31 +417,30 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
             # Modern card for fully sponsored items
             if remaining > 0:
                 st.markdown(
-                    """
-                    <style>
-                    .blink {
-                        animation: blinker 1s linear infinite;
-                    }
-                    @keyframes blinker {
-                        50% { opacity: 0; }
-                    }
-                    </style>
-                    """ +
-                    f"<b>{item}</b> — <span style='color:#1565c0;'>${fmt_amt(cost)} / {limit} = ${fmt_amt(per_slot)}$ per slot</span> | Total Slots: {limit}, Available Slots: {remaining_str}",
+                    f"""
+                    <div class='sponsor-option'>
+                        <div style='display:flex;justify-content:space-between;align-items:flex-start;gap:12px;'>
+                            <span class='sponsor-option-title'>{item}</span>
+                            <span class='sponsor-option-price'>${fmt_amt(per_slot)} / slot</span>
+                        </div>
+                        <div class='sponsor-option-metrics'>
+                            <span class='sponsor-metric'>Total: ${fmt_amt(cost)}</span>
+                            <span class='sponsor-metric'>Slots: {limit}</span>
+                            <span class='sponsor-metric'>Available: <strong>{remaining_str}</strong></span>
+                        </div>
+                    """,
                     unsafe_allow_html=True
                 )
                 if sponsor_names:
                     st.markdown(
-                        f"<span style='font-size: 0.95em;'>Sponsored Names: <span style='font-size:1.1em;vertical-align:middle;'>🙏</span> "
-                        + ", ".join([f"<span style='color:#388e3c;font-weight:bold'>{n}</span>" for n in sponsor_names])
-                        + "</span>",
+                        f"<div class='sponsor-option-names'>Sponsored by 🙏 <strong>{', '.join(sponsor_names)}</strong></div>",
                         unsafe_allow_html=True
                     )
                 # Only show sponsor checkbox if slots are available
                 if remaining > 0:
-                    if st.checkbox(f"Sponsor {item}", key=item):
+                    if sponsorship_form.checkbox(f"Select {item}", key=item):
                         selected_items.append(item)
-                st.markdown("---")
+                st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
             else:
                 st.markdown(
                     f"""
@@ -394,32 +468,37 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
 
     with tab2:
         # Show donor table before donation field
-        cursor.execute("SELECT name, donation FROM sponsors WHERE donation IS NOT NULL AND donation > 0 ORDER BY donation DESC")
+        cursor.execute("SELECT name, donation, submitted_at FROM sponsors WHERE donation IS NOT NULL AND donation > 0 ORDER BY submitted_at DESC")
         donor_rows = cursor.fetchall()
         # Only show donors with donation >= 5
         donor_rows_filtered = [row for row in donor_rows if row[1] >= 5]
         if donor_rows_filtered:
             donor_table_html = f"""
-<div style='background:linear-gradient(90deg,#e3f2fd 60%,#fffde7 100%); border-radius:14px; box-shadow:0 2px 12px #e0e0e0; padding:18px 24px; margin-bottom:18px; border:2px solid #90caf9;'>
-    <div style='font-size:1.15em; font-weight:bold; color:#222; margin-bottom:10px;'>🙏 Donors</div>
-    <table style='width:100%; border-collapse:collapse; font-size:1.05em;'>
+<div style='background:#ffffff; border-radius:10px; box-shadow:0 2px 8px rgba(46,125,50,0.08); padding:15px 18px; margin-bottom:16px; border:1px solid #d7e3d4;'>
+    <div style='font-size:1.1em; font-weight:700; color:#2e7d32; margin-bottom:9px;'>🙏 Donor Support</div>
+    <table style='width:100%; border-collapse:collapse; font-size:0.98em;'>
         <thead>
-            <tr style='background:#bbdefb;'>
-                <th style='padding:8px 12px; color:#222; font-weight:600; border-bottom:2px solid #90caf9;'>Donor Name</th>
-                <th style='padding:8px 12px; color:#222; font-weight:600; border-bottom:2px solid #90caf9;'>Amount</th>
+            <tr style='background:#f1f8e9;'>
+                <th style='padding:8px 12px; color:#37474f; font-weight:600; border-bottom:1px solid #c5d9c0;'>Donor Name</th>
+                <th style='padding:8px 12px; color:#37474f; font-weight:600; border-bottom:1px solid #c5d9c0;'>Amount</th>
+                <th style='padding:8px 12px; color:#37474f; font-weight:600; border-bottom:1px solid #c5d9c0;'>Submitted</th>
             </tr>
         </thead>
         <tbody>
-            {''.join([f"<tr><td style='padding:8px 12px; border-bottom:1px solid #e3f2fd;'>{row[0]}</td><td style='padding:8px 12px; border-bottom:1px solid #e3f2fd; color:#388e3c; font-weight:bold;'>${row[1]}</td></tr>" for row in donor_rows_filtered])}
+            {''.join([f"<tr><td style='padding:8px 12px; border-bottom:1px solid #edf3eb;'>{row[0]}</td><td style='padding:8px 12px; border-bottom:1px solid #edf3eb; color:#2e7d32; font-weight:bold;'>${row[1]}</td><td style='padding:8px 12px; border-bottom:1px solid #edf3eb; color:#546e7a;'>{row[2].strftime('%d-%b-%Y') if row[2] else ''}</td></tr>" for row in donor_rows_filtered])}
         </tbody>
     </table>
 </div>
 """
             st.markdown(donor_table_html, unsafe_allow_html=True)
-        # Only show donation input if there are available slots in any item and not in donors tab
-        if 'Donors' not in st.session_state.get('active_tab', ''):
-            if any((row[2] - sum([1 for s in sponsor_names if s == row[0]]) > 0) for row in items):
-                donation = st.number_input("Enter donation amount (optional)", min_value=0, value=0)
+        donation = sponsorship_form.number_input(
+            "Donation amount (optional)",
+            min_value=0.0,
+            value=0.0,
+            step=5.0,
+            format="%.2f",
+            key="sponsorship_donation_amount"
+        )
 
     def validate_us_phone(phone):
         digits = re.sub(r'\D', '', phone)
@@ -430,9 +509,11 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
     def format_name(name):
         return ' '.join(word.capitalize() for word in name.strip().split())
 
-    submit_disabled = st.session_state.get('show_submission', False)
+    submit_disabled = st.session_state.get('show_submission', False) or st.session_state.get('submission_in_progress', False)
     if show_submission_inputs:
-        if st.button("✅ Submit", key="sponsorship_submit", disabled=submit_disabled):
+        if sponsorship_form.form_submit_button("✅ Submit", disabled=submit_disabled, type="primary"):
+            st.session_state['submission_in_progress'] = True
+            submission_status = st.status("Submitting your sponsorship...", expanded=False)
             errors = []
             name_val = format_name(name)
             if not name_val:
@@ -459,6 +540,8 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
                 if not phone_valid:
                     errors.append("Please enter a valid 10-digit US phone number.")
             if errors:
+                st.session_state['submission_in_progress'] = False
+                submission_status.update(label="Please correct the highlighted fields", state="error", expanded=True)
                 for err in errors:
                     st.error(err)
             else:
@@ -475,8 +558,8 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
                         d = donation if idx == 0 else 0
                         if hasattr(cursor, 'execute') and hasattr(cursor.connection, 'account'):
                             cursor.execute("""
-                                INSERT INTO sponsors (id, name, email, gothram, mobile, apartment, sponsorship, donation)
-                                VALUES (sponsors_id_seq.NEXTVAL, %s, %s, %s, %s, %s, %s, %s)
+                                INSERT INTO sponsors (name, email, gothram, mobile, apartment, sponsorship, donation, submitted_at)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP())
                             """, (name_val, email, gothram, phone_fmt.strip(), apartment, item, d))
                         else:
                             cursor.execute("""
@@ -486,8 +569,8 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
                     if not selected_items and donation > 0:
                         if hasattr(cursor, 'execute') and hasattr(cursor.connection, 'account'):
                             cursor.execute("""
-                                INSERT INTO sponsors (id, name, email, gothram, mobile, apartment, sponsorship, donation)
-                                VALUES (sponsors_id_seq.NEXTVAL, %s, %s, %s, %s, %s, NULL, %s)
+                                INSERT INTO sponsors (name, email, gothram, mobile, apartment, sponsorship, donation, submitted_at)
+                                VALUES (%s, %s, %s, %s, %s, NULL, %s, CURRENT_TIMESTAMP())
                             """, (name_val, email, gothram, phone_fmt.strip(), apartment, donation))
                         else:
                             cursor.execute("""
@@ -508,20 +591,12 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
                         submitted_data["Donation"] = f"${donation}"
                     if (selected_items or donation > 0) and contributed_amount:
                         submitted_data["Contributed Amount"] = f"${contributed_amount}"
-                    # Add payment instructions
-                    paypal_link = st.secrets.get("paypal_link", "")
-                    paypal_icon = "<img src='https://www.paypalobjects.com/webstatic/icon/pp258.png' alt='PayPal' style='height:32px;vertical-align:middle;margin-right:8px;'/>"
-                    if paypal_link:
-                        paypal_html = f"<a href='{paypal_link}' target='_blank'>{paypal_icon}<b>Pay via PayPal</b></a>"
-                    else:
-                        paypal_html = "<span style='color:#d32f2f;'>PayPal link not available.</span>"
                     submitted_data["How to Pay"] = (
-                        "To pay your sponsorship or donation, please use the PayPal link below:<br>"
-                        f"{paypal_html}"
-                        "<br><b>For Zelle payment, pay money to any one of these persons: <span style='color:#1565C0;'>Purna Magum / Ganesh Thamma</span></b>"
+                        "<b>For Zelle payment, pay money to any one of these persons: <span style='color:#1565C0;'>Purna Magum / Guru Pavan Nama / Ganesh Thamma</span></b>"
                     )
                     st.session_state['submitted_data'] = submitted_data
                     st.session_state['show_submission'] = True
+                    st.session_state['submission_in_progress'] = False
                     notification_emails = get_notification_emails()
                     recipients = list(notification_emails)
                     if email.strip():
@@ -546,14 +621,7 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
                         email_rows += f"  <tr><th>Donation</th><td>General Donation</td><td><b>${donation}</b></td></tr>\n"
                     if contributed_amount:
                         email_rows += f"  <tr><th colspan='2'>Total Contributed Amount</th><td><b>${contributed_amount}</b></td></tr>\n"
-                    paypal_link = st.secrets.get("paypal_link", "")
-                    paypal_icon = "<img src='https://www.paypalobjects.com/webstatic/icon/pp258.png' alt='PayPal' style='height:32px;vertical-align:middle;margin-right:8px;'/>"
-                    paypal_html = "<br><b>To pay your sponsorship or donation, please use the PayPal link below:</b><br>"
-                    if paypal_link:
-                        paypal_html += f"<a href='{paypal_link}' target='_blank'>{paypal_icon}<b>Pay via PayPal</b></a>"
-                    else:
-                        paypal_html += "<span style='color:#d32f2f;'>PayPal link not available.</span>"
-                    paypal_html += "<br><b>For Zelle payment, pay money to any one of these persons: <span style='color:#1565C0;'>Purna Magum / Ganesh Thamma</span></b>"
+                    payment_html = "<br><b>For Zelle payment, pay money to any one of these persons: <span style='color:#1565C0;'>Purna Magum / Guru Pavan Nama / Ganesh Thamma</span></b>"
                     send_email(
                         "Ganesh Chaturthi Celebrations Sponsorship Program in Austin Texas",
                         f"""
@@ -561,11 +629,14 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
 <table border='1' cellpadding='6' cellspacing='0' style='border-collapse:collapse;'>
 {email_rows}
 </table>
-{paypal_html}
+{payment_html}
 """,
                         recipients
                     )
+                    submission_status.update(label="Submission complete", state="complete", expanded=False)
                     st.rerun()
                 except Exception as e:
+                    st.session_state['submission_in_progress'] = False
                     conn.rollback()
+                    submission_status.update(label="Submission failed", state="error", expanded=True)
                     st.error(f"❌ Submission failed: {e}")

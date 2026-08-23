@@ -208,8 +208,8 @@ def statistics_tab():
     if not contrib_df.empty:
         chart_df = contrib_df.melt(id_vars=['Name'], value_vars=['Sponsorship Amount', 'Donation Amount'], var_name='Type', value_name='Amount')
         # Set y-axis to have a step of 10 for amount range
-        min_amt = chart_df['Amount'].min() if not chart_df['Amount'].empty else 0
         max_amt = chart_df['Amount'].max() if not chart_df['Amount'].empty else 10
+        chart_max = max(10, float(max_amt))
         # Responsive chart width for mobile
         chart_width = 700
         # If running on mobile, reduce chart width (pseudo-code, Streamlit does not provide direct device detection)
@@ -217,13 +217,13 @@ def statistics_tab():
         # chart_width = 350 if is_mobile else 700
         chart = alt.Chart(chart_df).mark_bar().encode(
             x=alt.X('Name:N', title='Name', sort='-y'),
-            y=alt.Y('Amount:Q', title='Amount ($)', scale=alt.Scale(domain=[min_amt, max_amt], nice=True)),
+            y=alt.Y('Amount:Q', title='Amount ($)', scale=alt.Scale(domain=[0, chart_max], nice=True)),
             color=alt.Color('Type:N', title='Type'),
             tooltip=['Name', 'Type', 'Amount']
         ).properties(width=chart_width)
         chart = chart.configure_axis(
             grid=True,
-            tickCount=round((max_amt-min_amt)/5) if max_amt > min_amt else 5
+            tickCount=max(2, round(chart_max / 5))
         )
         st.altair_chart(chart, use_container_width=True)
 

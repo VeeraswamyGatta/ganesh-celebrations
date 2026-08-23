@@ -10,7 +10,8 @@ CREATE TABLE IF NOT EXISTS payment_details (
     amount NUMERIC(10,2) NOT NULL,
     date DATE NOT NULL,
     comments TEXT,
-    payment_type TEXT
+    payment_type TEXT,
+    recieved_zelle_acc_name TEXT
 );
 
 CREATE TABLE IF NOT EXISTS transfers (
@@ -35,7 +36,8 @@ CREATE TABLE IF NOT EXISTS sponsors (
     apartment TEXT NOT NULL,
     sponsorship TEXT,
     donation NUMERIC DEFAULT 0,
-    gothram STRING
+    gothram STRING,
+    submitted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS events (

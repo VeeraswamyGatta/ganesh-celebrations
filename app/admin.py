@@ -57,20 +57,23 @@ def admin_tab(menu="Sponsorship Items"):
             name_options = ["-- Select Name --"] + unpaid_names if unpaid_names else ["-- No Names Available --"]
             if 'add_pay_selected_name' not in st.session_state or st.session_state['add_pay_selected_name'] not in name_options:
                 st.session_state['add_pay_selected_name'] = name_options[0]
-            if 'add_pay_payment_type' not in st.session_state:
-                st.session_state['add_pay_payment_type'] = 'PayPal'
+            if st.session_state.get('add_pay_payment_type') != 'Zelle':
+                st.session_state['add_pay_payment_type'] = 'Zelle'
             def update_amount():
                 name = st.session_state['add_pay_selected_name']
                 amt = float(sponsor_df[sponsor_df["name"] == name]["total_amount"].values[0]) if name in sponsor_names else 0.0
-                st.session_state['add_pay_amount'] = amt
+                st.session_state['add_pay_amount_input'] = amt
             if 'add_pay_last_selected_name' not in st.session_state:
                 st.session_state['add_pay_last_selected_name'] = st.session_state['add_pay_selected_name']
+            if 'add_pay_amount_input' not in st.session_state:
+                update_amount()
             name = st.selectbox("Name", name_options, key="add_pay_selected_name")
-            payment_type = st.selectbox("Payment Type", ["PayPal", "Zelle"], key="add_pay_payment_type")
+            payment_type = st.selectbox("Payment Type", ["Zelle"], key="add_pay_payment_type")
             if st.session_state['add_pay_last_selected_name'] != st.session_state['add_pay_selected_name']:
                 update_amount()
+                st.session_state['add_pay_zelle_acc_name'] = ""
                 st.session_state['add_pay_last_selected_name'] = st.session_state['add_pay_selected_name']
-            default_amount = st.session_state.get('add_pay_amount', 0.0)
+            default_amount = st.session_state.get('add_pay_amount_input', 0.0)
             import pytz
             from datetime import datetime, time
             with st.form("add_payment_detail_form"):
@@ -93,76 +96,50 @@ def admin_tab(menu="Sponsorship Items"):
                             dt_naive = datetime.combine(date, time.min)
                             dt_cst = tz.localize(dt_naive)
                             date_cst = dt_cst.date()
-                            if hasattr(cursor, 'execute') and hasattr(cursor.connection, 'account'):
-                                cursor.execute(
-                                    "INSERT INTO payment_details (id, name, amount, date, comments, payment_type, recieved_zelle_acc_name) VALUES (payment_details_id_seq.NEXTVAL, %s, %s, %s, %s, %s, %s)",
-                                    (name, amount, date_cst, comments, payment_type, recieved_zelle_acc_name)
-                                )
-                            else:
+                            payment_columns = set(pd.read_sql("SELECT * FROM payment_details LIMIT 0", conn).columns.str.lower())
+                            if "recieved_zelle_acc_name" in payment_columns:
                                 cursor.execute(
                                     "INSERT INTO payment_details (name, amount, date, comments, payment_type, recieved_zelle_acc_name) VALUES (%s, %s, %s, %s, %s, %s)",
                                     (name, amount, date_cst, comments, payment_type, recieved_zelle_acc_name)
                                 )
+                            else:
+                                cursor.execute(
+                                    "INSERT INTO payment_details (name, amount, date, comments, payment_type) VALUES (%s, %s, %s, %s, %s)",
+                                    (name, amount, date_cst, comments, payment_type)
+                                )
                             conn.commit()
                             st.success("✅ Payment detail added!")
-                            st.rerun()
                         except Exception as e:
                             conn.rollback()
                             st.error(f"❌ Failed to add payment detail: {e}")
 
         with tab_received:
             # Received: Payment details table
-            df_pay = pd.read_sql("SELECT id, name, amount, date, payment_type, recieved_zelle_acc_name, comments FROM payment_details ORDER BY date DESC, id DESC", conn)
+            payment_columns = pd.read_sql("SELECT * FROM payment_details LIMIT 0", conn).columns.str.lower()
+            zelle_column = ", recieved_zelle_acc_name" if "recieved_zelle_acc_name" in payment_columns else ""
+            df_pay = pd.read_sql(f"SELECT id, name, amount, date, payment_type{zelle_column}, comments FROM payment_details ORDER BY date DESC, id DESC", conn)
             df_pay.columns = [c.lower() for c in df_pay.columns]
             if not df_pay.empty:
-                payment_types = ["All"] + sorted(df_pay["payment_type"].dropna().unique().tolist())
-                selected_type = st.selectbox("Filter by Payment Type", payment_types, index=0)
-                zelle_filter = st.text_input("Filter by Zelle Account Name (contains)", value="")
                 comments_filter = st.text_input("Filter by Comments (contains)", value="")
                 filtered_df = df_pay.copy()
-                if selected_type != "All":
-                    filtered_df = filtered_df[filtered_df["payment_type"] == selected_type]
-                if zelle_filter:
-                    filtered_df = filtered_df[filtered_df["recieved_zelle_acc_name"].str.contains(zelle_filter, case=False, na=False)]
                 if comments_filter:
                     filtered_df = filtered_df[filtered_df["comments"].str.contains(comments_filter, case=False, na=False)]
                 display_df = filtered_df.copy()
                 if 'id' in display_df.columns:
                     display_df = display_df.drop(columns=["id"])
                 display_df = display_df.sort_values(by=["name"]).reset_index(drop=True)
+                total_amount = display_df["amount"].sum()
+                display_df = display_df.rename(columns={
+                    "name": "Name",
+                    "amount": "Amount",
+                    "date": "Date",
+                    "payment_type": "Payment Type",
+                    "recieved_zelle_acc_name": "Received Zelle Account Name",
+                    "comments": "Comments"
+                })
                 display_df.index = display_df.index + 1
                 st.dataframe(display_df, use_container_width=True)
-                total_amount = display_df["amount"].sum()
-                paypal_total = display_df[display_df["payment_type"] == "PayPal"]["amount"].sum()
-                zelle_total = display_df[display_df["payment_type"] == "Zelle"]["amount"].sum()
-                if selected_type == "All":
-                    st.markdown(f"<div style='text-align:right; font-size:1.1em; margin-top:0.5em;'><b>Total Amount:</b> <span style='color:#6A1B9A;'>${total_amount:,.2f}</span></div>", unsafe_allow_html=True)
-                    st.markdown(f"<div style='text-align:right; font-size:1.05em; margin-top:0.2em;'><b>Total PayPal Amount:</b> <span style='color:#1565C0;'>${paypal_total:,.2f}</span></div>", unsafe_allow_html=True)
-                    st.markdown(f"<div style='text-align:right; font-size:1.05em; margin-top:0.2em;'><b>Total Zelle Amount:</b> <span style='color:#388E3C;'>${zelle_total:,.2f}</span></div>", unsafe_allow_html=True)
-                elif selected_type == "PayPal":
-                    st.markdown(f"<div style='text-align:right; font-size:1.05em; margin-top:0.5em;'><b>Total PayPal Amount:</b> <span style='color:#1565C0;'>${paypal_total:,.2f}</span></div>", unsafe_allow_html=True)
-                elif selected_type == "Zelle":
-                    st.markdown(f"<div style='text-align:right; font-size:1.05em; margin-top:0.5em;'><b>Total Zelle Amount:</b> <span style='color:#388E3C;'>${zelle_total:,.2f}</span></div>", unsafe_allow_html=True)
-                if st.button("Send Payment Details Email"):
-                    cursor.execute("SELECT email FROM notification_emails")
-                    notification_emails = [row[0] for row in cursor.fetchall() if row[0]]
-                    if notification_emails:
-                        html_table = display_df.to_html(index=False, border=1, justify='center')
-                        try:
-                            send_email(
-                                "Ganesh Chaturthi Payment Details",
-                                f"""
-<b>Payment Details (Received)</b><br><br>
-{html_table}
-<br><b>Total Amount:</b> <span style='color:#6A1B9A;'>${{total_amount:,.2f}}</span>
-""",
-                                notification_emails
-                            )
-                            st.success(f"✅ Payment details sent to: {', '.join(notification_emails)}")
-                        except Exception as e:
-                            st.error(f"❌ Failed to send email: {e}")
-                    else:
-                        st.warning("No notification emails found.")
+                st.markdown(f"<div style='text-align:right; font-size:1.1em; margin-top:0.5em;'><b>Total Amount:</b> <span style='color:#6A1B9A;'>${total_amount:,.2f}</span></div>", unsafe_allow_html=True)
             else:
                 st.info("No payment details found.")
 
@@ -177,7 +154,7 @@ def admin_tab(menu="Sponsorship Items"):
             if 'id' in not_received_df.columns:
                 not_received_df = not_received_df.drop(columns=["id"])
             st.dataframe(not_received_df, use_container_width=True)
-            st.markdown(f"<div style='text-align:right; font-size:1.1em; margin-top:0.5em;'><b>Total Not Received:</b> <span style='color:#6A1B9A;'>${{not_received_df['Amount'].sum():,.2f}}</span></div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='text-align:right; font-size:1.1em; margin-top:0.5em;'><b>Total Not Received:</b> <span style='color:#6A1B9A;'>${not_received_df['Amount'].sum():,.2f}</span></div>", unsafe_allow_html=True)
 
         with tab_mismatch:
             df_pay = pd.read_sql("SELECT name, amount FROM payment_details", conn)
@@ -225,27 +202,8 @@ def admin_tab(menu="Sponsorship Items"):
                     if st.button("Delete Payment Detail"):
                         if confirm_name.strip() == pay_row['name']:
                             try:
-                                cursor.execute("SELECT email FROM notification_emails")
-                                notification_emails = [row[0] for row in cursor.fetchall() if row[0]]
-                                admin_full_name = st.session_state.get('admin_full_name', 'Unknown')
-                                deleted_details = f"""
-<b>Payment Detail Deleted</b><br><br>
-<table border='1' cellpadding='6' cellspacing='0' style='border-collapse:collapse;'>
-    <tr><th style='{TABLE_HEADER_STYLE}'>Name</th><td>{pay_row['name']}</td></tr>
-    <tr><th style='{TABLE_HEADER_STYLE}'>Amount</th><td>${pay_row['amount']:,.2f}</td></tr>
-    <tr><th style='{TABLE_HEADER_STYLE}'>Date</th><td>{pay_row['date']}</td></tr>
-    <tr><th style='{TABLE_HEADER_STYLE}'>Comments</th><td>{pay_row['comments'] or ''}</td></tr>
-</table>
-<br><b>Modified By:</b> {admin_full_name}
-"""
                                 cursor.execute("DELETE FROM payment_details WHERE id=%s", (pay_id,))
                                 conn.commit()
-                                if notification_emails:
-                                    send_email(
-                                        "Ganesh Chaturthi Payment Detail Deleted",
-                                        deleted_details,
-                                        notification_emails
-                                    )
                                 st.success("🗑️ Payment detail deleted!")
                                 st.rerun()
                             except Exception as e:
@@ -273,7 +231,7 @@ def admin_tab(menu="Sponsorship Items"):
                 if st.form_submit_button("Add Item"):
                     try:
                         if hasattr(cursor, 'execute') and hasattr(cursor.connection, 'account'):
-                            cursor.execute("INSERT INTO sponsorship_items (id, item, amount, sponsor_limit) VALUES (sponsorship_items_id_seq.NEXTVAL, %s, %s, %s)",
+                            cursor.execute("INSERT INTO sponsorship_items (item, amount, sponsor_limit) VALUES (%s, %s, %s)",
                                            (new_name, new_amt, new_lim))
                         else:
                             cursor.execute("INSERT INTO sponsorship_items (item, amount, sponsor_limit) VALUES (%s, %s, %s)",

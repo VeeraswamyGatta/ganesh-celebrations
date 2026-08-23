@@ -69,47 +69,47 @@ def expenses_tab():
                 net_amount = expense_map.get(name, 0.0) - settlement_map.get(name, 0.0)
                 if net_amount != 0:
                     expense_names.append(name)
-            # Add Veeraswamy Gatta(Paypal Amount) if it has net amount > 0
-            cursor.execute("SELECT COALESCE(SUM(amount),0) FROM expenses WHERE status='active' AND spent_by IS NULL")
-            gatta_expense = float(cursor.fetchone()[0])
-            gatta_settled = float(settlement_map.get("Veeraswamy Gatta(Paypal Amount)", 0.0))
-            gatta_net = gatta_expense - gatta_settled
-            if gatta_net != 0:
-                expense_names.append("Veeraswamy Gatta(Paypal Amount)")
             # Use index to control default selection, avoid setting session_state directly
             default_index = 0
             if "settlement_name" in st.session_state and st.session_state["settlement_name"] in expense_names:
                 default_index = expense_names.index(st.session_state["settlement_name"])
             name = st.selectbox("Name", expense_names, index=default_index, key="settlement_name")
             # Set Amount field to (total expense - total settlement) for selected name
-            if name == "Veeraswamy Gatta(Paypal Amount)":
-                default_amount = gatta_net
-            else:
-                default_amount = expense_map.get(name, 0.0) - settlement_map.get(name, 0.0)
+            default_amount = expense_map.get(name, 0.0) - settlement_map.get(name, 0.0)
             try:
                 default_amount = float(default_amount)
             except Exception:
                 default_amount = 0.0
             # Remove min_value to allow negative values
             amount = st.number_input("Amount", value=default_amount, format="%.2f", key="settlement_amount")
-            cursor.execute("SELECT DISTINCT recieved_zelle_acc_name FROM payment_details")
-            sent_by_options = sorted([row[0] for row in cursor.fetchall() if row[0] and str(row[0]).strip()])
-            if not sent_by_options:
-                sent_by_options = ["Veeraswamy Gatta(Paypal Amount)"]
+            payment_columns = pd.read_sql("SELECT * FROM payment_details LIMIT 0", conn).columns.str.lower()
+            if "recieved_zelle_acc_name" in payment_columns:
+                cursor.execute(
+                    "SELECT DISTINCT recieved_zelle_acc_name FROM payment_details "
+                    "WHERE recieved_zelle_acc_name IS NOT NULL "
+                    "AND TRIM(recieved_zelle_acc_name) <> '' "
+                    "ORDER BY recieved_zelle_acc_name"
+                )
+                sent_by_options = [row[0] for row in cursor.fetchall()]
             else:
-                sent_by_options.append("Veeraswamy Gatta(Paypal Amount)")
+                sent_by_options = []
+            if not sent_by_options:
+                sent_by_options = ["-- No Zelle Account Names Available --"]
             sent_by = st.selectbox("Sent By", sent_by_options, key="settlement_sent_by")
             comments = st.text_area("Comments", key="settlement_comments")
             if st.button("Add Settlement", key="add_settlement_btn"):
-                st.session_state["settlement_submission_in_progress"] = True
-                st.info("Adding settlement is in progress...")
-                cursor.execute("INSERT INTO settlements (name, amount, sent_by, comments) VALUES (%s, %s, %s, %s)", (name, amount, sent_by, comments))
-                conn.commit()
-                st.session_state["settlement_submission_in_progress"] = False
-                st.success("✅ Settlement added!")
-                # Clear form fields
-                # Do not clear widget keys after instantiation to avoid StreamlitAPIException
-                st.rerun()
+                if sent_by == "-- No Zelle Account Names Available --":
+                    st.warning("Add a payment with a Zelle account name before adding a settlement.")
+                else:
+                    st.session_state["settlement_submission_in_progress"] = True
+                    st.info("Adding settlement is in progress...")
+                    cursor.execute("INSERT INTO settlements (name, amount, sent_by, comments) VALUES (%s, %s, %s, %s)", (name, amount, sent_by, comments))
+                    conn.commit()
+                    st.session_state["settlement_submission_in_progress"] = False
+                    st.success("✅ Settlement added!")
+                    # Clear form fields
+                    # Do not clear widget keys after instantiation to avoid StreamlitAPIException
+                    st.rerun()
 
         with tab2:
             st.markdown("### Wallet Summary")
@@ -120,30 +120,25 @@ def expenses_tab():
             settlement_rows = cursor.fetchall()
             settlement_map = {row[0]: row[1] for row in settlement_rows}
             wallet_summary = []
-            total_received_gatta = 0
-            total_settled_gatta = settlement_map.get("Veeraswamy Gatta(Paypal Amount)", 0)
             for row in payment_rows:
                 zelle_name = row[0]
                 total_received = row[1] or 0
                 total_settled = settlement_map.get(zelle_name, 0)
-                if not zelle_name or str(zelle_name).strip() == "":
-                    total_received_gatta += total_received
-                else:
+                if zelle_name and str(zelle_name).strip():
                     available = total_received - total_settled
                     wallet_summary.append({
                         "Name": zelle_name,
                         "Total Received Amount": total_received,
                         "Total Available Amount (Received - Settled)": available
                     })
-            available_gatta = total_received_gatta - total_settled_gatta
-            wallet_summary.append({
-                "Name": "Veeraswamy Gatta(Paypal Amount)",
-                "Total Received Amount": total_received_gatta,
-                "Total Available Amount (Received - Settled)": available_gatta
-            })
-            wallet_df = pd.DataFrame(wallet_summary)
-            wallet_df = wallet_df.sort_values(by=["Name"]).reset_index(drop=True)
-            wallet_df.index = wallet_df.index + 1
+            wallet_df = pd.DataFrame(wallet_summary, columns=[
+                "Name",
+                "Total Received Amount",
+                "Total Available Amount (Received - Settled)"
+            ])
+            if not wallet_df.empty:
+                wallet_df = wallet_df.sort_values(by=["Name"]).reset_index(drop=True)
+                wallet_df.index = wallet_df.index + 1
             st.dataframe(wallet_df, use_container_width=True)
             total_received_all = wallet_df["Total Received Amount"].sum()
             total_available_all = wallet_df["Total Available Amount (Received - Settled)"].sum()
@@ -190,7 +185,9 @@ def expenses_tab():
                 categories.append("Miscellaneous")
             MAX_RECEIPT_SIZE_MB = 10
             MAX_RECEIPT_SIZE_BYTES = MAX_RECEIPT_SIZE_MB * 1024 * 1024
-            uploaded_receipt = st.file_uploader(f"Upload Receipt (JPG/PNG, max {MAX_RECEIPT_SIZE_MB}MB)", type=["jpg", "jpeg", "png"], key="add_expense_receipt")
+            expense_form = st.form("add_expense_form")
+            expense_submit_disabled = st.session_state.get("expense_submission_in_progress", False)
+            uploaded_receipt = expense_form.file_uploader(f"Upload Receipt (JPG/PNG, max {MAX_RECEIPT_SIZE_MB}MB)", type=["jpg", "jpeg", "png"], key="add_expense_receipt")
             receipt_path = None
             receipt_bytes = None
             receipt_filename = None
@@ -205,25 +202,35 @@ def expenses_tab():
                     receipt_filename = f"receipt_{uuid.uuid4().hex}.{ext}"
                     receipt_bytes = uploaded_receipt.read()
                     receipt_path = receipt_filename
-            category = st.selectbox("Category", categories, key="add_expense_category")
-            sub_category = st.text_input("Sub Category", placeholder="e.g. Decoration, Snacks", key="add_expense_subcat")
-            amount = st.number_input("Amount", format="%.2f", key="add_expense_amount")
-            date = st.date_input("Date", value=datetime.date.today(), key="add_expense_date")
-            spent_by = st.text_input("Spent By", placeholder="e.g. Name", key="add_expense_spentby")
-            comments = st.text_area("Comments", value="", placeholder="Any additional details", key="add_expense_comments")
-            if st.button("Add Expense", key="add_expense_btn"):
+            category = expense_form.selectbox("Category", categories, key="add_expense_category")
+            sub_category = expense_form.text_input("Sub Category", placeholder="e.g. Decoration, Snacks", key="add_expense_subcat")
+            amount = expense_form.number_input("Amount", format="%.2f", key="add_expense_amount")
+            date = expense_form.date_input("Date", value=datetime.date.today(), key="add_expense_date")
+            spent_by = expense_form.text_input("Spent By", placeholder="e.g. Name", key="add_expense_spentby")
+            comments = expense_form.text_area("Comments", value="", placeholder="Any additional details", key="add_expense_comments")
+            if expense_form.form_submit_button("Add Expense", disabled=expense_submit_disabled, type="primary"):
+                st.session_state["expense_submission_in_progress"] = True
+                expense_status = st.status("Adding expense...", expanded=False)
                 if not category:
+                    st.session_state["expense_submission_in_progress"] = False
+                    expense_status.update(label="Please complete the required fields", state="error", expanded=True)
                     st.error("Category is required.")
                 elif not sub_category.strip():
+                    st.session_state["expense_submission_in_progress"] = False
+                    expense_status.update(label="Please complete the required fields", state="error", expanded=True)
                     st.error("Sub Category is required.")
                 # Remove validation for amount > 0 to allow negative values
                 elif not spent_by.strip():
+                    st.session_state["expense_submission_in_progress"] = False
+                    expense_status.update(label="Please complete the required fields", state="error", expanded=True)
                     st.error("Spent By is required.")
                 elif uploaded_receipt is not None and (uploaded_receipt.size > 10 * 1024 * 1024 or uploaded_receipt.type not in ["image/jpeg", "image/png"]):
+                    st.session_state["expense_submission_in_progress"] = False
+                    expense_status.update(label="Please choose a valid receipt", state="error", expanded=True)
                     st.error("Invalid receipt file. Only JPG/PNG under 10MB allowed.")
                 else:
                     if hasattr(cursor, 'execute') and hasattr(cursor.connection, 'account'):  # crude check for Snowflake
-                        cursor.execute("INSERT INTO expenses (id, category, sub_category, amount, date, spent_by, comments, receipt_path, receipt_blob, status) VALUES (expenses_id_seq.NEXTVAL, %s, %s, %s, %s, %s, %s, %s, %s, 'active')", (category, sub_category, amount, date, spent_by, comments, receipt_path, receipt_bytes))
+                        cursor.execute("INSERT INTO expenses (category, sub_category, amount, date, spent_by, comments, receipt_path, receipt_blob, status) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'active')", (category, sub_category, amount, date, spent_by, comments, receipt_path, receipt_bytes))
                     else:
                         cursor.execute("INSERT INTO expenses (category, sub_category, amount, date, spent_by, comments, receipt_path, receipt_blob, status) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'active')", (category, sub_category, amount, date, spent_by, comments, receipt_path, receipt_bytes))
                     conn.commit()
@@ -246,8 +253,6 @@ def expenses_tab():
                     admin_full_name = st.session_state.get("admin_full_name", "Admin")
                     body += f"<div style='margin-top:18px;font-size:1.08em;'><b>Submitted by:</b> <span style='color:#1976D2;'>{admin_full_name}</span></div>"
                     # Send email with receipt attached if present
-                    st.session_state["expense_submission_in_progress"] = True
-                    st.info("Add expense record is in progress...")
                     from app.email_utils import send_email, send_email_with_attachment
                     if receipt_bytes:
                         mime_type = "image/jpeg" if receipt_path.lower().endswith((".jpg", ".jpeg")) else "image/png"
@@ -256,6 +261,7 @@ def expenses_tab():
                     else:
                         send_email(subject, body, recipients)
                     st.session_state["expense_submission_in_progress"] = False
+                    expense_status.update(label="Expense added", state="complete", expanded=False)
                     st.success("✅ Expense added and notification email sent!")
                     # Set flag to clear input fields on next run
                     st.session_state["clear_expense_form"] = True

@@ -8,7 +8,7 @@ from app.statistics import statistics_tab
 from app.admin import admin_tab
 
 
-st.set_page_config(page_title="Terrazzo Ganesh Celebrations 2025", page_icon="🙏", layout="wide")
+st.set_page_config(page_title="Terrazzo Ganesh Celebrations 2026", page_icon="🙏", layout="wide")
 from PIL import Image
 ganesh_img = Image.open("ganesh.png")
 
@@ -41,6 +41,103 @@ st.markdown("""
         content: "* ";
         color: red;
     }
+    div[data-baseweb="input"] > div,
+    div[data-baseweb="input"],
+    div[data-baseweb="base-input"],
+    div[data-baseweb="textarea"] > div,
+    div[data-baseweb="textarea"],
+    div[data-baseweb="select"],
+    div[data-baseweb="select"] > div {
+        background-color: #ffffff !important;
+        border: 1px solid #c5d9c0 !important;
+        border-radius: 9px !important;
+        color: #263238 !important;
+        box-shadow: 0 1px 3px rgba(46, 125, 50, 0.07) !important;
+    }
+    div[data-baseweb="input"] input,
+    div[data-baseweb="base-input"] input,
+    div[data-baseweb="textarea"] textarea,
+    .stTextInput input,
+    .stDateInput input,
+    .stTimeInput input,
+    .stNumberInput input,
+    .stTextArea textarea {
+        background-color: #ffffff !important;
+        color: #263238 !important;
+        -webkit-text-fill-color: #263238 !important;
+    }
+    input[type="text"],
+    input[type="date"],
+    input[type="time"],
+    input[type="number"],
+    textarea,
+    .stTextInput input,
+    .stDateInput input,
+    .stTimeInput input,
+    .stNumberInput input {
+        background: #ffffff !important;
+        background-color: #ffffff !important;
+    }
+    .stSelectbox [data-baseweb="select"] > div,
+    .stSelectbox [data-baseweb="select"] > div > div {
+        background: #ffffff !important;
+        background-color: #ffffff !important;
+    }
+    div[data-baseweb="input"] input:focus,
+    div[data-baseweb="textarea"] textarea:focus {
+        border-color: #2e7d32 !important;
+        box-shadow: 0 0 0 2px rgba(46, 125, 50, 0.14) !important;
+    }
+    div[data-baseweb="input"] input::placeholder,
+    div[data-baseweb="base-input"] input::placeholder,
+    div[data-baseweb="textarea"] textarea::placeholder,
+    .stTextInput input::placeholder,
+    .stTextArea textarea::placeholder {
+        color: #78909c !important;
+        opacity: 1;
+    }
+    .nav-pills:not(.flex-column) {
+        background: linear-gradient(135deg, #fff8e1 0%, #f1f8e9 52%, #e3f2fd 100%);
+        border: 1px solid #d7ccc8;
+        border-radius: 16px;
+        box-shadow: 0 6px 18px rgba(93, 64, 55, 0.12);
+        padding: 0.45rem;
+        margin: 0 auto 1.2rem;
+    }
+    .nav-pills:not(.flex-column) {
+        gap: 0.35rem;
+    }
+    .nav-pills:not(.flex-column) .nav-link {
+        min-height: 3rem;
+        border-radius: 11px;
+        font-weight: 650;
+        transition: transform 160ms ease, box-shadow 160ms ease;
+    }
+    .nav-pills:not(.flex-column) .nav-link:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 3px 8px rgba(93, 64, 55, 0.14);
+    }
+    @media (max-width: 640px) {
+        .block-container {
+            padding: 1rem 0.7rem;
+        }
+        .nav-pills:not(.flex-column) {
+            border-radius: 13px;
+            padding: 0.35rem;
+            margin-bottom: 0.8rem;
+        }
+        .nav-pills:not(.flex-column) {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.3rem;
+        }
+        .nav-pills:not(.flex-column) .nav-link {
+            min-height: 2.8rem;
+            padding: 0.55rem 0.3rem;
+            font-size: 0.82rem;
+            line-height: 1.15;
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -69,7 +166,13 @@ if not st.session_state.user_logged_in and not st.session_state.admin_logged_in:
         icons=["award", "calendar-event", "box-arrow-in-right"],
         menu_icon="cast",
         default_index=0,
-        orientation="horizontal"
+        orientation="horizontal",
+        styles={
+            "container": {"padding": "0!important", "background-color": "transparent"},
+            "icon": {"color": "#bf360c", "font-size": "1.1rem"},
+            "nav-link": {"color": "#4e342e", "font-size": "0.95rem", "text-align": "center", "margin": "0"},
+            "nav-link-selected": {"background-color": "#2e7d32", "color": "#ffffff"}
+        }
     )
     if initial_menu == "Prasad Seva":
         from app.prasad_seva import prasad_seva_tab
@@ -217,7 +320,13 @@ else:
             icons=menu_icons,
             menu_icon="cast",
             default_index=0,
-            orientation="horizontal"
+            orientation="horizontal",
+            styles={
+                "container": {"padding": "0!important", "background-color": "transparent"},
+                "icon": {"color": "#bf360c", "font-size": "1.1rem"},
+                "nav-link": {"color": "#4e342e", "font-size": "0.95rem", "text-align": "center", "margin": "0"},
+                "nav-link-selected": {"background-color": "#2e7d32", "color": "#ffffff"}
+            }
         )
 
         if main_menu == "Contributions":
