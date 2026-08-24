@@ -83,6 +83,19 @@ st.markdown("""
         background: #ffffff !important;
         background-color: #ffffff !important;
     }
+    [data-testid="stSelectbox"] [data-baseweb="select"] [role="combobox"],
+    [data-testid="stSelectbox"] [data-baseweb="select"] [role="combobox"] > div,
+    [data-testid="stSelectbox"] [data-baseweb="select"] [role="combobox"] span {
+        color: #263238 !important;
+        -webkit-text-fill-color: #263238 !important;
+    }
+    [data-testid="stSelectbox"] [data-baseweb="select"] [role="combobox"] {
+        min-height: 2.7rem;
+    }
+    [data-baseweb="popover"] [role="option"] {
+        background: #ffffff !important;
+        color: #263238 !important;
+    }
     div[data-baseweb="input"] input:focus,
     div[data-baseweb="textarea"] textarea:focus {
         border-color: #2e7d32 !important;
@@ -159,11 +172,11 @@ if "user_logged_in" not in st.session_state:
 show_login_form = False
 # Only show the initial menu if not logged in
 if not st.session_state.user_logged_in and not st.session_state.admin_logged_in:
-    # Show only Prasad Seva, Events, Login
+    # Open on Login while keeping the public pages available.
     initial_menu = option_menu(
         "Menu",
-        ["Prasad Seva", "Events", "Login"],
-        icons=["award", "calendar-event", "box-arrow-in-right"],
+        ["Login", "Prasad Seva", "Events"],
+        icons=["box-arrow-in-right", "award", "calendar-event"],
         menu_icon="cast",
         default_index=0,
         orientation="horizontal",
@@ -268,41 +281,6 @@ if show_login_form:
                     </div>
                     """.format("".join([f"<li>{err}</li>" for err in errors])), unsafe_allow_html=True)
 else:
-    # Add Ganesh image to the top-right corner (after login)
-    st.markdown(
-        """
-        <style>
-        .ganesh-corner-st {
-            position: fixed;
-            top: 40px;
-            right: 24px;
-            z-index: 9999;
-            width: 80px;
-            height: 90px;
-            border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-            background: #fff;
-            padding: 4px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        </style>
-        <div class="ganesh-corner-st" id="ganesh-corner-st"></div>
-        <script>
-        const img = window.parent.document.createElement('img');
-        img.src = '/app/static/ganesh.png';
-        img.alt = 'Ganesh';
-        img.style.width = '100%';
-        img.style.height = '100%';
-        img.style.borderRadius = '12px';
-        document.getElementById('ganesh-corner-st').appendChild(img);
-        </script>
-        """,
-        unsafe_allow_html=True
-    )
-    # Fallback for environments where JS injection doesn't work (e.g., Streamlit Cloud)
-    # (Removed: do not show Ganesh image at the bottom)
     # Show menu based on role after successful login
     if st.session_state.admin_logged_in:
         menu_items = ["Contributions", "Events", "Prasad Seva", "Statistics", "Expenses", "Admin"]

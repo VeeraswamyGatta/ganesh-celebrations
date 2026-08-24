@@ -317,14 +317,141 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
             st.rerun()
         return
 
+    def save_submission(pending):
+        selected_items = pending["selected_items"]
+        donation = pending["donation"]
+        name_val = pending["name"]
+        email = pending["email"]
+        gothram = pending["gothram"]
+        phone_fmt = pending["phone"]
+        apartment = pending["apartment"]
+        contributed_amount = pending["contributed_amount"]
+
+        for idx, item in enumerate(selected_items):
+            donation_for_item = donation if idx == 0 else 0
+            if hasattr(cursor, 'execute') and hasattr(cursor.connection, 'account'):
+                cursor.execute("""
+                    INSERT INTO sponsors (name, email, gothram, mobile, apartment, sponsorship, donation, submitted_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP())
+                """, (name_val, email, gothram, phone_fmt, apartment, item, donation_for_item))
+            else:
+                cursor.execute("""
+                    INSERT INTO sponsors (name, email, gothram, mobile, apartment, sponsorship, donation)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (name_val, email, gothram, phone_fmt, apartment, item, donation_for_item))
+        if not selected_items and donation > 0:
+            if hasattr(cursor, 'execute') and hasattr(cursor.connection, 'account'):
+                cursor.execute("""
+                    INSERT INTO sponsors (name, email, gothram, mobile, apartment, sponsorship, donation, submitted_at)
+                    VALUES (%s, %s, %s, %s, %s, NULL, %s, CURRENT_TIMESTAMP())
+                """, (name_val, email, gothram, phone_fmt, apartment, donation))
+            else:
+                cursor.execute("""
+                    INSERT INTO sponsors (name, email, gothram, mobile, apartment, sponsorship, donation)
+                    VALUES (%s, %s, %s, %s, %s, NULL, %s)
+                """, (name_val, email, gothram, phone_fmt, apartment, donation))
+        conn.commit()
+
+        submitted_data = {
+            "Name": name_val,
+            "Email": email,
+            "Gothram": gothram,
+            "Mobile": phone_fmt,
+            "Apartment": apartment
+        }
+        if selected_items:
+            submitted_data["Sponsorship Items"] = selected_items.copy()
+        if donation > 0:
+            submitted_data["Donation"] = f"${donation:.2f}"
+        if contributed_amount:
+            submitted_data["Contributed Amount"] = f"${contributed_amount:.2f}"
+        submitted_data["How to Pay"] = (
+            "<b>For Zelle payment, pay money to any one of these persons: "
+            "<span style='color:#1565C0;'>Purna Magum / Guru Pavan Nama / Ganesh Thamma</span></b>"
+        )
+
+        notification_emails = get_notification_emails()
+        recipients = list(notification_emails)
+        if email.strip():
+            recipients.append(email.strip())
+        recipients = list(set(recipients))
+        email_rows = f"""
+  <tr><th>Name</th><td>{name_val}</td></tr>
+  <tr><th>Email</th><td>{email}</td></tr>
+  <tr><th>Gothram</th><td>{gothram}</td></tr>
+  <tr><th>Mobile</th><td>{phone_fmt}</td></tr>
+  <tr><th>Apartment</th><td>{apartment}</td></tr>
+"""
+        if selected_items:
+            format_strings = ','.join(['%s'] * len(selected_items))
+            cursor.execute(f"SELECT item, amount, sponsor_limit FROM sponsorship_items WHERE item IN ({format_strings})", tuple(selected_items))
+            item_amounts = {row[0]: (row[1], row[2]) for row in cursor.fetchall()}
+            for item in selected_items:
+                amount, limit = item_amounts.get(item, (0, 1))
+                per_item_amount = round(amount / limit, 2) if limit else amount
+                email_rows += f"  <tr><th>Sponsorship Item</th><td>{item}</td><td><b>${per_item_amount:.2f}</b></td></tr>\n"
+        if donation > 0:
+            email_rows += f"  <tr><th>Donation</th><td>General Donation</td><td><b>${donation:.2f}</b></td></tr>\n"
+        email_rows += f"  <tr><th colspan='2'>Total Contributed Amount</th><td><b>${contributed_amount:.2f}</b></td></tr>\n"
+        send_email(
+            "Ganesh Chaturthi Celebrations Sponsorship Program in Austin Texas",
+            f"""
+<b>New Sponsorship Submission</b><br><br>
+<table border='1' cellpadding='6' cellspacing='0' style='border-collapse:collapse;'>
+{email_rows}
+</table>
+<br><b>For Zelle payment, pay money to any one of these persons: <span style='color:#1565C0;'>Purna Magum / Guru Pavan Nama / Ganesh Thamma</span></b>
+""",
+            recipients
+        )
+        return submitted_data
+
+    pending_submission = st.session_state.get("pending_sponsorship")
+    if pending_submission:
+        st.markdown("### Confirm Your Submission")
+        confirmation_rows = [
+            ("Name", pending_submission["name"]),
+            ("Apartment", pending_submission["apartment"]),
+            ("Email", pending_submission["email"] or "Not provided"),
+            ("Gothram", pending_submission["gothram"] or "Not provided"),
+            ("Mobile", pending_submission["phone"] or "Not provided"),
+            ("Sponsorship Items", ", ".join(pending_submission["selected_items"]) or "None"),
+            ("Donation", f"${pending_submission['donation']:.2f}"),
+            ("Total", f"${pending_submission['contributed_amount']:.2f}"),
+        ]
+        st.table({"": [row[0] for row in confirmation_rows], "Selected value": [row[1] for row in confirmation_rows]})
+        confirm_col, edit_col = st.columns(2)
+        if confirm_col.button("Confirm Submission", type="primary", use_container_width=True):
+            try:
+                with st.spinner("Saving your confirmed submission..."):
+                    st.session_state["submitted_data"] = save_submission(pending_submission)
+                st.session_state["pending_sponsorship"] = None
+                st.session_state["show_submission"] = True
+                st.rerun()
+            except Exception as error:
+                conn.rollback()
+                st.error(f"Submission failed: {error}")
+        if edit_col.button("Edit Details", use_container_width=True):
+            st.session_state["sponsorship_name"] = pending_submission["name"]
+            st.session_state["sponsorship_apartment"] = pending_submission["apartment"]
+            st.session_state["sponsorship_email"] = pending_submission["email"]
+            st.session_state["sponsorship_gothram"] = pending_submission["gothram"]
+            st.session_state["sponsorship_mobile"] = pending_submission["phone"]
+            st.session_state["sponsorship_donation_amount"] = pending_submission["donation"]
+            for item in pending_submission["available_items"]:
+                st.session_state[item] = item in pending_submission["selected_items"]
+            st.session_state["pending_sponsorship"] = None
+            st.rerun()
+        return
+
     sponsorship_form = st.form("sponsorship_form")
     # Only show submission inputs if allowed
     if show_submission_inputs:
-        name = sponsorship_form.text_input("👤 Your Name", help="Please enter your full name", placeholder="E.g., Raghava Rao")
-        apartment = sponsorship_form.text_input("🏢 Your Apartment Number", help="Apartment number must be between 100 and 1600", placeholder="E.g., 305")
-        email = sponsorship_form.text_input("📧 Email Address (optional)", help="Get notifications and receipts to your email", placeholder="your@email.com")
-        gothram = sponsorship_form.text_input("🪔 Gothram (optional)", help="Enter your family Gothram (optional)", placeholder="E.g., Bharadwaja, Kashyapa, etc.")
-        mobile = sponsorship_form.text_input("📱 Mobile Number (optional)", help="10-digit US phone number (no country code)", placeholder="E.g., 5121234567")
+        name = sponsorship_form.text_input("👤 Your Name", help="Please enter your full name", placeholder="E.g., Raghava Rao", key="sponsorship_name")
+        apartment = sponsorship_form.text_input("🏢 Your Apartment Number", help="Apartment number must be between 100 and 1600", placeholder="E.g., 305", key="sponsorship_apartment")
+        email = sponsorship_form.text_input("📧 Email Address (optional)", help="Get notifications and receipts to your email", placeholder="your@email.com", key="sponsorship_email")
+        gothram = sponsorship_form.text_input("🪔 Gothram (optional)", help="Enter your family Gothram (optional)", placeholder="E.g., Bharadwaja, Kashyapa, etc.", key="sponsorship_gothram")
+        mobile = sponsorship_form.text_input("📱 Mobile Number (optional)", help="10-digit US phone number (no country code)", placeholder="E.g., 5121234567", key="sponsorship_mobile")
     else:
         name = apartment = email = gothram = mobile = ""
 
@@ -438,7 +565,13 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
                     )
                 # Only show sponsor checkbox if slots are available
                 if remaining > 0:
-                    if sponsorship_form.checkbox(f"Select {item}", key=item):
+                    checkbox_col, amount_col = sponsorship_form.columns([4, 1])
+                    item_selected = checkbox_col.checkbox(f"Select {item}", key=item)
+                    amount_col.markdown(
+                        f"<div style='color:#2e7d32;font-weight:700;text-align:right;padding-top:8px;'>${per_slot:,.2f}</div>",
+                        unsafe_allow_html=True
+                    )
+                    if item_selected:
                         selected_items.append(item)
                 st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
             else:
@@ -509,6 +642,12 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
     def format_name(name):
         return ' '.join(word.capitalize() for word in name.strip().split())
 
+    validation_errors = st.session_state.get("sponsorship_validation_errors", [])
+    if validation_errors:
+        sponsorship_form.error("Please complete the required fields before submitting:")
+        for error in validation_errors:
+            sponsorship_form.markdown(f"- {error}")
+
     submit_disabled = st.session_state.get('show_submission', False) or st.session_state.get('submission_in_progress', False)
     if show_submission_inputs:
         if sponsorship_form.form_submit_button("✅ Submit", disabled=submit_disabled, type="primary"):
@@ -541,10 +680,32 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
                     errors.append("Please enter a valid 10-digit US phone number.")
             if errors:
                 st.session_state['submission_in_progress'] = False
+                st.session_state["sponsorship_validation_errors"] = errors
                 submission_status.update(label="Please correct the highlighted fields", state="error", expanded=True)
-                for err in errors:
-                    st.error(err)
+                st.rerun()
             else:
+                st.session_state["sponsorship_validation_errors"] = []
+                with st.spinner("Preparing your confirmation details..."):
+                    sponsorship_total = 0
+                    if selected_items:
+                        format_strings = ','.join(['%s'] * len(selected_items))
+                        cursor.execute(f"SELECT amount, sponsor_limit FROM sponsorship_items WHERE item IN ({format_strings})", tuple(selected_items))
+                        sponsorship_total = sum([row[0] / row[1] if row[1] else 0 for row in cursor.fetchall()])
+                    contributed_amount = round(sponsorship_total + (donation if donation else 0), 2)
+                    st.session_state['pending_sponsorship'] = {
+                        "name": name_val,
+                        "email": email.strip(),
+                        "gothram": gothram.strip(),
+                        "phone": phone_fmt.strip(),
+                        "apartment": apartment.strip(),
+                        "selected_items": selected_items.copy(),
+                        "available_items": [row[0] for row in rows],
+                        "donation": float(donation or 0),
+                        "contributed_amount": contributed_amount,
+                    }
+                st.session_state['submission_in_progress'] = False
+                st.rerun()
+
                 try:
                     # Calculate sponsorship item total as (amount / sponsor_limit) for each selected item
                     sponsorship_total = 0
