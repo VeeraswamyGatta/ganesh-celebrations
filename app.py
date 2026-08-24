@@ -306,6 +306,11 @@ else:
                 "nav-link-selected": {"background-color": "#2e7d32", "color": "#ffffff"}
             }
         )
+        if st.button("Logout", key="logout_button"):
+            st.session_state.user_logged_in = False
+            st.session_state.admin_logged_in = False
+            st.session_state.pop('is_admin', None)
+            st.rerun()
 
         if main_menu == "Contributions":
             sponsorship_tab()

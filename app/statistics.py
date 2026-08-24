@@ -20,7 +20,6 @@ import pandas as pd
 import datetime
 from .db import get_connection
 from .email_utils import send_email
-import altair as alt
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -39,7 +38,6 @@ def statistics_tab():
     # Build sponsorship records with type and split item/donation, and show correct sponsored amount
     raw_df = pd.read_sql("SELECT name, email, mobile, sponsorship, donation FROM sponsors ORDER BY id", conn)
     raw_df.columns = [c.lower() for c in raw_df.columns]
-    # Get sponsorship item amounts and limits for per-slot calculation
     cursor.execute("SELECT item, amount, sponsor_limit FROM sponsorship_items")
     item_amt_map = {row[0]: (row[1], row[2]) for row in cursor.fetchall()}
     records = []
@@ -68,20 +66,17 @@ def statistics_tab():
     st.markdown("### 📋 Sponsorship Records")
     df_display = df.copy()
     if not is_admin:
-        # Hide email and mobile columns for users
         df_display = df_display.drop(columns=[col for col in ['Email', 'Mobile'] if col in df_display.columns])
     if 'Name' in df_display.columns:
         df_display = df_display.sort_values(by=["Name"]).reset_index(drop=True)
     df_display.index = range(1, len(df_display) + 1)
     st.dataframe(df_display)
-    # Add total row at the bottom
     if not df.empty:
         df_amt = df.copy()
         df_amt['Amount'] = df_amt['Amount'].apply(lambda x: float(x))
         total_amt = df_amt['Amount'].sum()
         st.markdown(f"<div style='font-size:1.1em; color:#1565C0; font-weight:bold; margin-top:0.5em;'>Total Amount (All Records): <span style='color:#2E7D32;'>{total_amt:,.2f}</span></div>", unsafe_allow_html=True)
 
-    # Add total row to CSV export
     def send_csv_email(subject, body, df_csv, filename):
         import io
         cursor.execute("SELECT email FROM notification_emails WHERE email IS NOT NULL AND email != ''")
@@ -93,7 +88,6 @@ def statistics_tab():
         EMAIL_PASSWORD = st.secrets["email_password"]
         SMTP_SERVER = st.secrets["smtp_server"]
         SMTP_PORT = st.secrets["smtp_port"]
-        # Add total row and sort by Name
         df_csv_out = df_csv.copy()
         if not df_csv_out.empty:
             if 'Name' in df_csv_out.columns:
@@ -178,66 +172,5 @@ def statistics_tab():
             st.success("Available items report sent!")
 
 
-    # Bar chart for total contribution per person (sponsorship + donation)
-    st.markdown("### 📊 Total Contribution by Person")
-    # Prepare grouped data for sponsorship and donation
-    contrib_data = {}
-    for _, row in raw_df.iterrows():
-        name = row['name']
-        # Sponsorship amount (apply limit calculation)
-        spon_amt = 0
-        if row['sponsorship']:
-            amt, limit = item_amt_map.get(row['sponsorship'], (0, 1))
-            spon_amt = round(amt / limit, 2) if limit else amt
-        # Donation amount
-        don_amt = row['donation'] if row['donation'] else 0
-        if name not in contrib_data:
-            contrib_data[name] = {'Sponsorship Amount': 0, 'Donation Amount': 0}
-        contrib_data[name]['Sponsorship Amount'] += spon_amt
-        contrib_data[name]['Donation Amount'] += don_amt
-    # Build DataFrame for chart
-    contrib_df = pd.DataFrame([
-        {
-            'Name': name,
-            'Sponsorship Amount': float(v['Sponsorship Amount']),
-            'Donation Amount': float(v['Donation Amount']),
-            'Total Contribution': float(v['Sponsorship Amount']) + float(v['Donation Amount'])
-        }
-        for name, v in contrib_data.items()
-    ])
-    if not contrib_df.empty:
-        chart_df = contrib_df.melt(id_vars=['Name'], value_vars=['Sponsorship Amount', 'Donation Amount'], var_name='Type', value_name='Amount')
-        # Set y-axis to have a step of 10 for amount range
-        max_amt = chart_df['Amount'].max() if not chart_df['Amount'].empty else 10
-        chart_max = max(10, float(max_amt))
-        # Responsive chart width for mobile
-        chart_width = 700
-        # If running on mobile, reduce chart width (pseudo-code, Streamlit does not provide direct device detection)
-        # You may use st.container() or st.columns for better mobile layout if needed
-        # chart_width = 350 if is_mobile else 700
-        chart = alt.Chart(chart_df).mark_bar().encode(
-            x=alt.X('Name:N', title='Name', sort='-y'),
-            y=alt.Y('Amount:Q', title='Amount ($)', scale=alt.Scale(domain=[0, chart_max], nice=True)),
-            color=alt.Color('Type:N', title='Type'),
-            tooltip=['Name', 'Type', 'Amount']
-        ).properties(width=chart_width)
-        chart = chart.configure_axis(
-            grid=True,
-            tickCount=max(2, round(chart_max / 5))
-        )
-        st.altair_chart(chart, use_container_width=True)
-
-        # Calculate unique contributors for sponsors and donations
-        sponsor_names = set(raw_df[raw_df['sponsorship'].notnull()]['name'])
-        donation_names = set(raw_df[(raw_df['donation'] > 0) & raw_df['donation'].notnull()]['name'])
-        total_sponsors = len(sponsor_names)
-        total_donors = len(donation_names)
-        total_contributors = len(sponsor_names.union(donation_names))
-
-        st.markdown(f"<div style='font-size:1em; color:#1565C0; font-weight:bold; margin-top:0.5em;'>Total Contributors (Sponsors + Donations) = {total_sponsors} + {total_donors} = <span style='color:#2E7D32;'>{total_contributors}</span></div>", unsafe_allow_html=True)
-    else:
-        st.info("No contributions recorded yet.")
-
-
-
+    # Removed Bar Chart of Sponsorships as requested
     # Removed Bar Chart of Sponsorships as requested

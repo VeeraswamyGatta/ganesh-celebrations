@@ -124,7 +124,7 @@ def sponsorship_tab():
             🙏 Welcome to Terrazzo Ganesh Celebrations 2026!
         </div>
         <div style='font-size:1.13em; color: #E65100; margin-bottom:6px; text-align:center;'>
-            <span style='font-size:1.08em; color:#444;'>📅 14th Sep 2026 to 16th Sep 2026 <span style='color:#388e3c;'>(3 days)</span></span><br>
+            <span style='font-size:1.08em; color:#444;'>📅 14th Sep 2026 to 20th Sep 2026 <span style='color:#388e3c;'>(7 days)</span></span><br>
             <span style='font-size:1.08em; color:#1565c0;'>📍 3C Garagge <span style='font-size:1.15em;vertical-align:middle;'>🙏</span> <span style='font-size:0.98em; color:#444;'>(Raghava)</span></span>
         </div>
         <div style='font-size:1.08em; color:#333; margin-bottom:6px;'>
@@ -240,11 +240,6 @@ def sponsorship_tab():
         </div>
     </div>
     <hr style='margin:1.5em 0 1em 0; border:0; border-top:1.5px solid #eee;'>
-    <div style='font-size:1.05em; color:#1565c0; margin-bottom:0.5em;'>
-        <span style='margin-right:18px;'>📊 <b>Expenses:</b> See <b style='color:#d32f2f;'>Expenses</b> tab above.</span><br>
-        <span style='margin-right:18px;'>📅 <b>Events:</b> See <b style='color:#FF9800;'>Events</b> tab above.</span><br>
-        <span>📈 <b>Summary:</b> See <b style='color:#FF9800;'>Statistics</b> tab above.</span>
-    </div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -419,7 +414,10 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
             ("Donation", f"${pending_submission['donation']:.2f}"),
             ("Total", f"${pending_submission['contributed_amount']:.2f}"),
         ]
-        st.table({"": [row[0] for row in confirmation_rows], "Selected value": [row[1] for row in confirmation_rows]})
+        for label, value in confirmation_rows:
+            label_col, value_col = st.columns([1, 2])
+            label_col.markdown(f"**{label}**")
+            value_col.write(value)
         confirm_col, edit_col = st.columns(2)
         if confirm_col.button("Confirm Submission", type="primary", use_container_width=True):
             try:
@@ -650,9 +648,9 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
 
     submit_disabled = st.session_state.get('show_submission', False) or st.session_state.get('submission_in_progress', False)
     if show_submission_inputs:
-        if sponsorship_form.form_submit_button("✅ Submit", disabled=submit_disabled, type="primary"):
+        if sponsorship_form.form_submit_button("🔍 Review", disabled=submit_disabled, type="primary"):
             st.session_state['submission_in_progress'] = True
-            submission_status = st.status("Submitting your sponsorship...", expanded=False)
+            submission_status = st.status("Reviewing your sponsorship...", expanded=False)
             errors = []
             name_val = format_name(name)
             if not name_val:
