@@ -113,6 +113,9 @@ def sponsorship_tab():
             .sponsor-option-price { font-size: 0.98rem; }
             .sponsor-metric { font-size: 0.82rem; }
         }
+        div[data-testid="stTooltipIcon"] {
+            display: none !important;
+        }
         </style>
         """,
         unsafe_allow_html=True
@@ -445,11 +448,11 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
     sponsorship_form = st.form("sponsorship_form")
     # Only show submission inputs if allowed
     if show_submission_inputs:
-        name = sponsorship_form.text_input("👤 Your Name", help="Please enter your full name", placeholder="E.g., Raghava Rao", key="sponsorship_name")
-        apartment = sponsorship_form.text_input("🏢 Your Apartment Number", help="Apartment number must be between 100 and 1600", placeholder="E.g., 305", key="sponsorship_apartment")
-        email = sponsorship_form.text_input("📧 Email Address (optional)", help="Get notifications and receipts to your email", placeholder="your@email.com", key="sponsorship_email")
-        gothram = sponsorship_form.text_input("🪔 Gothram (optional)", help="Enter your family Gothram (optional)", placeholder="E.g., Bharadwaja, Kashyapa, etc.", key="sponsorship_gothram")
-        mobile = sponsorship_form.text_input("📱 Mobile Number (optional)", help="10-digit US phone number (no country code)", placeholder="E.g., 5121234567", key="sponsorship_mobile")
+        name = sponsorship_form.text_input("👤 Your Name", placeholder="E.g., Raghava Rao", key="sponsorship_name")
+        apartment = sponsorship_form.text_input("🏢 Your Apartment Number", placeholder="E.g., 305", key="sponsorship_apartment")
+        email = sponsorship_form.text_input("📧 Email Address (optional)", placeholder="your@email.com", key="sponsorship_email")
+        gothram = sponsorship_form.text_input("🪔 Gothram (optional)", placeholder="E.g., Bharadwaja, Kashyapa, etc.", key="sponsorship_gothram")
+        mobile = sponsorship_form.text_input("📱 Mobile Number (optional)", placeholder="E.g., 5121234567", key="sponsorship_mobile")
     else:
         name = apartment = email = gothram = mobile = ""
 
@@ -539,11 +542,9 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
                     )
                 # Only show sponsor checkbox if slots are available
                 if remaining > 0:
-                    checkbox_col, amount_col = sponsorship_form.columns([4, 1])
-                    item_selected = checkbox_col.checkbox(f"Select {item}", key=item)
-                    amount_col.markdown(
-                        f"<div style='color:#2e7d32;font-weight:700;text-align:right;padding-top:8px;'>${per_slot:,.2f}</div>",
-                        unsafe_allow_html=True
+                    item_selected = sponsorship_form.checkbox(
+                        f"Select {item} **:green[${per_slot:,.2f}]**",
+                        key=item
                     )
                     if item_selected:
                         selected_items.append(item)
