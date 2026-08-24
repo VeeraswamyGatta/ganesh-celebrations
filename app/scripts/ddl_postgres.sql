@@ -17,8 +17,12 @@ CREATE TABLE IF NOT EXISTS payment_details (
 CREATE TABLE IF NOT EXISTS committee_members (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
-    zelle_enable BOOLEAN NOT NULL DEFAULT FALSE
+    apartment TEXT NOT NULL,
+    recieve_cash_enable BOOLEAN NOT NULL DEFAULT FALSE
 );
+
+ALTER TABLE committee_members ADD COLUMN IF NOT EXISTS apartment TEXT;
+ALTER TABLE committee_members ADD COLUMN IF NOT EXISTS recieve_cash_enable BOOLEAN NOT NULL DEFAULT FALSE;
 
 CREATE TABLE IF NOT EXISTS transfers (
     id SERIAL PRIMARY KEY,

@@ -100,12 +100,12 @@ def expenses_tab():
             else:
                 sent_by_options = []
             if not sent_by_options:
-                sent_by_options = ["-- No Zelle Account Names Available --"]
+                sent_by_options = ["-- No Cash Collectors Available --"]
             sent_by = st.selectbox("Sent By", sent_by_options, key="settlement_sent_by")
             comments = st.text_area("Comments", key="settlement_comments")
             if st.button("Add Settlement", key="add_settlement_btn"):
-                if sent_by == "-- No Zelle Account Names Available --":
-                    st.warning("Add a payment with a Zelle account name before adding a settlement.")
+                if sent_by == "-- No Cash Collectors Available --":
+                    st.warning("Add a cash payment with a collector before adding a settlement.")
                 else:
                     st.session_state["settlement_submission_in_progress"] = True
                     st.info("Adding settlement is in progress...")
@@ -127,13 +127,13 @@ def expenses_tab():
             settlement_map = {row[0]: row[1] for row in settlement_rows}
             wallet_summary = []
             for row in payment_rows:
-                zelle_name = row[0]
+                cash_collector = row[0]
                 total_received = row[1] or 0
-                total_settled = settlement_map.get(zelle_name, 0)
-                if zelle_name and str(zelle_name).strip():
+                total_settled = settlement_map.get(cash_collector, 0)
+                if cash_collector and str(cash_collector).strip():
                     available = total_received - total_settled
                     wallet_summary.append({
-                        "Name": zelle_name,
+                        "Name": cash_collector,
                         "Total Received Amount": total_received,
                         "Total Available Amount (Received - Settled)": available
                     })

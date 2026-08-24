@@ -51,18 +51,21 @@ def sponsorship_tab():
     ):
         st.session_state['submission_in_progress'] = False
     try:
-        cursor.execute("SELECT name, zelle_enable FROM committee_members ORDER BY name")
-        zelle_names = [
-            row[0] for row in cursor.fetchall()
-            if row[0] and str(row[1]).strip().lower() in {"true", "1", "t", "yes", "y"}
+        cursor.execute("SELECT name, apartment FROM committee_members WHERE recieve_cash_enable = TRUE ORDER BY name")
+        cash_collectors = [
+            f"{row[0]} (Apartment {row[1]})" for row in cursor.fetchall()
+            if row[0] and row[1]
         ]
     except Exception:
-        zelle_names = []
-    zelle_payment_html = ""
-    if zelle_names:
-        zelle_payment_html = (
-            "<br><b>For Zelle payment, pay money to any one of these persons: "
-            f"<span style='color:#1565C0;'>{' / '.join(zelle_names)}</span></b>"
+        cash_collectors = []
+    cash_payment_html = ""
+    if cash_collectors:
+        cash_payment_html = (
+            "<br><b>Please reach out to one of these members for cash payment:</b><br>"
+            + "<br>".join(
+                f"<span style='color:#1565C0;'>{collector}</span>"
+                for collector in cash_collectors
+            )
         )
     st.markdown(
         """
@@ -142,8 +145,8 @@ def sponsorship_tab():
         unsafe_allow_html=True
     )
 
-    # --- Combined PayPal + Zelle Total ---
-    # Get PayPal and Zelle totals from payment_details table
+    # --- Combined PayPal + Cash Total ---
+    # Get PayPal and Cash totals from payment_details table
     paypal_amount = 0.0
     zelle_amount = 0.0
     try:
@@ -154,10 +157,10 @@ def sponsorship_tab():
     except Exception:
         paypal_amount = 0.0
     try:
-        zelle_df = pd.read_sql("SELECT amount FROM payment_details WHERE payment_type = 'Zelle'", conn)
-        zelle_df.columns = [c.lower() for c in zelle_df.columns]
-        if not zelle_df.empty:
-            zelle_amount = zelle_df["amount"].astype(float).sum()
+        cash_df = pd.read_sql("SELECT amount FROM payment_details WHERE payment_type = 'Cash'", conn)
+        cash_df.columns = [c.lower() for c in cash_df.columns]
+        if not cash_df.empty:
+            zelle_amount = cash_df["amount"].astype(float).sum()
     except Exception:
         zelle_amount = 0.0
     combined_total = paypal_amount + zelle_amount
@@ -384,8 +387,8 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
             submitted_data["Donation"] = f"${donation:.2f}"
         if contributed_amount:
             submitted_data["Contributed Amount"] = f"${contributed_amount:.2f}"
-        if zelle_names:
-            submitted_data["How to Pay"] = zelle_payment_html.lstrip("<br>")
+        if cash_collectors:
+            submitted_data["How to Pay"] = cash_payment_html.lstrip("<br>")
 
         notification_emails = get_notification_emails()
         recipients = list(notification_emails)
@@ -417,7 +420,7 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
 <table border='1' cellpadding='6' cellspacing='0' style='border-collapse:collapse;'>
 {email_rows}
 </table>
-{zelle_payment_html}
+{cash_payment_html}
 """,
             recipients
         )
@@ -746,8 +749,8 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
                         submitted_data["Donation"] = f"${donation}"
                     if (selected_items or donation > 0) and contributed_amount:
                         submitted_data["Contributed Amount"] = f"${contributed_amount}"
-                    if zelle_names:
-                        submitted_data["How to Pay"] = zelle_payment_html.lstrip("<br>")
+                    if cash_collectors:
+                        submitted_data["How to Pay"] = cash_payment_html.lstrip("<br>")
                     st.session_state['submitted_data'] = submitted_data
                     st.session_state['show_submission'] = True
                     st.session_state['submission_in_progress'] = False
@@ -775,7 +778,7 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
                         email_rows += f"  <tr><th>Donation</th><td>General Donation</td><td><b>${donation}</b></td></tr>\n"
                     if contributed_amount:
                         email_rows += f"  <tr><th colspan='2'>Total Contributed Amount</th><td><b>${contributed_amount}</b></td></tr>\n"
-                    payment_html = zelle_payment_html
+                    payment_html = cash_payment_html
                     send_email(
                         "Ganesh Chaturthi Celebrations Sponsorship Program in Austin Texas",
                         f"""

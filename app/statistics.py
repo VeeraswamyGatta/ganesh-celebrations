@@ -25,7 +25,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 def statistics_tab():
-    # --- Combined PayPal + Zelle Total ---    
+    # --- Combined PayPal + Cash Total ---
     st.session_state['active_tab'] = 'Statistics'
     is_admin = st.session_state.get('is_admin', False)
     # --- Audit trail: Your Full Name ---
