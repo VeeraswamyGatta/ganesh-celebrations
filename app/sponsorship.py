@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import datetime
+import re
 from .db import get_connection
 from .email_utils import send_email
 from .notification_utils import get_notification_emails
@@ -43,6 +44,26 @@ def sponsorship_tab():
     st.session_state['active_tab'] = 'Sponsorship'
     conn = get_connection()
     cursor = conn.cursor()
+    if (
+        st.session_state.get('submission_in_progress', False)
+        and not st.session_state.get('pending_sponsorship')
+        and not st.session_state.get('submitted_data')
+    ):
+        st.session_state['submission_in_progress'] = False
+    try:
+        cursor.execute("SELECT name, zelle_enable FROM committee_members ORDER BY name")
+        zelle_names = [
+            row[0] for row in cursor.fetchall()
+            if row[0] and str(row[1]).strip().lower() in {"true", "1", "t", "yes", "y"}
+        ]
+    except Exception:
+        zelle_names = []
+    zelle_payment_html = ""
+    if zelle_names:
+        zelle_payment_html = (
+            "<br><b>For Zelle payment, pay money to any one of these persons: "
+            f"<span style='color:#1565C0;'>{' / '.join(zelle_names)}</span></b>"
+        )
     st.markdown(
         """
         <style>
@@ -363,10 +384,8 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
             submitted_data["Donation"] = f"${donation:.2f}"
         if contributed_amount:
             submitted_data["Contributed Amount"] = f"${contributed_amount:.2f}"
-        submitted_data["How to Pay"] = (
-            "<b>For Zelle payment, pay money to any one of these persons: "
-            "<span style='color:#1565C0;'>Purna Magum / Guru Pavan Nama / Ganesh Thamma</span></b>"
-        )
+        if zelle_names:
+            submitted_data["How to Pay"] = zelle_payment_html.lstrip("<br>")
 
         notification_emails = get_notification_emails()
         recipients = list(notification_emails)
@@ -398,7 +417,7 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
 <table border='1' cellpadding='6' cellspacing='0' style='border-collapse:collapse;'>
 {email_rows}
 </table>
-<br><b>For Zelle payment, pay money to any one of these persons: <span style='color:#1565C0;'>Purna Magum / Guru Pavan Nama / Ganesh Thamma</span></b>
+{zelle_payment_html}
 """,
             recipients
         )
@@ -623,7 +642,7 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
         for error in validation_errors:
             sponsorship_form.markdown(f"- {error}")
 
-    submit_disabled = st.session_state.get('show_submission', False) or st.session_state.get('submission_in_progress', False)
+    submit_disabled = st.session_state.get('submission_in_progress', False)
     if show_submission_inputs:
         if sponsorship_form.form_submit_button("🔍 Review", disabled=submit_disabled, type="primary"):
             st.session_state['submission_in_progress'] = True
@@ -727,9 +746,8 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
                         submitted_data["Donation"] = f"${donation}"
                     if (selected_items or donation > 0) and contributed_amount:
                         submitted_data["Contributed Amount"] = f"${contributed_amount}"
-                    submitted_data["How to Pay"] = (
-                        "<b>For Zelle payment, pay money to any one of these persons: <span style='color:#1565C0;'>Purna Magum / Guru Pavan Nama / Ganesh Thamma</span></b>"
-                    )
+                    if zelle_names:
+                        submitted_data["How to Pay"] = zelle_payment_html.lstrip("<br>")
                     st.session_state['submitted_data'] = submitted_data
                     st.session_state['show_submission'] = True
                     st.session_state['submission_in_progress'] = False
@@ -757,7 +775,7 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
                         email_rows += f"  <tr><th>Donation</th><td>General Donation</td><td><b>${donation}</b></td></tr>\n"
                     if contributed_amount:
                         email_rows += f"  <tr><th colspan='2'>Total Contributed Amount</th><td><b>${contributed_amount}</b></td></tr>\n"
-                    payment_html = "<br><b>For Zelle payment, pay money to any one of these persons: <span style='color:#1565C0;'>Purna Magum / Guru Pavan Nama / Ganesh Thamma</span></b>"
+                    payment_html = zelle_payment_html
                     send_email(
                         "Ganesh Chaturthi Celebrations Sponsorship Program in Austin Texas",
                         f"""

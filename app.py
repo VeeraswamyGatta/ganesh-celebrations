@@ -273,8 +273,8 @@ if show_login_form:
 else:
     # Show menu based on role after successful login
     if st.session_state.admin_logged_in:
-        menu_items = ["Contributions", "Events", "Prasad Seva", "Statistics", "Expenses", "Admin"]
-        menu_icons = ["gift", "calendar-event", "award", "bar-chart", "cash-coin", "lock"]
+        menu_items = ["Contributions", "Events", "Prasad Seva", "Statistics", "Expenses", "Sponsorship Payment Details", "Admin"]
+        menu_icons = ["gift", "calendar-event", "award", "bar-chart", "cash-coin", "credit-card", "lock"]
     elif st.session_state.user_logged_in:
         menu_items = ["Contributions", "Events", "Prasad Seva", "Statistics", "Expenses"]
         menu_icons = ["gift", "calendar-event", "award", "bar-chart", "cash-coin"]
@@ -324,6 +324,9 @@ else:
         elif main_menu == "Expenses":
             from app.expenses import expenses_tab
             expenses_tab()
+        elif st.session_state.admin_logged_in and main_menu == "Sponsorship Payment Details":
+            from app.admin import admin_tab
+            admin_tab(menu="Sponsorship Payment Details")
         elif st.session_state.admin_logged_in and main_menu == "Admin":
             if 'admin_full_name' not in st.session_state:
                 st.session_state.admin_full_name = ''
@@ -331,12 +334,12 @@ else:
             admin_menu = option_menu(
                 "Admin Sections",
                 [
-                    "Payment Details",
                     "Sponsorship Record",
                     "Sponsorship Items",
+                    "Committee Members",
                     "Manage Notification Emails"
                 ],
-                icons=["credit-card", "pencil-square", "list-task", "envelope-fill"],
+                icons=["pencil-square", "list-task", "people-fill", "envelope-fill"],
                 menu_icon="gear",
                 default_index=0,
                 orientation="vertical"

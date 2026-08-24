@@ -26,13 +26,14 @@ def prasad_seva_tab():
         ]
     else:
         tab_names = [
+            "Add Prasad Seva",
             "Prasad Seva Summary",
             "Prasad Seva Sponsors List",
             "Total Served by Name/Group"
         ]
     # Prepend Laddu Auction Winners as default option
     tab_names = [laddu_winners_option] + tab_names
-    selected_tab = st.selectbox("Select Section", tab_names, index=0)
+    selected_tab = st.selectbox("Select Section", tab_names, index=tab_names.index("Add Prasad Seva"))
 
     if selected_tab == laddu_winners_option:
         st.markdown(

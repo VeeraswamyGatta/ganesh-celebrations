@@ -19,6 +19,12 @@ def expenses_tab():
         st.rerun()
     conn = get_connection()
     cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT name FROM committee_members ORDER BY name")
+        committee_member_names = [row[0] for row in cursor.fetchall() if row[0]]
+    except Exception:
+        committee_member_names = []
+    spent_by_options = committee_member_names or ["-- No Committee Members Available --"]
     # Calculate wallet and expenses totals
     cursor.execute("SELECT COALESCE(SUM(amount),0) FROM payment_details")
     total_payments = cursor.fetchone()[0]
@@ -206,7 +212,7 @@ def expenses_tab():
             sub_category = expense_form.text_input("Sub Category", placeholder="e.g. Decoration, Snacks", key="add_expense_subcat")
             amount = expense_form.number_input("Amount", format="%.2f", key="add_expense_amount")
             date = expense_form.date_input("Date", value=datetime.date.today(), key="add_expense_date")
-            spent_by = expense_form.text_input("Spent By", placeholder="e.g. Name", key="add_expense_spentby")
+            spent_by = expense_form.selectbox("Spent By", spent_by_options, key="add_expense_spentby")
             comments = expense_form.text_area("Comments", value="", placeholder="Any additional details", key="add_expense_comments")
             if expense_form.form_submit_button("Add Expense", disabled=expense_submit_disabled, type="primary"):
                 st.session_state["expense_submission_in_progress"] = True
@@ -220,7 +226,7 @@ def expenses_tab():
                     expense_status.update(label="Please complete the required fields", state="error", expanded=True)
                     st.error("Sub Category is required.")
                 # Remove validation for amount > 0 to allow negative values
-                elif not spent_by.strip():
+                elif spent_by == "-- No Committee Members Available --":
                     st.session_state["expense_submission_in_progress"] = False
                     expense_status.update(label="Please complete the required fields", state="error", expanded=True)
                     st.error("Spent By is required.")
@@ -386,7 +392,15 @@ def expenses_tab():
                         new_sub_category = st.text_input("Sub Category", value=entry["Sub Category"])
                         new_amount = st.number_input("Amount", value=amount_val, format="%.2f")
                         new_date = st.date_input("Date", value=date_obj)
-                        new_spent_by = st.text_input("Spent By", value=entry["Spent By"])
+                        edit_spent_by_options = spent_by_options.copy()
+                        if entry["Spent By"] not in edit_spent_by_options and entry["Spent By"]:
+                            edit_spent_by_options.insert(0, entry["Spent By"])
+                        new_spent_by = st.selectbox(
+                            "Spent By",
+                            edit_spent_by_options,
+                            index=edit_spent_by_options.index(entry["Spent By"]) if entry["Spent By"] in edit_spent_by_options else 0,
+                            key=f"edit_spent_by_{selected_id}"
+                        )
                         plain_comments = entry["Comments"]
                         if isinstance(plain_comments, list):
                             plain_comments = "\n".join([str(line) for line in plain_comments if str(line).strip()])

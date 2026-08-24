@@ -26,8 +26,8 @@ def admin_tab(menu="Sponsorship Items"):
     conn = get_connection()
     cursor = conn.cursor()
     # Always show Payment Details by default and display its tabs first
-    if menu == "Payment Details" or menu is None:
-        st.markdown("<h2 style='color: #6A1B9A;'>💳 Payment Details</h2>", unsafe_allow_html=True)
+    if menu == "Sponsorship Payment Details" or menu is None:
+        st.markdown("<h2 style='color: #6A1B9A;'>💳 Sponsorship Payment Details</h2>", unsafe_allow_html=True)
         def get_sponsor_df():
             df = pd.read_sql("SELECT name, SUM(COALESCE(donation,0)) AS donation_sum FROM sponsors GROUP BY name", conn)
             df.columns = [c.lower() for c in df.columns]
@@ -57,8 +57,6 @@ def admin_tab(menu="Sponsorship Items"):
             name_options = ["-- Select Name --"] + unpaid_names if unpaid_names else ["-- No Names Available --"]
             if 'add_pay_selected_name' not in st.session_state or st.session_state['add_pay_selected_name'] not in name_options:
                 st.session_state['add_pay_selected_name'] = name_options[0]
-            if st.session_state.get('add_pay_payment_type') != 'Zelle':
-                st.session_state['add_pay_payment_type'] = 'Zelle'
             def update_amount():
                 name = st.session_state['add_pay_selected_name']
                 amt = float(sponsor_df[sponsor_df["name"] == name]["total_amount"].values[0]) if name in sponsor_names else 0.0
@@ -68,7 +66,7 @@ def admin_tab(menu="Sponsorship Items"):
             if 'add_pay_amount_input' not in st.session_state:
                 update_amount()
             name = st.selectbox("Name", name_options, key="add_pay_selected_name")
-            payment_type = st.selectbox("Payment Type", ["Zelle"], key="add_pay_payment_type")
+            payment_type = "Zelle"
             if st.session_state['add_pay_last_selected_name'] != st.session_state['add_pay_selected_name']:
                 update_amount()
                 st.session_state['add_pay_zelle_acc_name'] = ""
@@ -81,15 +79,26 @@ def admin_tab(menu="Sponsorship Items"):
                 with col1:
                     st.write(f"Name: **{name}**")
                     amount = st.number_input("Amount (editable)", min_value=0.0, value=default_amount, step=1.0, format="%.2f", key="add_pay_amount_input")
-                    st.write(f"Payment Type: **{payment_type}**")
+                    st.write("Payment Type: **Zelle**")
                 with col2:
                     date = st.date_input("Date", key="add_pay_date")
-                    recieved_zelle_acc_name = st.text_input("Received Zelle Account Name", key="add_pay_zelle_acc_name")
+                    try:
+                        cursor.execute("SELECT name, zelle_enable FROM committee_members ORDER BY name")
+                        member_names = [
+                            row[0] for row in cursor.fetchall()
+                            if row[0] and str(row[1]).strip().lower() in {"true", "1", "t", "yes", "y"}
+                        ]
+                    except Exception:
+                        member_names = []
+                    zelle_name_options = ["-- Select Zelle Account Name --"] + member_names
+                    recieved_zelle_acc_name = st.selectbox("Received Zelle Account Name", zelle_name_options, key="add_pay_zelle_acc_name")
                     comments = st.text_input("Comments", key="add_pay_comments")
                 submit = st.form_submit_button("Add Payment Detail")
                 if submit:
                     if name == "-- Select Name --" or name == "-- No Names Available --":
                         st.warning("Please select a name before submitting.")
+                    elif recieved_zelle_acc_name == "-- Select Zelle Account Name --":
+                        st.warning("Please select a Zelle account name before submitting.")
                     else:
                         try:
                             tz = pytz.timezone('America/Chicago')
@@ -488,6 +497,90 @@ def admin_tab(menu="Sponsorship Items"):
                         st.error("Name entered does not match. Record not deleted.")
         else:
             st.info("No sponsorship records found.")
+    if menu == "Committee Members":
+        st.markdown("<h2 style='color: #6A1B9A;'>👥 Committee Members</h2>", unsafe_allow_html=True)
+        try:
+            df_members = pd.read_sql("SELECT id, name, zelle_enable FROM committee_members ORDER BY name", conn)
+            df_members.columns = [c.lower() for c in df_members.columns]
+        except Exception as e:
+            st.error(f"Unable to load committee members: {e}")
+            return
+
+        member_tabs = st.tabs(["Members List", "Add Member", "Edit Member", "Delete Member"])
+        with member_tabs[1]:
+            with st.form("add_committee_member_form"):
+                new_member_name = st.text_input("Member Name")
+                new_member_zelle_enable = st.checkbox("Enable for Zelle payments", value=False)
+                if st.form_submit_button("Add Member"):
+                    if not new_member_name.strip():
+                        st.warning("Member name is required.")
+                    else:
+                        try:
+                            cursor.execute(
+                                "INSERT INTO committee_members (name, zelle_enable) VALUES (%s, %s)",
+                                (new_member_name.strip(), new_member_zelle_enable)
+                            )
+                            conn.commit()
+                            st.success("✅ Committee member added!")
+                            st.rerun()
+                        except Exception as e:
+                            conn.rollback()
+                            st.error(f"❌ Failed to add committee member: {e}")
+
+        with member_tabs[0]:
+            display_members = df_members.rename(columns={"name": "Name", "zelle_enable": "Zelle Enabled"})
+            display_members = display_members.drop(columns=["id"])
+            display_members.index = display_members.index + 1
+            st.dataframe(display_members, use_container_width=True)
+
+        with member_tabs[2]:
+            if df_members.empty:
+                st.info("No committee members found.")
+            else:
+                member_options = df_members["name"].tolist()
+                selected_member = st.selectbox("Select Member to Edit", member_options)
+                member_row = df_members[df_members["name"] == selected_member].iloc[0]
+                member_name = st.text_input("Member Name", value=member_row["name"], key="edit_committee_member_name")
+                member_zelle_enable = st.checkbox(
+                    "Enable for Zelle payments",
+                    value=bool(member_row["zelle_enable"]),
+                    key="edit_committee_member_zelle"
+                )
+                if st.button("Update Committee Member"):
+                    if not member_name.strip():
+                        st.warning("Member name is required.")
+                    else:
+                        try:
+                            cursor.execute(
+                                "UPDATE committee_members SET name=%s, zelle_enable=%s WHERE id=%s",
+                                (member_name.strip(), member_zelle_enable, int(member_row["id"]))
+                            )
+                            conn.commit()
+                            st.success("✅ Committee member updated!")
+                            st.rerun()
+                        except Exception as e:
+                            conn.rollback()
+                            st.error(f"❌ Failed to update committee member: {e}")
+
+        with member_tabs[3]:
+            if df_members.empty:
+                st.info("No committee members found.")
+            else:
+                member_options = df_members["name"].tolist()
+                selected_member = st.selectbox("Select Member to Delete", member_options)
+                member_row = df_members[df_members["name"] == selected_member].iloc[0]
+                st.write(f"Member: **{member_row['name']}**")
+                st.write(f"Zelle Enabled: **{bool(member_row['zelle_enable'])}**")
+                if st.button("Delete Committee Member"):
+                    try:
+                        cursor.execute("DELETE FROM committee_members WHERE id=%s", (int(member_row["id"]),))
+                        conn.commit()
+                        st.success("✅ Committee member deleted!")
+                        st.rerun()
+                    except Exception as e:
+                        conn.rollback()
+                        st.error(f"❌ Failed to delete committee member: {e}")
+
     if menu == "Manage Notification Emails":
         st.markdown("<h2 style='color: #6A1B9A;'>✉️ Manage Notification Emails</h2>", unsafe_allow_html=True)
         df_emails = pd.read_sql("SELECT * FROM notification_emails ORDER BY id", conn)

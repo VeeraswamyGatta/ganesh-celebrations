@@ -8,6 +8,7 @@ create or replace sequence PRASAD_SEVA_ID_SEQ start with 27 increment by 1 noord
 create or replace sequence SPONSORSHIP_ITEMS_ID_SEQ start with 20 increment by 1 noorder;
 create or replace sequence SPONSORS_ID_SEQ start with 161 increment by 1 noorder;
 create or replace sequence TRANSFERS_ID_SEQ start with 4 increment by 1 noorder;
+create or replace sequence COMMITTEE_MEMBERS_ID_SEQ start with 1 increment by 1 noorder;
 create or replace masking policy MASK_EMAIL as (VAL VARCHAR) 
 returns VARCHAR ->
 CASE
@@ -75,6 +76,13 @@ create or replace TABLE PAYMENT_DETAILS (
 	PAYMENT_TYPE VARCHAR(16777216),
 	RECIEVED_ZELLE_ACC_NAME VARCHAR(16777216),
 	primary key (ID)
+);
+create or replace TABLE COMMITTEE_MEMBERS (
+	ID NUMBER(38,0) NOT NULL autoincrement start 1 increment 1 noorder,
+	NAME VARCHAR(16777216) NOT NULL WITH MASKING POLICY GANESH_DB.GANESH_SCHEMA.MASK_NAME,
+	ZELLE_ENABLE BOOLEAN NOT NULL DEFAULT FALSE,
+	primary key (ID),
+	unique (NAME)
 );
 create or replace TABLE PRASAD_SEVA (
 	ID NUMBER(38,0) NOT NULL autoincrement start 1 increment 1 noorder,

@@ -14,6 +14,12 @@ CREATE TABLE IF NOT EXISTS payment_details (
     recieved_zelle_acc_name TEXT
 );
 
+CREATE TABLE IF NOT EXISTS committee_members (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    zelle_enable BOOLEAN NOT NULL DEFAULT FALSE
+);
+
 CREATE TABLE IF NOT EXISTS transfers (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
