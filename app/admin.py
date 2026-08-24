@@ -538,9 +538,35 @@ def admin_tab(menu="Sponsorship Items"):
                 st.info("No committee members found.")
             else:
                 member_options = df_members["name"].tolist()
-                selected_member = st.selectbox("Select Member to Edit", member_options)
+                def zelle_enabled(value):
+                    return str(value).strip().lower() in {"true", "1", "t", "yes", "y"}
+
+                updated_member = st.session_state.pop("updated_committee_member", None)
+                if updated_member in member_options:
+                    st.session_state["edit_committee_member_selection"] = updated_member
+                    st.session_state["edit_committee_member_name"] = updated_member
+                    updated_row = df_members[df_members["name"] == updated_member].iloc[0]
+                    st.session_state["edit_committee_member_zelle"] = zelle_enabled(updated_row["zelle_enable"])
+
+                def sync_member_name():
+                    selected_name = st.session_state["edit_committee_member_selection"]
+                    selected_row = df_members[df_members["name"] == selected_name].iloc[0]
+                    st.session_state["edit_committee_member_name"] = selected_name
+                    st.session_state["edit_committee_member_zelle"] = zelle_enabled(selected_row["zelle_enable"])
+                    st.session_state["edit_committee_member_last_selection"] = selected_name
+
+                selected_member = st.selectbox(
+                    "Select Member to Edit",
+                    member_options,
+                    key="edit_committee_member_selection",
+                    on_change=sync_member_name
+                )
                 member_row = df_members[df_members["name"] == selected_member].iloc[0]
-                member_name = st.text_input("Member Name", value=member_row["name"], key="edit_committee_member_name")
+                if st.session_state.get("edit_committee_member_last_selection") != selected_member:
+                    st.session_state["edit_committee_member_name"] = member_row["name"]
+                    st.session_state["edit_committee_member_zelle"] = zelle_enabled(member_row["zelle_enable"])
+                    st.session_state["edit_committee_member_last_selection"] = selected_member
+                member_name = st.text_input("Member Name", key="edit_committee_member_name")
                 member_zelle_enable = st.checkbox(
                     "Enable for Zelle payments",
                     value=bool(member_row["zelle_enable"]),
@@ -556,6 +582,7 @@ def admin_tab(menu="Sponsorship Items"):
                                 (member_name.strip(), member_zelle_enable, int(member_row["id"]))
                             )
                             conn.commit()
+                            st.session_state["updated_committee_member"] = member_name.strip()
                             st.success("✅ Committee member updated!")
                             st.rerun()
                         except Exception as e:
