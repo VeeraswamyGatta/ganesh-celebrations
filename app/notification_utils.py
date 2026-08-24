@@ -5,5 +5,4 @@ def get_notification_emails():
     with conn.cursor() as cursor:
         cursor.execute("SELECT email FROM notification_emails")
         emails = [row[0] for row in cursor.fetchall()]
-    conn.close()
     return emails

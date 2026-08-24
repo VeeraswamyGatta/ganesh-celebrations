@@ -5,6 +5,27 @@ from .db import get_connection
 from .email_utils import send_email
 from .notification_utils import get_notification_emails
 import altair as alt
+import requests
+from bs4 import BeautifulSoup
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def get_paypal_total(paypal_link):
+    """Fetch the public PayPal total at most once every five minutes."""
+    if not paypal_link:
+        return "(not configured)"
+    try:
+        response = requests.get(paypal_link, timeout=5)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, "html.parser")
+        amount_tag = soup.find(class_="poolProgressBar-amount-raised")
+        if amount_tag and amount_tag.text.strip():
+            return amount_tag.text.strip()
+        import re
+        match = re.search(r"\$[0-9,.]+", response.text)
+        return match.group(0) if match else "(not found)"
+    except Exception:
+        return "(unavailable)"
 
 # Place all sponsorship and donation logic here
 
@@ -168,29 +189,8 @@ def sponsorship_tab():
     total_sponsored = round(total_sponsored, 2)
     total_donated = round(total_donated, 2)
     total_combined = round(total_sponsored + total_donated, 2)
-    import requests
-    from bs4 import BeautifulSoup
     paypal_link = st.secrets.get("paypal_link", "")
-    total_paypal_received = "(fetching...)"
-    if paypal_link:
-        try:
-            resp = requests.get(paypal_link, timeout=10)
-            if resp.status_code == 200:
-                soup = BeautifulSoup(resp.text, "html.parser")
-                amt_tag = soup.find(class_="poolProgressBar-amount-raised")
-                if amt_tag and amt_tag.text.strip():
-                    total_paypal_received = amt_tag.text.strip()
-                else:
-                    import re
-                    match = re.search(r'\$[0-9,.]+', resp.text)
-                    if match:
-                        total_paypal_received = match.group(0)
-                    else:
-                        total_paypal_received = "(not found)"
-            else:
-                total_paypal_received = f"(error: {resp.status_code})"
-        except Exception as e:
-            total_paypal_received = f"(error)"
+    total_paypal_received = get_paypal_total(paypal_link)
     blink_style = """
 <style>
 .blink-red {
@@ -487,32 +487,8 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
     total_donated = round(total_donated, 2)
     total_combined = round(total_sponsored + total_donated, 2)
     # Fetch PayPal pool amount from the public page
-    import requests
-    from bs4 import BeautifulSoup
     paypal_link = st.secrets.get("paypal_link", "")
-    total_paypal_received = "(fetching...)"
-    if paypal_link:
-        try:
-            resp = requests.get(paypal_link, timeout=10)
-            if resp.status_code == 200:
-                soup = BeautifulSoup(resp.text, "html.parser")
-                # Try to find the amount in the page (PayPal pool pages show a progress bar with amount)
-                # Look for something like: <span class="poolProgressBar-amount-raised">$123.45</span>
-                amt_tag = soup.find(class_="poolProgressBar-amount-raised")
-                if amt_tag and amt_tag.text.strip():
-                    total_paypal_received = amt_tag.text.strip()
-                else:
-                    # Fallback: look for any $ amount in the page
-                    import re
-                    match = re.search(r'\$[0-9,.]+', resp.text)
-                    if match:
-                        total_paypal_received = match.group(0)
-                    else:
-                        total_paypal_received = "(not found)"
-            else:
-                total_paypal_received = f"(error: {resp.status_code})"
-        except Exception as e:
-            total_paypal_received = f"(error)"
+    total_paypal_received = get_paypal_total(paypal_link)
     # ...existing code...
 
     tab1, tab2 = st.tabs([

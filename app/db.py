@@ -4,6 +4,7 @@ import streamlit as st
 import snowflake.connector
 
 # ---------- DB Connection ----------
+@st.cache_resource(show_spinner=False)
 def get_connection():
     db_type = st.secrets.get("db_type", "postgres").lower()
     if db_type == "postgres":

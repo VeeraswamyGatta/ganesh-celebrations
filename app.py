@@ -1,11 +1,6 @@
 import streamlit as st
 from streamlit_option_menu import option_menu
 import datetime
-from app.db import get_connection
-from app.sponsorship import sponsorship_tab
-from app.events import events_tab
-from app.statistics import statistics_tab
-from app.admin import admin_tab
 
 
 st.set_page_config(page_title="Terrazzo Ganesh Celebrations 2026", page_icon="🙏", layout="wide")
@@ -24,11 +19,6 @@ def get_admin_password():
     now_cst = now_utc.astimezone(cst)
     today_day = now_cst.strftime('%d')
     return f"{ADMIN_PASSWORD_BASE}{today_day}"
-
-# ---------- DB Setup ----------
-
-conn = get_connection()
-
 
 # ---------- Styling ----------
 st.markdown("""
@@ -292,31 +282,36 @@ else:
         menu_items = []
         menu_icons = []
     if menu_items:
-        main_menu = option_menu(
-            "Menu",
-            menu_items,
-            icons=menu_icons,
-            menu_icon="cast",
-            default_index=0,
-            orientation="horizontal",
-            styles={
-                "container": {"padding": "0!important", "background-color": "transparent"},
-                "icon": {"color": "#bf360c", "font-size": "1.1rem"},
-                "nav-link": {"color": "#4e342e", "font-size": "0.95rem", "text-align": "center", "margin": "0"},
-                "nav-link-selected": {"background-color": "#2e7d32", "color": "#ffffff"}
-            }
-        )
-        if st.button("Logout", key="logout_button"):
-            st.session_state.user_logged_in = False
-            st.session_state.admin_logged_in = False
-            st.session_state.pop('is_admin', None)
-            st.rerun()
+        menu_column, logout_column = st.columns([0.94, 0.06])
+        with menu_column:
+            main_menu = option_menu(
+                "Menu",
+                menu_items,
+                icons=menu_icons,
+                menu_icon="cast",
+                default_index=0,
+                orientation="horizontal",
+                styles={
+                    "container": {"padding": "0!important", "background-color": "transparent"},
+                    "icon": {"color": "#bf360c", "font-size": "1.1rem"},
+                    "nav-link": {"color": "#4e342e", "font-size": "0.95rem", "text-align": "center", "margin": "0"},
+                    "nav-link-selected": {"background-color": "#2e7d32", "color": "#ffffff"}
+                }
+            )
+        with logout_column:
+            if st.button(":material/logout:", help="Logout", key="logout_button", use_container_width=True):
+                st.session_state.user_logged_in = False
+                st.session_state.admin_logged_in = False
+                st.session_state.pop('is_admin', None)
+                st.rerun()
 
         if main_menu == "Contributions":
+            from app.sponsorship import sponsorship_tab
             sponsorship_tab()
         elif main_menu == "Events":
             if 'admin_full_name' not in st.session_state or not st.session_state['admin_full_name']:
                 st.session_state['admin_full_name'] = ''
+            from app.events import events_tab
             events_tab()
         elif main_menu == "Prasad Seva":
             from app.prasad_seva import prasad_seva_tab
@@ -324,6 +319,7 @@ else:
         elif main_menu == "Statistics":
             # Set is_admin flag for statistics
             st.session_state['is_admin'] = st.session_state.admin_logged_in
+            from app.statistics import statistics_tab
             statistics_tab()
         elif main_menu == "Expenses":
             from app.expenses import expenses_tab
@@ -331,6 +327,7 @@ else:
         elif st.session_state.admin_logged_in and main_menu == "Admin":
             if 'admin_full_name' not in st.session_state:
                 st.session_state.admin_full_name = ''
+            from app.admin import admin_tab
             admin_menu = option_menu(
                 "Admin Sections",
                 [
