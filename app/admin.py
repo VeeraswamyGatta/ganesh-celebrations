@@ -18,13 +18,70 @@ st.markdown('''
     </style>
 ''', unsafe_allow_html=True)
 import pandas as pd
+from datetime import date, datetime, timedelta
 from .db import get_connection
 from .email_utils import send_email
+from .login_audit import ensure_login_audit_table
 
 def admin_tab(menu="Sponsorship Items"):
     st.session_state['active_tab'] = 'Admin'
     conn = get_connection()
     cursor = conn.cursor()
+    if menu == "User Login Activity":
+        ensure_login_audit_table(conn)
+        st.markdown("<h2 style='color: #6A1B9A;'>User Login Activity</h2>", unsafe_allow_html=True)
+
+        today = date.today()
+        filter_start, filter_end = st.columns(2)
+        start_date = filter_start.date_input("Start Date", value=today - timedelta(days=9), key="login_activity_start")
+        end_date = filter_end.date_input("End Date", value=today, key="login_activity_end")
+        if start_date > end_date:
+            st.error("Start Date must be on or before End Date.")
+            return
+
+        active_cutoff = datetime.now() - timedelta(minutes=10)
+        cursor.execute(
+            """
+            SELECT COUNT(DISTINCT session_id)
+            FROM user_login_audit
+            WHERE logout_at IS NULL AND last_activity_at >= %s
+            """,
+            (active_cutoff,),
+        )
+        active_users = cursor.fetchone()[0] or 0
+        st.metric("Active Users (last 10 minutes)", active_users)
+
+        login_counts = pd.read_sql(
+            """
+            SELECT CAST(login_at AS DATE) AS login_date, COUNT(*) AS login_count
+            FROM user_login_audit
+            WHERE CAST(login_at AS DATE) BETWEEN %s AND %s
+            GROUP BY CAST(login_at AS DATE)
+            ORDER BY login_date
+            """,
+            conn,
+            params=(start_date, end_date),
+        )
+        all_dates = pd.DataFrame({"login_date": pd.date_range(start_date, end_date)})
+        login_counts["login_date"] = pd.to_datetime(login_counts["login_date"])
+        login_counts = all_dates.merge(login_counts, on="login_date", how="left").fillna({"login_count": 0})
+        login_counts["login_count"] = login_counts["login_count"].astype(int)
+        st.bar_chart(login_counts.set_index("login_date"), y="login_count")
+
+        audit_df = pd.read_sql(
+            """
+            SELECT user_role, username, ip_address, user_agent, login_at, last_activity_at, logout_at
+            FROM user_login_audit
+            WHERE CAST(login_at AS DATE) BETWEEN %s AND %s
+            ORDER BY login_at DESC
+            """,
+            conn,
+            params=(start_date, end_date),
+        )
+        audit_df.index = audit_df.index + 1
+        st.dataframe(audit_df, use_container_width=True)
+        return
+
     # Always show Payment Details by default and display its tabs first
     if menu == "Sponsorship Payment Details" or menu is None:
         st.markdown("<h2 style='color: #6A1B9A;'>💳 Sponsorship Payment Details</h2>", unsafe_allow_html=True)

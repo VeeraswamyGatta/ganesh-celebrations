@@ -443,7 +443,16 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
             label_col.markdown(f"**{label}**")
             value_col.write(value)
         confirm_col, edit_col = st.columns(2)
-        if confirm_col.button("Confirm Submission", type="primary", use_container_width=True):
+        submission_in_progress = st.session_state.get("sponsorship_confirmation_in_progress", False)
+        if confirm_col.button(
+            "Confirm Submission",
+            type="primary",
+            use_container_width=True,
+            disabled=submission_in_progress,
+        ):
+            if submission_in_progress:
+                st.stop()
+            st.session_state["sponsorship_confirmation_in_progress"] = True
             try:
                 with st.spinner("Saving your confirmed submission..."):
                     st.session_state["submitted_data"] = save_submission(pending_submission)
@@ -451,9 +460,10 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
                 st.session_state["show_submission"] = True
                 st.rerun()
             except Exception as error:
+                st.session_state["sponsorship_confirmation_in_progress"] = False
                 conn.rollback()
                 st.error(f"Submission failed: {error}")
-        if edit_col.button("Edit Details", use_container_width=True):
+        if edit_col.button("Edit Details", use_container_width=True, disabled=submission_in_progress):
             st.session_state["sponsorship_name"] = pending_submission["name"]
             st.session_state["sponsorship_apartment"] = pending_submission["apartment"]
             st.session_state["sponsorship_email"] = pending_submission["email"]

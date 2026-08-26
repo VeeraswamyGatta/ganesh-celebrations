@@ -3,6 +3,8 @@ from streamlit_option_menu import option_menu
 import datetime
 import time
 
+from app.login_audit import end_login_audit, start_login_audit, touch_login_audit
+
 
 st.set_page_config(page_title="Terrazzo Ganesh Celebrations 2026", page_icon="🙏", layout="wide")
 from PIL import Image
@@ -154,11 +156,13 @@ SESSION_IDLE_TIMEOUT_SECONDS = 10 * 60
 
 
 def end_session():
+    end_login_audit(st.session_state.get("login_audit_session_id"))
     st.session_state.user_logged_in = False
     st.session_state.admin_logged_in = False
     st.session_state.pop("admin_full_name", None)
     st.session_state.pop("admin_audit_name_pending", None)
     st.session_state.pop("last_activity_at", None)
+    st.session_state.pop("login_audit_session_id", None)
 
 
 def enforce_idle_timeout():
@@ -172,6 +176,7 @@ def enforce_idle_timeout():
         st.session_state.session_timed_out = True
     else:
         st.session_state.last_activity_at = now
+        touch_login_audit(st.session_state.get("login_audit_session_id"))
 
 
 
@@ -230,6 +235,7 @@ if show_login_form:
                 st.session_state.admin_full_name = full_name.strip()
                 st.session_state.admin_logged_in = True
                 st.session_state.admin_audit_name_pending = False
+                st.session_state.login_audit_session_id = start_login_audit("Admin", ADMIN_USERNAME)
                 st.session_state.last_activity_at = time.monotonic()
                 st.success("✅ Admin access granted!")
                 st.rerun()
@@ -247,6 +253,7 @@ if show_login_form:
             elif username == USER_USERNAME.lower() and password == USER_PASSWORD:
                 st.session_state.user_logged_in = True
                 st.session_state.user_apartment = ""
+                st.session_state.login_audit_session_id = start_login_audit("User", USER_USERNAME)
                 st.session_state.last_activity_at = time.monotonic()
                 st.success("✅ User login successful!")
                 st.rerun()
@@ -315,12 +322,13 @@ else:
             admin_menu = option_menu(
                 "Admin Sections",
                 [
+                    "User Login Activity",
                     "Sponsorship Record",
                     "Sponsorship Items",
                     "Committee Members",
                     "Manage Notification Emails"
                 ],
-                icons=["pencil-square", "list-task", "people-fill", "envelope-fill"],
+                icons=["bar-chart", "pencil-square", "list-task", "people-fill", "envelope-fill"],
                 menu_icon="gear",
                 default_index=0,
                 orientation="vertical"
