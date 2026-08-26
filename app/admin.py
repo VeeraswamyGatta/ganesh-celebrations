@@ -296,12 +296,16 @@ def admin_tab(menu="Sponsorship Items"):
         df_sponsors = pd.read_sql("SELECT * FROM sponsors ORDER BY id", conn)
         df_sponsors.columns = [c.lower() for c in df_sponsors.columns]
         if not df_sponsors.empty:
-            # Add Type column
             display_df = df_sponsors.copy()
             def get_type(row):
-                if row['sponsorship'] and str(row['sponsorship']).strip():
+                has_sponsorship = (
+                    pd.notna(row['sponsorship'])
+                    and bool(str(row['sponsorship']).strip())
+                )
+                donation_amount = float(row['donation']) if pd.notna(row['donation']) else 0
+                if has_sponsorship:
                     return 'Sponsorship'
-                elif row['donation'] and float(row['donation']) > 0:
+                elif donation_amount > 0:
                     return 'Donation'
                 else:
                     return ''
@@ -319,21 +323,18 @@ def admin_tab(menu="Sponsorship Items"):
             # Compute a single amount column
             def get_amount(row):
                 if row['Type'] == 'Sponsorship':
-                    item = row['sponsorship']
-                    return item_amounts.get(item, 0.0) if item else 0.0
-                elif row['Type'] == 'Donation':
-                    try:
-                        return float(row['donation']) if row['donation'] not in (None, '', 0, '0') else 0.0
-                    except:
-                        return 0.0
+                    return item_amounts.get(row['sponsorship'], 0.0)
+                if row['Type'] == 'Donation':
+                    return float(row['donation']) if pd.notna(row['donation']) else 0.0
                 return 0.0
+
             display_df['Donation/Sponsorship Amount'] = display_df.apply(get_amount, axis=1)
-            # Remove original 'sponsorship', 'donation', and 'id' columns
-            display_df = display_df.drop(columns=['sponsorship', 'donation', 'id'])
+            display_df = display_df.drop(columns=['donation', 'id'])
             # Reorder columns
-            col_order = ['name', 'email', 'mobile', 'apartment', 'gothram', 'Type', 'Donation/Sponsorship Amount']
+            col_order = ['name', 'email', 'mobile', 'apartment', 'gothram', 'sponsorship', 'Type', 'Donation/Sponsorship Amount']
             display_df = display_df[[c for c in col_order if c in display_df.columns]]
             display_df = display_df.rename(columns={col: col.replace('_', ' ').title() for col in display_df.columns})
+            display_df = display_df.rename(columns={'Sponsorship': 'Sponsorship Item'})
             # Show table with index starting from 1 and sorted by Name, keep id column
             display_df_display = display_df.copy()
             if 'Name' in display_df_display.columns:
@@ -356,8 +357,7 @@ def admin_tab(menu="Sponsorship Items"):
             # Move Edit/Delete selection to the top
             action = st.radio("Choose Action", ["Edit Record", "Delete Record"], horizontal=True)
             if action == "Edit Record":
-                # Read-only mandatory and requested fields in plain text
-                st.write(f"Name: {sponsor_row['name']}")
+                edit_name = st.text_input("Name", value=sponsor_row["name"] or "", key=f"edit_name_{sponsor_id}")
                 st.write(f"Apartment Number: {sponsor_row['apartment']}")
                 # Editable Sponsorship Item field
                 cursor.execute("SELECT item FROM sponsorship_items ORDER BY id")
@@ -376,6 +376,9 @@ def admin_tab(menu="Sponsorship Items"):
                 edit_mobile = st.text_input("Mobile (optional, US format)", value=sponsor_row["mobile"] or "")
                 if st.button("Update Sponsorship Record"):
                     errors = []
+                    edit_name = edit_name.strip()
+                    if not edit_name:
+                        errors.append("Name is required.")
                     # Email validation
                     if edit_email.strip():
                         if '@' not in edit_email or not edit_email.strip().lower().endswith('.com'):
@@ -403,8 +406,8 @@ def admin_tab(menu="Sponsorship Items"):
                     else:
                         try:
                             cursor.execute(
-                                "UPDATE sponsors SET email=%s, mobile=%s, gothram=%s, sponsorship=%s, donation=%s WHERE id=%s",
-                                (edit_email, phone_fmt.strip(), edit_gothram, sponsorship_value, edit_donation, sponsor_id)
+                                "UPDATE sponsors SET name=%s, email=%s, mobile=%s, gothram=%s, sponsorship=%s, donation=%s WHERE id=%s",
+                                (edit_name, edit_email, phone_fmt.strip(), edit_gothram, sponsorship_value, edit_donation, sponsor_id)
                             )
                             conn.commit()
                             st.success("✅ Sponsorship record updated!")
@@ -418,7 +421,7 @@ def admin_tab(menu="Sponsorship Items"):
                                     f"""
     <b>Sponsorship Record Updated</b><br><br>
     <table border='1' cellpadding='6' cellspacing='0' style='border-collapse:collapse;'>
-            <tr><th style='{TABLE_HEADER_STYLE}'>Name</th><td>{sponsor_row['name']}</td></tr>
+            <tr><th style='{TABLE_HEADER_STYLE}'>Name</th><td>{edit_name}</td></tr>
             <tr><th style='{TABLE_HEADER_STYLE}'>Email</th><td>{edit_email}</td></tr>
             <tr><th style='{TABLE_HEADER_STYLE}'>Gothram</th><td>{edit_gothram}</td></tr>
             <tr><th style='{TABLE_HEADER_STYLE}'>Mobile</th><td>{phone_fmt.strip()}</td></tr>

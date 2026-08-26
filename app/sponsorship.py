@@ -349,19 +349,18 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
         apartment = pending["apartment"]
         contributed_amount = pending["contributed_amount"]
 
-        for idx, item in enumerate(selected_items):
-            donation_for_item = donation if idx == 0 else 0
+        for item in selected_items:
             if hasattr(cursor, 'execute') and hasattr(cursor.connection, 'account'):
                 cursor.execute("""
                     INSERT INTO sponsors (name, email, gothram, mobile, apartment, sponsorship, donation, submitted_at)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP())
-                """, (name_val, email, gothram, phone_fmt, apartment, item, donation_for_item))
+                """, (name_val, email, gothram, phone_fmt, apartment, item, 0))
             else:
                 cursor.execute("""
                     INSERT INTO sponsors (name, email, gothram, mobile, apartment, sponsorship, donation)
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
-                """, (name_val, email, gothram, phone_fmt, apartment, item, donation_for_item))
-        if not selected_items and donation > 0:
+                """, (name_val, email, gothram, phone_fmt, apartment, item, 0))
+        if donation > 0:
             if hasattr(cursor, 'execute') and hasattr(cursor.connection, 'account'):
                 cursor.execute("""
                     INSERT INTO sponsors (name, email, gothram, mobile, apartment, sponsorship, donation, submitted_at)

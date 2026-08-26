@@ -1,6 +1,7 @@
 import streamlit as st
 from streamlit_option_menu import option_menu
 import datetime
+import time
 
 
 st.set_page_config(page_title="Terrazzo Ganesh Celebrations 2026", page_icon="🙏", layout="wide")
@@ -149,6 +150,29 @@ st.markdown("""
 if "admin_logged_in" not in st.session_state:
     st.session_state.admin_logged_in = False
 
+SESSION_IDLE_TIMEOUT_SECONDS = 10 * 60
+
+
+def end_session():
+    st.session_state.user_logged_in = False
+    st.session_state.admin_logged_in = False
+    st.session_state.pop("admin_full_name", None)
+    st.session_state.pop("admin_audit_name_pending", None)
+    st.session_state.pop("last_activity_at", None)
+
+
+def enforce_idle_timeout():
+    if not (st.session_state.user_logged_in or st.session_state.admin_logged_in):
+        return
+
+    now = time.monotonic()
+    last_activity_at = st.session_state.get("last_activity_at", now)
+    if now - last_activity_at >= SESSION_IDLE_TIMEOUT_SECONDS:
+        end_session()
+        st.session_state.session_timed_out = True
+    else:
+        st.session_state.last_activity_at = now
+
 
 
 
@@ -158,6 +182,8 @@ USER_PASSWORD = st.secrets["user_password"]
 
 if "user_logged_in" not in st.session_state:
     st.session_state.user_logged_in = False
+
+enforce_idle_timeout()
 
 show_login_form = False
 # Only show the initial menu if not logged in
@@ -188,88 +214,44 @@ if not st.session_state.user_logged_in and not st.session_state.admin_logged_in:
 else:
     show_login_form = False
 if show_login_form:
-    role = st.selectbox("Login as", ["User", "Admin"], index=0)
-    if role == "User":
-        with st.form("user_login_form"):
-            user = st.text_input("👤 Username", key="user_login_username")
-            pwd = st.text_input("🔒 Password", type="password", key="user_login_password")
-            login = st.form_submit_button("Login", help="Login as User", use_container_width=True)
-        if login:
-            user = user.strip().lower()
-            pwd = pwd.strip().lower()
-            errors = []
-            if not user:
-                errors.append("Username is required.")
-            if not pwd:
-                errors.append("Password is required.")
-            apartment = None
-            base_pwd = USER_PASSWORD
-            apt_num = None
-            if pwd.startswith(base_pwd) and len(pwd) > len(base_pwd):
-                apt_str = pwd[len(base_pwd):]
-                if apt_str.isdigit():
-                    apt_num = int(apt_str)
-                    if not (100 <= apt_num <= 1600):
-                        pass
-                    else:
-                        apartment = apt_str
-                else:
-                    errors.append("Apartment Number must be numeric and follow the password.")
-            elif pwd == base_pwd:
-                apartment = None
+    if st.session_state.pop("session_timed_out", False):
+        st.warning("Your session expired after 10 minutes of inactivity. Please log in again.")
+    if st.session_state.get("admin_audit_name_pending", False):
+        with st.form("admin_audit_name_form"):
+            full_name = st.text_input(
+                "📝 Your Full Name (for audit trail) *",
+                placeholder="Enter your full name",
+            )
+            save_name = st.form_submit_button("Continue", use_container_width=True)
+        if save_name:
+            if not full_name.strip():
+                st.error("Your Full Name is required for audit trail.")
             else:
-                errors.append("Username or password is incorrect.")
-            if user != USER_USERNAME:
-                errors.append("Invalid username.")
-            if errors:
-                st.markdown("""
-                <div style='background:#ffebee;border-radius:10px;padding:16px 18px;margin-bottom:12px;border:1px solid #e57373;'>
-                    <span style='color:#d32f2f;font-size:1.1em;font-weight:bold;'>⚠️ Login Error</span>
-                    <ul style='color:#d32f2f;margin-top:8px;'>
-                        {} 
-                    </ul>
-                </div>
-                """.format("".join([f"<li>{err}</li>" for err in errors])), unsafe_allow_html=True)
-                st.info("For login issues, please reach out in the Ganesh Chaturthi celebrations 2025 WhatsApp group.")
-            else:
-                st.session_state.user_logged_in = True
-                st.session_state.user_apartment = apartment if apartment else ""
-                st.success("✅ User login successful!")
-                st.rerun()
-    else:
-        with st.form("admin_login_form"):
-            user = st.text_input("👤 Admin Username", key="admin_login_username")
-            pwd = st.text_input("🔒 Admin Password", type="password", key="admin_login_password")
-            full_name = st.text_input("📝 Your Full Name (for audit trail) *", key="admin_login_full_name", placeholder="Enter your full name")
-            login = st.form_submit_button("Login", help="Login as Admin", use_container_width=True)
-        if login:
-            user = user.strip().lower()
-            pwd = pwd.strip().lower()
-            full_name = full_name.strip()
-            errors = []
-            if not user:
-                errors.append("Username is required.")
-            if not pwd:
-                errors.append("Password is required.")
-            if not full_name:
-                errors.append("Your Full Name is required for audit trail.")
-            if user == ADMIN_USERNAME and pwd == get_admin_password() and not errors:
+                st.session_state.admin_full_name = full_name.strip()
                 st.session_state.admin_logged_in = True
-                st.session_state.admin_full_name = full_name
+                st.session_state.admin_audit_name_pending = False
+                st.session_state.last_activity_at = time.monotonic()
                 st.success("✅ Admin access granted!")
                 st.rerun()
+    else:
+        with st.form("login_form"):
+            user = st.text_input("👤 Username")
+            pwd = st.text_input("🔒 Password", type="password")
+            login = st.form_submit_button("Login", use_container_width=True)
+        if login:
+            username = user.strip().lower()
+            password = pwd.strip()
+            if username == ADMIN_USERNAME.lower() and password == get_admin_password():
+                st.session_state.admin_audit_name_pending = True
+                st.rerun()
+            elif username == USER_USERNAME.lower() and password == USER_PASSWORD:
+                st.session_state.user_logged_in = True
+                st.session_state.user_apartment = ""
+                st.session_state.last_activity_at = time.monotonic()
+                st.success("✅ User login successful!")
+                st.rerun()
             else:
-                if not (user == ADMIN_USERNAME and pwd == get_admin_password()) and not errors:
-                    errors.append("❌ Invalid admin credentials")
-                if errors:
-                    st.markdown("""
-                    <div style='background:#ffebee;border-radius:10px;padding:16px 18px;margin-bottom:12px;border:1px solid #e57373;'>
-                        <span style='color:#d32f2f;font-size:1.1em;font-weight:bold;'>⚠️ Login Error</span>
-                        <ul style='color:#d32f2f;margin-top:8px;'>
-                            {} 
-                        </ul>
-                    </div>
-                    """.format("".join([f"<li>{err}</li>" for err in errors])), unsafe_allow_html=True)
+                st.error("Invalid username or password.")
 else:
     # Show menu based on role after successful login
     if st.session_state.admin_logged_in:
@@ -300,8 +282,7 @@ else:
             )
         with logout_column:
             if st.button(":material/logout:", help="Logout", key="logout_button", use_container_width=True):
-                st.session_state.user_logged_in = False
-                st.session_state.admin_logged_in = False
+                end_session()
                 st.session_state.pop('is_admin', None)
                 st.rerun()
 
