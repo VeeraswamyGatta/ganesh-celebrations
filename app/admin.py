@@ -18,7 +18,7 @@ st.markdown('''
     </style>
 ''', unsafe_allow_html=True)
 import pandas as pd
-from datetime import date, datetime, timedelta
+import datetime
 from .db import get_connection
 from .email_utils import send_email
 from .login_audit import ensure_login_audit_table
@@ -31,15 +31,15 @@ def admin_tab(menu="Sponsorship Items"):
         ensure_login_audit_table(conn)
         st.markdown("<h2 style='color: #6A1B9A;'>User Login Activity</h2>", unsafe_allow_html=True)
 
-        today = date.today()
+        today = datetime.date.today()
         filter_start, filter_end = st.columns(2)
-        start_date = filter_start.date_input("Start Date", value=today - timedelta(days=9), key="login_activity_start")
+        start_date = filter_start.date_input("Start Date", value=today - datetime.timedelta(days=9), key="login_activity_start")
         end_date = filter_end.date_input("End Date", value=today, key="login_activity_end")
         if start_date > end_date:
             st.error("Start Date must be on or before End Date.")
             return
 
-        active_cutoff = datetime.now() - timedelta(minutes=10)
+        active_cutoff = datetime.datetime.now() - datetime.timedelta(minutes=10)
         cursor.execute(
             """
             SELECT COUNT(DISTINCT session_id)
@@ -62,6 +62,9 @@ def admin_tab(menu="Sponsorship Items"):
             conn,
             params=(start_date, end_date),
         )
+        login_counts.columns = [str(column).lower() for column in login_counts.columns]
+        if login_counts.empty:
+            login_counts = pd.DataFrame(columns=["login_date", "login_count"])
         all_dates = pd.DataFrame({"login_date": pd.date_range(start_date, end_date)})
         login_counts["login_date"] = pd.to_datetime(login_counts["login_date"])
         login_counts = all_dates.merge(login_counts, on="login_date", how="left").fillna({"login_count": 0})
@@ -78,6 +81,12 @@ def admin_tab(menu="Sponsorship Items"):
             conn,
             params=(start_date, end_date),
         )
+        audit_df.columns = [str(column).lower() for column in audit_df.columns]
+        if audit_df.empty:
+            audit_df = pd.DataFrame(columns=[
+                "user_role", "username", "ip_address", "user_agent",
+                "login_at", "last_activity_at", "logout_at",
+            ])
         audit_df.index = audit_df.index + 1
         st.dataframe(audit_df, use_container_width=True)
         return
@@ -130,7 +139,6 @@ def admin_tab(menu="Sponsorship Items"):
                 st.session_state['add_pay_last_selected_name'] = st.session_state['add_pay_selected_name']
             default_amount = st.session_state.get('add_pay_amount_input', 0.0)
             import pytz
-            from datetime import datetime, time
             with st.form("add_payment_detail_form"):
                 col1, col2 = st.columns(2)
                 with col1:
@@ -156,7 +164,7 @@ def admin_tab(menu="Sponsorship Items"):
                     else:
                         try:
                             tz = pytz.timezone('America/Chicago')
-                            dt_naive = datetime.combine(date, time.min)
+                            dt_naive = datetime.datetime.combine(date, datetime.time.min)
                             dt_cst = tz.localize(dt_naive)
                             date_cst = dt_cst.date()
                             payment_columns = set(pd.read_sql("SELECT * FROM payment_details LIMIT 0", conn).columns.str.lower())
