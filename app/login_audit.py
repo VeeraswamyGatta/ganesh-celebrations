@@ -89,3 +89,20 @@ def end_login_audit(session_id):
         (session_id,),
     )
     connection.commit()
+
+
+def get_today_visit_count():
+    connection = get_connection()
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        SELECT user_role, COUNT(*)
+        FROM user_login_audit
+        WHERE login_at >= CURRENT_DATE
+        GROUP BY user_role
+        """
+    )
+    visit_counts = {role: count for role, count in cursor.fetchall()}
+    admin_visits = visit_counts.get("Admin", 0)
+    user_visits = visit_counts.get("User", 0)
+    return admin_visits, user_visits, admin_visits + user_visits

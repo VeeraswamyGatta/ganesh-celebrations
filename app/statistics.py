@@ -18,6 +18,7 @@ st.markdown('''
 ''', unsafe_allow_html=True)
 import pandas as pd
 import datetime
+import altair as alt
 from .db import get_connection
 from .email_utils import send_email
 import smtplib
@@ -35,8 +36,11 @@ def statistics_tab():
     conn = get_connection()
     cursor = conn.cursor()
 
-    # Build sponsorship records with type and split item/donation, and show correct sponsored amount
-    raw_df = pd.read_sql("SELECT name, email, mobile, sponsorship, donation FROM sponsors ORDER BY id", conn)
+    # Build sponsorship records with the correct per-item amount.
+    raw_df = pd.read_sql(
+        "SELECT name, apartment, gothram, sponsorship, donation FROM sponsors ORDER BY id",
+        conn,
+    )
     raw_df.columns = [c.lower() for c in raw_df.columns]
     cursor.execute("SELECT item, amount, sponsor_limit FROM sponsorship_items")
     item_amt_map = {row[0]: (row[1], row[2]) for row in cursor.fetchall()}
@@ -49,30 +53,46 @@ def statistics_tab():
             per_item_amt = round(amt / limit, 2) if limit else amt
             records.append({
                 'Name': row['name'],
-                'Email': row['email'],
-                'Mobile': row['mobile'],
-                'Type': 'Sponsored',
-                'Item/Donation': row['sponsorship'],
+                'Apartment': row['apartment'],
+                'Gothram': row['gothram'],
                 'Amount': per_item_amt
             })
         if pd.notna(row['donation']) and row['donation'] > 0:
             records.append({
                 'Name': row['name'],
-                'Email': row['email'],
-                'Mobile': row['mobile'],
-                'Type': 'Donation',
-                'Item/Donation': 'General Donation',
+                'Apartment': row['apartment'],
+                'Gothram': row['gothram'],
                 'Amount': row['donation']
             })
     df = pd.DataFrame(records)
     st.markdown("### 📋 Sponsorship Records")
-    df_display = df.copy()
-    if not is_admin:
-        df_display = df_display.drop(columns=[col for col in ['Email', 'Mobile'] if col in df_display.columns])
-    if 'Name' in df_display.columns:
-        df_display = df_display.sort_values(by=["Name"]).reset_index(drop=True)
-    df_display.index = range(1, len(df_display) + 1)
-    st.dataframe(df_display)
+    aggregation = {'Amount': 'sum'}
+    if is_admin:
+        aggregation.update({'Apartment': 'first', 'Gothram': 'first'})
+    if not df.empty:
+        df_display = df.groupby('Name', as_index=False, sort=True).agg(aggregation)
+        df_display['Amount'] = df_display['Amount'].astype(float).round(2)
+    else:
+        df_display = pd.DataFrame(columns=['Name', 'Apartment', 'Gothram', 'Amount'])
+
+    records_tab, chart_tab = st.tabs(["Records", "Chart"])
+    with records_tab:
+        display_columns = ['Name', 'Apartment', 'Gothram', 'Amount'] if is_admin else ['Name', 'Amount']
+        table_df = df_display[display_columns].copy()
+        table_df.index = range(1, len(table_df) + 1)
+        st.dataframe(table_df)
+
+    with chart_tab:
+        if df_display.empty:
+            st.info("No sponsorship records available to chart.")
+        else:
+            chart_data = df_display[['Name', 'Amount']].sort_values('Amount', ascending=True)
+            chart = alt.Chart(chart_data).mark_bar().encode(
+                x=alt.X('Amount:Q', title='Aggregated Amount'),
+                y=alt.Y('Name:N', title='Name', sort='-x'),
+                tooltip=[alt.Tooltip('Name:N', title='Name'), alt.Tooltip('Amount:Q', format='$,.2f')],
+            ).properties(height=max(300, len(chart_data) * 35))
+            st.altair_chart(chart, use_container_width=True)
     if not df.empty:
         df_amt = df.copy()
         df_amt['Amount'] = df_amt['Amount'].apply(lambda x: float(x))

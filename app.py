@@ -3,7 +3,7 @@ from streamlit_option_menu import option_menu
 import datetime
 import time
 
-from app.login_audit import end_login_audit, start_login_audit, touch_login_audit
+from app.login_audit import end_login_audit, get_today_visit_count, start_login_audit, touch_login_audit
 
 
 st.set_page_config(page_title="Terrazzo Ganesh Celebrations 2026", page_icon="🙏", layout="wide")
@@ -152,7 +152,7 @@ st.markdown("""
 if "admin_logged_in" not in st.session_state:
     st.session_state.admin_logged_in = False
 
-SESSION_IDLE_TIMEOUT_SECONDS = 10 * 60
+SESSION_IDLE_TIMEOUT_SECONDS = int(st.secrets.get("session_idle_timeout_seconds", 15 * 60))
 
 
 def end_session():
@@ -220,7 +220,13 @@ else:
     show_login_form = False
 if show_login_form:
     if st.session_state.pop("session_timed_out", False):
-        st.warning("Your session expired after 10 minutes of inactivity. Please log in again.")
+        timeout_minutes = SESSION_IDLE_TIMEOUT_SECONDS // 60
+        timeout_text = (
+            f"{SESSION_IDLE_TIMEOUT_SECONDS} seconds"
+            if timeout_minutes == 0
+            else f"{timeout_minutes} minutes"
+        )
+        st.warning(f"Your session expired after {timeout_text} of inactivity. Please log in again.")
     if st.session_state.get("admin_audit_name_pending", False):
         with st.form("admin_audit_name_form"):
             full_name = st.text_input(
@@ -292,6 +298,42 @@ else:
                 end_session()
                 st.session_state.pop('is_admin', None)
                 st.rerun()
+
+        if st.session_state.admin_logged_in:
+            try:
+                admin_visits, user_visits, total_visits = get_today_visit_count()
+                today_label = datetime.datetime.now().strftime("%A, %d %B %Y")
+                st.markdown(
+                    f"""
+                    <div style="
+                        margin: 1.2rem 0 1.5rem;
+                        padding: 1.1rem 1.4rem;
+                        border: 1px solid #c5d9c0;
+                        border-left: 6px solid #2e7d32;
+                        border-radius: 12px;
+                        background: linear-gradient(100deg, #f1f8e9 0%, #fffde7 100%);
+                        box-shadow: 0 3px 12px rgba(46, 125, 50, 0.12);
+                    ">
+                        <div style="color:#2e7d32; font-size:0.9rem; font-weight:700;">
+                            TODAY'S VISITS
+                        </div>
+                        <div style="color:#263238; font-size:2rem; font-weight:800; line-height:1.15; margin-top:0.25rem;">
+                            {total_visits}
+                        </div>
+                        <div style="color:#546e7a; font-size:0.9rem; margin-top:0.2rem;">
+                            Today's Date &nbsp;•&nbsp; {today_label}
+                        </div>
+                        <div style="color:#546e7a; font-size:0.9rem; margin-top:0.55rem;">
+                            Admin: <strong>{admin_visits}</strong>
+                            &nbsp;&nbsp;|&nbsp;&nbsp;
+                            Users: <strong>{user_visits}</strong>
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+            except Exception:
+                st.warning("Today's visit count is currently unavailable.")
 
         if main_menu == "Contributions":
             from app.sponsorship import sponsorship_tab

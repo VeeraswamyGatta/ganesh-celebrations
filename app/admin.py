@@ -327,12 +327,27 @@ def admin_tab(menu="Sponsorship Items"):
             selected_item_name = st.selectbox("Select Item Name", item_names)
             item_row = df[df["item"] == selected_item_name].iloc[0]
             new_item_name = st.text_input("Item Name", value=item_row["item"])
-            st.write(f"Amount: ${float(item_row['amount']):,.2f}")
-            st.write(f"Limit: {int(item_row['sponsor_limit'])}")
+            new_amount = st.number_input(
+                "Amount",
+                min_value=0.0,
+                value=float(item_row["amount"]),
+                step=1.0,
+                format="%.2f",
+                key=f"edit_sponsorship_amount_{item_row['id']}",
+            )
+            new_limit = st.number_input(
+                "Limit",
+                min_value=1,
+                value=int(item_row["sponsor_limit"]),
+                step=1,
+                key=f"edit_sponsorship_limit_{item_row['id']}",
+            )
             if st.button("Update Item"):
                 try:
-                    cursor.execute("UPDATE sponsorship_items SET item=%s WHERE id=%s",
-                                   (new_item_name, item_row["id"]))
+                    cursor.execute(
+                        "UPDATE sponsorship_items SET item=%s, amount=%s, sponsor_limit=%s WHERE id=%s",
+                        (new_item_name, new_amount, new_limit, item_row["id"]),
+                    )
                     conn.commit()
                     st.success("✅ Item updated successfully!")
                 except Exception as e:
