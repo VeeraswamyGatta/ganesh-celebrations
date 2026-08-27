@@ -406,6 +406,7 @@ if show_login_form:
             with st.form("login_form"):
                 user = st.text_input("👤 Username")
                 pwd = st.text_input("🔒 Password", type="password")
+                login_error = st.empty()
                 login = st.form_submit_button("Login", use_container_width=True)
             if login:
                 username = user.strip().lower()
@@ -421,10 +422,10 @@ if show_login_form:
                     st.success("✅ User login successful!")
                     st.rerun()
                 else:
-                    st.markdown(
+                    login_error.markdown(
                         """
                         <div style="
-                            margin-top: 0.9rem;
+                            margin: 0.35rem 0 0.75rem;
                             padding: 0.75rem 0.9rem;
                             border: 1px solid #ef9a9a;
                             border-left: 4px solid #d32f2f;

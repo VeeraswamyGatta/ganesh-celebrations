@@ -31,6 +31,7 @@ def get_paypal_total(paypal_link):
 
 # Place all sponsorship and donation logic here
 
+@st.fragment
 def sponsorship_tab():
     # Helper to get total approved expense amount
     def get_total_expense_amount(conn):
@@ -706,154 +707,62 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
             sponsorship_form.markdown(f"- {error}")
 
     submit_disabled = st.session_state.get('submission_in_progress', False)
+    def prepare_review():
+        st.session_state['submission_in_progress'] = True
+        errors = []
+        name_val = format_name(name)
+        if not name_val:
+            errors.append("Name is required.")
+        if not apartment.strip():
+            errors.append("Apartment Number is required.")
+        else:
+            try:
+                apt_num = int(apartment.strip())
+                if not 100 <= apt_num <= 1600:
+                    errors.append("Apartment Number must be between 100 and 1600.")
+            except ValueError:
+                errors.append("Apartment Number must be a number between 100 and 1600.")
+        if not selected_items and donation == 0:
+            errors.append("Please sponsor at least one item or donate an amount.")
+        if email.strip() and ('@' not in email or not email.strip().lower().endswith('.com')):
+            errors.append("Please enter a valid email address (must contain '@' and end with .com)")
+
+        phone_fmt = mobile
+        if mobile.strip():
+            phone_valid, phone_fmt = validate_us_phone(mobile)
+            if not phone_valid:
+                errors.append("Please enter a valid 10-digit US phone number.")
+        st.session_state['submission_in_progress'] = False
+        if errors:
+            st.session_state["sponsorship_validation_errors"] = errors
+            return
+
+        st.session_state["sponsorship_validation_errors"] = []
+        sponsorship_total = 0
+        if selected_items:
+            format_strings = ','.join(['%s'] * len(selected_items))
+            cursor.execute(
+                f"SELECT amount, sponsor_limit FROM sponsorship_items WHERE item IN ({format_strings})",
+                tuple(selected_items),
+            )
+            sponsorship_total = sum(row[0] / row[1] if row[1] else 0 for row in cursor.fetchall())
+        contributed_amount = round(sponsorship_total + (donation if donation else 0), 2)
+        st.session_state['pending_sponsorship'] = {
+            "name": name_val,
+            "email": email.strip(),
+            "gothram": gothram.strip(),
+            "phone": phone_fmt.strip(),
+            "apartment": apartment.strip(),
+            "selected_items": selected_items.copy(),
+            "available_items": [row[0] for row in rows],
+            "donation": float(donation or 0),
+            "contributed_amount": contributed_amount,
+        }
+
     if show_submission_inputs:
-        if sponsorship_form.form_submit_button("🔍 Review", disabled=submit_disabled, type="primary"):
-            st.session_state['submission_in_progress'] = True
-            submission_status = st.status("Reviewing your sponsorship...", expanded=False)
-            errors = []
-            name_val = format_name(name)
-            if not name_val:
-                errors.append("Name is required.")
-            if not apartment.strip():
-                errors.append("Apartment Number is required.")
-            else:
-                try:
-                    apt_num = int(apartment.strip())
-                    if not (100 <= apt_num <= 1600):
-                        errors.append("Apartment Number must be between 100 and 1600.")
-                except ValueError:
-                    errors.append("Apartment Number must be a number between 100 and 1600.")
-            if not selected_items and donation == 0:
-                errors.append("Please sponsor at least one item or donate an amount.")
-            # Basic email validation
-            if email.strip():
-                if '@' not in email or not email.strip().lower().endswith('.com'):
-                    errors.append("Please enter a valid email address (must contain '@' and end with .com)")
-
-            phone_valid, phone_fmt = True, mobile
-            if mobile.strip():
-                phone_valid, phone_fmt = validate_us_phone(mobile)
-                if not phone_valid:
-                    errors.append("Please enter a valid 10-digit US phone number.")
-            if errors:
-                st.session_state['submission_in_progress'] = False
-                st.session_state["sponsorship_validation_errors"] = errors
-                submission_status.update(label="Please correct the highlighted fields", state="error", expanded=True)
-                st.rerun()
-            else:
-                st.session_state["sponsorship_validation_errors"] = []
-                with st.spinner("Preparing your confirmation details..."):
-                    sponsorship_total = 0
-                    if selected_items:
-                        format_strings = ','.join(['%s'] * len(selected_items))
-                        cursor.execute(f"SELECT amount, sponsor_limit FROM sponsorship_items WHERE item IN ({format_strings})", tuple(selected_items))
-                        sponsorship_total = sum([row[0] / row[1] if row[1] else 0 for row in cursor.fetchall()])
-                    contributed_amount = round(sponsorship_total + (donation if donation else 0), 2)
-                    st.session_state['pending_sponsorship'] = {
-                        "name": name_val,
-                        "email": email.strip(),
-                        "gothram": gothram.strip(),
-                        "phone": phone_fmt.strip(),
-                        "apartment": apartment.strip(),
-                        "selected_items": selected_items.copy(),
-                        "available_items": [row[0] for row in rows],
-                        "donation": float(donation or 0),
-                        "contributed_amount": contributed_amount,
-                    }
-                st.session_state['submission_in_progress'] = False
-                st.rerun()
-
-                try:
-                    # Calculate sponsorship item total as (amount / sponsor_limit) for each selected item
-                    sponsorship_total = 0
-                    if selected_items:
-                        format_strings = ','.join(['%s'] * len(selected_items))
-                        cursor.execute(f"SELECT amount, sponsor_limit FROM sponsorship_items WHERE item IN ({format_strings})", tuple(selected_items))
-                        sponsorship_total = sum([row[0] / row[1] if row[1] else 0 for row in cursor.fetchall()])
-                    contributed_amount = sponsorship_total + (donation if donation else 0)
-                    contributed_amount = round(contributed_amount, 2)
-                    for idx, item in enumerate(selected_items):
-                        d = donation if idx == 0 else 0
-                        if hasattr(cursor, 'execute') and hasattr(cursor.connection, 'account'):
-                            cursor.execute("""
-                                INSERT INTO sponsors (name, email, gothram, mobile, apartment, sponsorship, donation, submitted_at)
-                                VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP())
-                            """, (name_val, email, gothram, phone_fmt.strip(), apartment, item, d))
-                        else:
-                            cursor.execute("""
-                                INSERT INTO sponsors (name, email, gothram, mobile, apartment, sponsorship, donation)
-                                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                            """, (name_val, email, gothram, phone_fmt.strip(), apartment, item, d))
-                    if not selected_items and donation > 0:
-                        if hasattr(cursor, 'execute') and hasattr(cursor.connection, 'account'):
-                            cursor.execute("""
-                                INSERT INTO sponsors (name, email, gothram, mobile, apartment, sponsorship, donation, submitted_at)
-                                VALUES (%s, %s, %s, %s, %s, NULL, %s, CURRENT_TIMESTAMP())
-                            """, (name_val, email, gothram, phone_fmt.strip(), apartment, donation))
-                        else:
-                            cursor.execute("""
-                                INSERT INTO sponsors (name, email, gothram, mobile, apartment, sponsorship, donation)
-                                VALUES (%s, %s, %s, %s, %s, NULL, %s)
-                            """, (name_val, email, gothram, phone_fmt.strip(), apartment, donation))
-                    conn.commit()
-                    submitted_data = {
-                        "Name": name_val,
-                        "Email": email,
-                        "Gothram": gothram,
-                        "Mobile": phone_fmt.strip(),
-                        "Apartment": apartment
-                    }
-                    if selected_items:
-                        submitted_data["Sponsorship Items"] = selected_items.copy()
-                    if donation > 0:
-                        submitted_data["Donation"] = f"${donation}"
-                    if (selected_items or donation > 0) and contributed_amount:
-                        submitted_data["Contributed Amount"] = f"${contributed_amount}"
-                    if cash_collectors:
-                        submitted_data["How to Pay"] = cash_payment_html.lstrip("<br>")
-                    st.session_state['submitted_data'] = submitted_data
-                    st.session_state['show_submission'] = True
-                    st.session_state['submission_in_progress'] = False
-                    notification_emails = get_notification_emails()
-                    recipients = list(notification_emails)
-                    if email.strip():
-                        recipients.append(email.strip())
-                    recipients = list(set(recipients))
-                    email_rows = f"""
-  <tr><th>Name</th><td>{name_val}</td></tr>
-  <tr><th>Email</th><td>{email}</td></tr>
-  <tr><th>Gothram</th><td>{gothram}</td></tr>
-  <tr><th>Mobile</th><td>{phone_fmt.strip()}</td></tr>
-  <tr><th>Apartment</th><td>{apartment}</td></tr>
-"""
-                    if selected_items:
-                        format_strings = ','.join(['%s'] * len(selected_items))
-                        cursor.execute(f"SELECT item, amount, sponsor_limit FROM sponsorship_items WHERE item IN ({format_strings})", tuple(selected_items))
-                        item_amounts = {row[0]: (row[1], row[2]) for row in cursor.fetchall()}
-                        for item in selected_items:
-                            amt, limit = item_amounts.get(item, (0, 1))
-                            per_item_amt = round(amt / limit, 2) if limit else amt
-                            email_rows += f"  <tr><th>Sponsorship Item</th><td>{item}</td><td><b>${per_item_amt}</b></td></tr>\n"
-                    if donation > 0:
-                        email_rows += f"  <tr><th>Donation</th><td>General Donation</td><td><b>${donation}</b></td></tr>\n"
-                    if contributed_amount:
-                        email_rows += f"  <tr><th colspan='2'>Total Contributed Amount</th><td><b>${contributed_amount}</b></td></tr>\n"
-                    payment_html = cash_payment_html
-                    send_email(
-                        "Ganesh Chaturthi Celebrations Sponsorship Program in Austin Texas",
-                        f"""
-<b>New Sponsorship Submission</b><br><br>
-<table border='1' cellpadding='6' cellspacing='0' style='border-collapse:collapse;'>
-{email_rows}
-</table>
-{payment_html}
-""",
-                        recipients
-                    )
-                    submission_status.update(label="Submission complete", state="complete", expanded=False)
-                    st.rerun()
-                except Exception as e:
-                    st.session_state['submission_in_progress'] = False
-                    conn.rollback()
-                    submission_status.update(label="Submission failed", state="error", expanded=True)
-                    st.error(f"❌ Submission failed: {e}")
+        sponsorship_form.form_submit_button(
+            "🔍 Review",
+            disabled=submit_disabled,
+            type="primary",
+            on_click=prepare_review,
+        )
