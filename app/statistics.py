@@ -42,7 +42,9 @@ def statistics_tab():
     item_amt_map = {row[0]: (row[1], row[2]) for row in cursor.fetchall()}
     records = []
     for _, row in raw_df.iterrows():
-        if row['sponsorship']:
+        # pd.read_sql can return NaN (truthy) instead of None for NULL text columns, so use pd.notna()
+        has_sponsorship = pd.notna(row['sponsorship']) and bool(str(row['sponsorship']).strip())
+        if has_sponsorship:
             amt, limit = item_amt_map.get(row['sponsorship'], (0, 1))
             per_item_amt = round(amt / limit, 2) if limit else amt
             records.append({
@@ -53,7 +55,7 @@ def statistics_tab():
                 'Item/Donation': row['sponsorship'],
                 'Amount': per_item_amt
             })
-        if row['donation'] and row['donation'] > 0:
+        if pd.notna(row['donation']) and row['donation'] > 0:
             records.append({
                 'Name': row['name'],
                 'Email': row['email'],
