@@ -3,6 +3,93 @@ import streamlit as st
 # Custom button styles for events section
 st.markdown('''
     <style>
+    .event-card {
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        gap: 1.2rem;
+        border: 1px solid #d7ccc8;
+        border-left: 6px solid #bf360c;
+        border-radius: 16px;
+        background: linear-gradient(120deg, #fffaf0 0%, #f1f8e9 100%);
+        box-shadow: 0 8px 20px rgba(93, 64, 55, 0.11);
+        padding: 1.25rem 1.4rem;
+        margin-bottom: 1rem;
+    }
+    .event-date-block {
+        flex: 0 0 88px;
+        align-self: stretch;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        border-radius: 12px;
+        background: #fff3e0;
+        color: #bf360c;
+        text-align: center;
+    }
+    .event-date-icon { font-size: 1.35rem; }
+    .event-date-label {
+        margin-top: 0.35rem;
+        font-size: 0.8rem;
+        font-weight: 800;
+        line-height: 1.25;
+    }
+    .event-card-content { flex: 1; min-width: 0; }
+    .event-time-badge {
+        display: inline-block;
+        margin-bottom: 0.85rem;
+        padding: 0.38rem 0.7rem;
+        border-radius: 999px;
+        background: #e8f5e9;
+        color: #2e7d32;
+        font-size: 0.86rem;
+        font-weight: 800;
+    }
+    .event-card.past {
+        border-left-color: #90a4ae;
+        background: linear-gradient(120deg, #f5f5f5 0%, #eceff1 100%);
+        box-shadow: 0 4px 12px rgba(84, 110, 122, 0.08);
+    }
+    .event-card-title {
+        color: #3e2723;
+        font-size: 1.3rem;
+        font-weight: 800;
+        line-height: 1.25;
+        margin-bottom: 0.8rem;
+    }
+    .event-card.past .event-card-title { color: #607d8b; }
+    .event-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.55rem;
+        margin-bottom: 0.9rem;
+    }
+    .event-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.42rem 0.7rem;
+        border: 1px solid #c5d9c0;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.76);
+        color: #2e7d32;
+        font-size: 0.88rem;
+        font-weight: 700;
+    }
+    .event-description {
+        padding-top: 0.85rem;
+        border-top: 1px solid rgba(93, 64, 55, 0.14);
+        color: #546e7a;
+        font-size: 0.96rem;
+        line-height: 1.55;
+    }
+    @media (max-width: 640px) {
+        .event-card { gap: 0.8rem; padding: 1rem; }
+        .event-date-block { flex-basis: 70px; }
+        .event-date-label { font-size: 0.72rem; }
+        .event-card-title { font-size: 1.08rem; }
+    }
     .stButton > button {
         background-color: #2E7D32 !important;
         color: #fff !important;
@@ -24,14 +111,6 @@ def events_tab():
     st.session_state['active_tab'] = 'Events'
     conn = get_connection()
     cursor = conn.cursor()
-    st.markdown("""
-    <div style='text-align:center;margin-bottom:18px;'>
-        <span style='font-size:2.6em;vertical-align:middle;'>🪔</span>
-        <span style='font-size:2.2em;font-weight:700;color:#2E7D32;letter-spacing:1px;'>Ganesh Chaturthi Events</span>
-        <div style='font-size:1.1em;color:#388e3c;margin-top:6px;'>Celebrating joy, devotion, and togetherness</div>
-    </div>
-    """, unsafe_allow_html=True)
-
     # Admin credentials for add/edit/delete
     ADMIN_USERNAME = st.secrets["admin_user"]
     ADMIN_PASSWORD_BASE = st.secrets["admin_pass"]
@@ -66,19 +145,16 @@ def events_tab():
                 if not upcoming_df.empty:
                     for idx, row in upcoming_df.iterrows():
                         st.markdown(f"""
-                        <div style='background: linear-gradient(90deg, #fcfcf4 0%, #e3f2fd 100%); border: 2px solid #90caf9; border-radius: 24px; box-shadow: 0 2px 12px rgba(33,150,243,0.08); padding: 20px 24px; margin-bottom: 20px;'>
-                            <div style='font-size:1.35em;font-weight:600;color:#2196f3;margin-bottom:10px;'>
-                                {row['Event Name']}
+                        <div class='event-card'>
+                            <div class='event-date-block'>
+                                <div class='event-date-icon'>📅</div>
+                                <div class='event-date-label'>{row['Date']}</div>
                             </div>
-                            <div style='display:flex;align-items:center;margin-bottom:6px;'>
-                                <span style='font-size:1.1em;margin-right:6px;'>📅</span>
-                                <span style='font-size:1em;font-weight:500;color:#388e3c;'>{row['Date']}</span>
+                            <div class='event-card-content'>
+                                <div class='event-card-title'>{row['Event Name']}</div>
+                                <div class='event-time-badge'>⏰ {row['Time']}</div>
+                                <div class='event-description'>{row['Description'] or 'Join us for this special celebration.'}</div>
                             </div>
-                            <div style='display:flex;align-items:center;margin-bottom:6px;'>
-                                <span style='font-size:1.1em;margin-right:6px;'>⏰</span>
-                                <span style='font-size:1em;font-weight:500;color:#1976d2;'>{row['Time']}</span>
-                            </div>
-                            <div style='margin-top:12px;font-size:1em;color:#444;'>{row['Description']}</div>
                         </div>
                         """, unsafe_allow_html=True)
                 else:
@@ -87,19 +163,16 @@ def events_tab():
                 if not past_df.empty:
                     for idx, row in past_df.iterrows():
                         st.markdown(f"""
-                        <div style='background: linear-gradient(90deg, #f5f5f5 0%, #e0e0e0 100%); border: 2px solid #bdbdbd; border-radius: 24px; box-shadow: 0 2px 8px rgba(158,158,158,0.08); padding: 20px 24px; margin-bottom: 20px;'>
-                            <div style='font-size:1.15em;font-weight:600;color:#757575;margin-bottom:10px;'>
-                                {row['Event Name']}
+                        <div class='event-card past'>
+                            <div class='event-date-block'>
+                                <div class='event-date-icon'>📅</div>
+                                <div class='event-date-label'>{row['Date']}</div>
                             </div>
-                            <div style='display:flex;align-items:center;margin-bottom:6px;'>
-                                <span style='font-size:1em;margin-right:6px;'>📅</span>
-                                <span style='font-size:0.95em;font-weight:500;color:#757575;'>{row['Date']}</span>
+                            <div class='event-card-content'>
+                                <div class='event-card-title'>{row['Event Name']}</div>
+                                <div class='event-time-badge'>⏰ {row['Time']}</div>
+                                <div class='event-description'>{row['Description'] or 'Event completed.'}</div>
                             </div>
-                            <div style='display:flex;align-items:center;margin-bottom:6px;'>
-                                <span style='font-size:1em;margin-right:6px;'>⏰</span>
-                                <span style='font-size:0.95em;font-weight:500;color:#757575;'>{row['Time']}</span>
-                            </div>
-                            <div style='margin-top:12px;font-size:0.97em;color:#444;'>{row['Description']}</div>
                         </div>
                         """, unsafe_allow_html=True)
                 else:
@@ -175,19 +248,13 @@ def events_tab():
             if not upcoming_df.empty:
                 for idx, row in upcoming_df.iterrows():
                     st.markdown(f"""
-                    <div style='background: linear-gradient(90deg, #fcfcf4 0%, #e3f2fd 100%); border: 2px solid #90caf9; border-radius: 24px; box-shadow: 0 2px 12px rgba(33,150,243,0.08); padding: 20px 24px; margin-bottom: 20px;'>
-                        <div style='font-size:1.35em;font-weight:600;color:#2196f3;margin-bottom:10px;'>
-                            {row['Event Name']}
+                    <div class='event-card'>
+                        <div class='event-card-title'>{row['Event Name']}</div>
+                        <div class='event-meta'>
+                            <span class='event-badge'>📅 {row['Date']}</span>
+                            <span class='event-badge'>⏰ {row['Time']}</span>
                         </div>
-                        <div style='display:flex;align-items:center;margin-bottom:6px;'>
-                            <span style='font-size:1.1em;margin-right:6px;'>📅</span>
-                            <span style='font-size:1em;font-weight:500;color:#388e3c;'>{row['Date']}</span>
-                        </div>
-                        <div style='display:flex;align-items:center;margin-bottom:6px;'>
-                            <span style='font-size:1.1em;margin-right:6px;'>⏰</span>
-                            <span style='font-size:1em;font-weight:500;color:#1976d2;'>{row['Time']}</span>
-                        </div>
-                        <div style='margin-top:12px;font-size:1em;color:#444;'>{row['Description']}</div>
+                        <div class='event-description'>{row['Description'] or 'Join us for this special celebration.'}</div>
                     </div>
                     """, unsafe_allow_html=True)
             else:
@@ -197,19 +264,13 @@ def events_tab():
             if not past_df.empty:
                 for idx, row in past_df.iterrows():
                     st.markdown(f"""
-                    <div style='background: linear-gradient(90deg, #f5f5f5 0%, #e0e0e0 100%); border: 2px solid #bdbdbd; border-radius: 24px; box-shadow: 0 2px 8px rgba(158,158,158,0.08); padding: 20px 24px; margin-bottom: 20px;'>
-                        <div style='font-size:1.15em;font-weight:600;color:#757575;margin-bottom:10px;'>
-                            {row['Event Name']}
+                    <div class='event-card past'>
+                        <div class='event-card-title'>{row['Event Name']}</div>
+                        <div class='event-meta'>
+                            <span class='event-badge'>📅 {row['Date']}</span>
+                            <span class='event-badge'>⏰ {row['Time']}</span>
                         </div>
-                        <div style='display:flex;align-items:center;margin-bottom:6px;'>
-                            <span style='font-size:1em;margin-right:6px;'>📅</span>
-                            <span style='font-size:0.95em;font-weight:500;color:#757575;'>{row['Date']}</span>
-                        </div>
-                        <div style='display:flex;align-items:center;margin-bottom:6px;'>
-                            <span style='font-size:1em;margin-right:6px;'>⏰</span>
-                            <span style='font-size:0.95em;font-weight:500;color:#757575;'>{row['Time']}</span>
-                        </div>
-                        <div style='margin-top:12px;font-size:0.97em;color:#444;'>{row['Description']}</div>
+                        <div class='event-description'>{row['Description'] or 'Event completed.'}</div>
                     </div>
                     """, unsafe_allow_html=True)
             else:

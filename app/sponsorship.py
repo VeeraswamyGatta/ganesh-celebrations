@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import datetime
 import re
+from html import escape
 from .db import get_connection
 from .email_utils import send_email
 from .notification_utils import get_notification_emails
@@ -79,6 +80,11 @@ def sponsorship_tab():
             margin: 8px 0 4px;
             box-shadow: 0 3px 10px rgba(46, 125, 50, 0.09);
         }
+        .sponsor-option-closed {
+            background: linear-gradient(135deg, #fffaf0 0%, #f5f5f5 100%);
+            border-left-color: #90a4ae;
+            box-shadow: 0 2px 8px rgba(84, 110, 122, 0.08);
+        }
         .sponsor-option-title {
             color: #3e2723;
             font-size: 1.08rem;
@@ -110,6 +116,28 @@ def sponsorship_tab():
             margin-top: 10px;
         }
         .sponsor-option-names strong { color: #2e7d32; }
+        .sponsor-name-label {
+            display: block;
+            margin-bottom: 0.45rem;
+            color: #546e7a;
+            font-size: 0.82rem;
+            font-weight: 700;
+        }
+        .sponsor-name-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+        }
+        .sponsor-name-chip {
+            display: inline-block;
+            padding: 0.3rem 0.55rem;
+            border: 1px solid #dce8d8;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.78);
+            color: #2e7d32;
+            font-size: 0.8rem;
+            font-weight: 700;
+        }
         div[data-testid='stTextInput'] input,
         div[data-testid='stNumberInput'] input,
         div[data-testid='stTextArea'] textarea {
@@ -237,36 +265,40 @@ def sponsorship_tab():
         slots_html = f"<span style='color:#d32f2f;font-weight:bold'>{remaining_slots}</span>"
         style_html = ""
 
+    total_received = float(combined_total)
+    total_pending = float(total_combined) - total_received
+    available_wallet = total_received - float(get_total_expense_amount(conn))
     st.markdown(f"""
 {style_html}
-<div style='max-width:600px; margin:1.5em auto 1em auto; border-radius:18px; box-shadow:0 2px 16px rgba(21,101,192,0.10); background:#fff; padding:2em 2.2em 1.5em 2.2em;'>
-    <div style='display:flex; align-items:center; justify-content:space-between; margin-bottom:1.2em;'>
-        <div style='font-size:1.25em; color:#6A1B9A; font-weight:bold;'>🎉 Sponsorship and Donation Summary</div>
-        <div style='font-size:1.5em;'>🛕</div>
+<div style='max-width:1080px; margin:1.2em auto 1.5em; padding:1.2em; border:1px solid #d7ccc8; border-radius:20px; background:linear-gradient(135deg,#fffdf7 0%,#f1f8e9 100%); box-shadow:0 8px 24px rgba(93,64,55,0.12);'>
+    <div style='display:flex; align-items:center; justify-content:space-between; gap:1em; margin:0 0 1em; padding:0 0.35em;'>
+        <div>
+            <div style='color:#bf360c; font-size:0.76em; font-weight:800; letter-spacing:0.08em; text-transform:uppercase;'>Community dashboard</div>
+            <div style='font-size:1.45em; color:#3e2723; font-weight:800;'>Sponsorship &amp; Donation Summary</div>
+        </div>
+        <div style='font-size:2em;'>🛕</div>
     </div>
-    <div style='display:flex; flex-wrap:wrap; gap:1.2em;'>
-        <div style='flex:1; min-width:220px;'>
-            <span style='font-size:1.1em; color:#1565c0;'>Slots</span><br>
-            <span style='font-size:1.5em; color:#2E7D32; font-weight:bold;'>{slots_html}</span> / <span style='color:#1565c0;'>{total_slots}</span>
-            <span style='font-size:1.2em; margin-left:8px;'>🪔</span>
+    <div style='display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:0.8em;'>
+        <div style='padding:1em; border-radius:14px; background:#fff8e1; border-top:4px solid #ffb300;'>
+            <div style='color:#8d6e63; font-size:0.86em; font-weight:700;'>🪔 SLOTS</div>
+            <div style='margin-top:0.35em; font-size:1.55em; color:#3e2723; font-weight:800;'>{slots_html} <span style='color:#8d6e63; font-size:0.7em;'>/ {total_slots}</span></div>
+            <div style='color:#795548; font-size:0.82em;'>Available sponsorship slots</div>
         </div>
-        <div style='flex:1; min-width:220px;'>
-            <span style='font-size:1.1em; color:#1565c0;'>Total Sponsored & Donated</span><br>
-            <span style='font-size:1.2em; color:#2E7D32; font-weight:bold;'>${total_sponsored:,.2f}</span> + <span style='font-size:1.2em; color:#388E3C; font-weight:bold;'>${total_donated:,.2f}</span> = <span style='font-size:1.2em; color:#1565c0; font-weight:bold;'>${total_combined:,.2f}</span>
-            <span style='font-size:1.2em; margin-left:8px;'>💰</span>
+        <div style='padding:1em; border-radius:14px; background:#e8f5e9; border-top:4px solid #43a047;'>
+            <div style='color:#2e7d32; font-size:0.86em; font-weight:700;'>💰 SUBMITTED</div>
+            <div style='margin-top:0.35em; font-size:1.35em; color:#1b5e20; font-weight:800;'>${total_combined:,.2f}</div>
+            <div style='color:#558b2f; font-size:0.82em;'>${total_sponsored:,.2f} sponsored + ${total_donated:,.2f} donated</div>
         </div>
-        <div style='flex:1; min-width:220px;'>
-            <span style='font-size:1.1em; color:#1565c0;'>Total Received & Pending</span><br>
-            <span style='font-size:1.2em; color:#2E7D32; font-weight:bold;'>${float(combined_total):,.2f}</span> + <span style='font-size:1.2em; color:#d32f2f; font-weight:bold;'>{float(total_combined) - float(combined_total):,.2f}</span> = <span style='font-size:1.2em; color:#1565c0; font-weight:bold;'>${float(total_combined):,.2f}</span>
-            <span style='font-size:1.2em; margin-left:8px;'>📥</span>
+        <div style='padding:1em; border-radius:14px; background:#e3f2fd; border-top:4px solid #1e88e5;'>
+            <div style='color:#1565c0; font-size:0.86em; font-weight:700;'>📥 AMOUNT RECEIVED</div>
+            <div style='margin-top:0.35em; font-size:1.35em; color:#0d47a1; font-weight:800;'>${total_received:,.2f}</div>
+            <div style='color:#546e7a; font-size:0.82em;'>Pending: ${total_pending:,.2f}</div>
         </div>
-        <div style='flex:1; min-width:220px;'>
-            <span style='font-size:1.1em; color:#1565c0;' title="Total funds received minus all approved expenses. This is the remaining balance available for future expenses.">Available Wallet <span style='font-size:1.1em;' title="Total funds received minus all approved expenses. This is the remaining balance available for future expenses.">🛈</span></span><br>
-            <span style='font-size:1.2em; color:#388e3c; font-weight:bold;'>${float(combined_total):,.2f}</span> - <span style='font-size:1.2em; color:#d32f2f; font-weight:bold;'>${float(get_total_expense_amount(conn)):,.2f}</span> = <span style='font-size:1.2em; color:#1565c0; font-weight:bold;'>${float(combined_total) - float(get_total_expense_amount(conn)):,.2f}</span>
-            <span style='font-size:1.2em; margin-left:8px;'>👛</span>
+        <div style='padding:1em; border-radius:14px; background:#fce4ec; border-top:4px solid #d81b60;'>
+            <div style='color:#ad1457; font-size:0.86em; font-weight:700;'>👛 AVAILABLE WALLET</div>
+            <div style='margin-top:0.35em; font-size:1.35em; color:#880e4f; font-weight:800;'>${available_wallet:,.2f}</div>
+            <div style='color:#6d4c41; font-size:0.82em;'>After approved expenses</div>
         </div>
-    </div>
-    <hr style='margin:1.5em 0 1em 0; border:0; border-top:1.5px solid #eee;'>
 </div>
 """, unsafe_allow_html=True)
 
@@ -535,6 +567,15 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
         counts = dict(cursor.fetchall())
         cursor.execute("SELECT item, amount, sponsor_limit FROM sponsorship_items ORDER BY id")
         rows = cursor.fetchall()
+        rows = sorted(
+            rows,
+            key=lambda row: (
+                row[2] - counts.get(row[0], 0) > 0,
+                -(row[2] - counts.get(row[0], 0)),
+            ),
+        )
+        fully_sponsored_heading_shown = False
+        available_heading_shown = False
         for row in rows:
             item, cost, limit = row
             count = counts.get(item, 0)
@@ -542,6 +583,10 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
             # Fetch sponsor names for this item
             cursor.execute("SELECT name FROM sponsors WHERE sponsorship = %s", (item,))
             sponsor_names = [n[0] for n in cursor.fetchall()]
+            sponsor_names_html = "".join(
+                f"<span class='sponsor-name-chip'>{escape(str(name))}</span>"
+                for name in sponsor_names
+            )
             if remaining > 0:
                 remaining_str = f"<span class='blink' style='color:#d32f2f;font-weight:bold'>{remaining}</span>"
             else:
@@ -551,6 +596,9 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
                 return str(int(val)) if val == int(val) else str(val)
             # Modern card for fully sponsored items
             if remaining > 0:
+                if not available_heading_shown:
+                    st.markdown("### Available Sponsorships")
+                    available_heading_shown = True
                 st.markdown(
                     f"""
                     <div class='sponsor-option'>
@@ -563,12 +611,13 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
                             <span class='sponsor-metric'>Slots: {limit}</span>
                             <span class='sponsor-metric'>Available: <strong>{remaining_str}</strong></span>
                         </div>
+                    </div>
                     """,
                     unsafe_allow_html=True
                 )
                 if sponsor_names:
                     st.markdown(
-                        f"<div class='sponsor-option-names'>Sponsored by 🙏 <strong>{', '.join(sponsor_names)}</strong></div>",
+                        f"<div class='sponsor-option-names'><span class='sponsor-name-label'>Sponsored by 🙏</span><div class='sponsor-name-list'>{sponsor_names_html}</div></div>",
                         unsafe_allow_html=True
                     )
                 # Only show sponsor checkbox if slots are available
@@ -581,24 +630,26 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
                         selected_items.append(item)
                 st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
             else:
+                if not fully_sponsored_heading_shown:
+                    st.markdown("### Fully Sponsored Items")
+                    fully_sponsored_heading_shown = True
                 st.markdown(
                     f"""
-                    <div style='background:linear-gradient(90deg,#ffe0b2 60%,#fffde7 100%); border-radius:14px; box-shadow:0 2px 12px #e0e0e0; padding:22px 28px; margin-bottom:22px; border:2px solid #ffb74d;'>
-                        <div style='display:flex; align-items:center; justify-content:space-between;'>
-                            <div style='font-size:1.15em; font-weight:bold; color:#d84315;'>{item}</div>
-                            <div style='font-size:1.1em; color:#1565c0; font-weight:bold;'>${fmt_amt(cost)}</div>
+                    <div class='sponsor-option sponsor-option-closed'>
+                        <div style='display:flex;justify-content:space-between;align-items:flex-start;gap:12px;'>
+                            <span class='sponsor-option-title'>{item}</span>
+                            <span class='sponsor-option-price'>${fmt_amt(per_slot)} / slot</span>
                         </div>
-                        <div style='margin:10px 0 6px 0; font-size:1.05em;'>
-                            <span style='color:#388E3C;'>${fmt_amt(cost)}</span> / <span style='color:#1565c0;'>{limit}</span> = <span style='color:#388E3C;'>{fmt_amt(per_slot)}</span> per slot
-                            &nbsp;|&nbsp; <span style='color:#1565c0;'>Total Slots: {limit}</span>
-                            &nbsp;|&nbsp; <span style='color:#2E7D32;'>Available Slots: 0</span>
+                        <div class='sponsor-option-metrics'>
+                            <span class='sponsor-metric'>Total: ${fmt_amt(cost)}</span>
+                            <span class='sponsor-metric'>Slots: {limit}</span>
+                            <span class='sponsor-metric'>Available: 0</span>
                         </div>
-                        <div style='margin:10px 0 0 0; font-size:1em; color:#333;'>
-                            <span style='font-weight:500;'>Sponsored Names:</span> <span style='font-size:1.1em;vertical-align:middle;'>🙏</span> {', '.join([f"<span style='color:#388e3c;font-weight:bold'>{n}</span>" for n in sponsor_names])}
+                        <div class='sponsor-option-names'>
+                            <span class='sponsor-name-label'>Sponsored by 🙏</span>
+                            <div class='sponsor-name-list'>{sponsor_names_html}</div>
                         </div>
-                        <div style='margin-top:14px; padding:10px 0; background:#ffe0b2; border-radius:8px; font-size:1.08em; color:#d84315; font-weight:bold; text-align:center; box-shadow:0 1px 4px #ffe0b2;'>
-                            <span style='font-size:1.12em;'>Slots are not available. This item is fully sponsored! <span style='font-size:1.1em;vertical-align:middle;'>🙏</span></span>
-                        </div>
+                        <div style='margin-top:10px; color:#607d8b; font-size:0.86rem; font-weight:700;'>Fully sponsored</div>
                     </div>
                     """,
                     unsafe_allow_html=True
