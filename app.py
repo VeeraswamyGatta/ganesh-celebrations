@@ -28,7 +28,11 @@ st.markdown("""
 <style>
     .block-container {
         padding: 2rem;
+        padding-top: 3rem;
         border-radius: 10px;
+    }
+    .nav-pills:not(.flex-column) {
+        margin-top: 0.4rem;
     }
     label > div[data-testid="stMarkdownContainer"] > p:first-child:before {
         content: "* ";
@@ -247,7 +251,7 @@ st.markdown("""
     }
     @media (max-width: 640px) {
         .block-container {
-            padding: 1rem 0.7rem;
+            padding: 2.2rem 0.7rem 1rem;
         }
         .nav-pills:not(.flex-column) {
             border-radius: 13px;
@@ -475,7 +479,7 @@ else:
                 st.session_state.pop('is_admin', None)
                 st.rerun()
 
-        if st.session_state.admin_logged_in:
+        if st.session_state.admin_logged_in and main_menu == "Contributions":
             try:
                 admin_visits, user_visits, total_visits = get_today_visit_count()
                 today_label = datetime.datetime.now().strftime("%A, %d %B %Y")

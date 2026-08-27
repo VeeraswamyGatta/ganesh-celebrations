@@ -94,9 +94,15 @@ def end_login_audit(session_id):
 def get_today_visit_count():
     connection = get_connection()
     cursor = connection.cursor()
+    # Count each visitor once per day: distinct IP address, falling back to
+    # session_id when the IP is missing (e.g., localhost or proxied traffic).
     cursor.execute(
         """
-        SELECT user_role, COUNT(*)
+        SELECT user_role,
+               COUNT(DISTINCT CASE
+                   WHEN ip_address IS NOT NULL AND ip_address <> '' THEN ip_address
+                   ELSE session_id
+               END)
         FROM user_login_audit
         WHERE login_at >= CURRENT_DATE
         GROUP BY user_role

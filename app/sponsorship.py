@@ -269,15 +269,57 @@ def sponsorship_tab():
     total_received = float(combined_total)
     total_pending = float(total_combined) - total_received
     available_wallet = total_received - float(get_total_expense_amount(conn))
+
+    # Today's submitted amount (sponsorships + donations submitted today)
+    item_amt_map = {row[0]: (row[1], row[2]) for row in sponsorship_items}
+    today_sponsored_amount = 0.0
+    today_donated_amount = 0.0
+    try:
+        cursor.execute("SELECT sponsorship, donation, submitted_at FROM sponsors WHERE submitted_at IS NOT NULL")
+        today_rows = cursor.fetchall()
+        import pytz
+        cst_tz = pytz.timezone('US/Central')
+        utc_tz = pytz.utc
+        today_date = datetime.datetime.now(cst_tz).date()
+        for sponsorship_name, donation_amount, submitted_at in today_rows:
+            try:
+                if isinstance(submitted_at, str):
+                    submitted_dt = pd.to_datetime(submitted_at, errors='coerce')
+                    if pd.isna(submitted_dt):
+                        continue
+                    submitted_dt = submitted_dt.to_pydatetime()
+                else:
+                    submitted_dt = submitted_at
+                # DB timestamps are stored in UTC; compare in US/Central "today"
+                if submitted_dt.tzinfo is None:
+                    submitted_dt = utc_tz.localize(submitted_dt)
+                if submitted_dt.astimezone(cst_tz).date() != today_date:
+                    continue
+            except Exception:
+                continue
+            if sponsorship_name:
+                amount, limit = item_amt_map.get(sponsorship_name, (0, 1))
+                today_sponsored_amount += (amount / limit) if limit else amount
+            if donation_amount:
+                today_donated_amount += float(donation_amount)
+    except Exception:
+        pass
+    today_total = round(today_sponsored_amount + today_donated_amount, 2)
+    today_card_html = ""
+    if today_total > 0:
+        today_card_html = (
+            "<div style='padding:1em; border-radius:14px; background:#ede7f6; border-top:4px solid #7e57c2;'>"
+            "<div style='color:#5e35b1; font-size:0.86em; font-weight:700;'>📅 TODAY SUBMITTED</div>"
+            f"<div style='margin-top:0.35em; font-size:1.35em; color:#4527a0; font-weight:800;'>${today_total:,.2f}</div>"
+            "<div style='color:#6a5a8a; font-size:0.82em;'>Today's submissions</div>"
+            "</div>"
+        )
+
     st.markdown(f"""
 {style_html}
 <div style='max-width:1080px; margin:1.2em auto 1.5em; padding:1.2em; border:1px solid #d7ccc8; border-radius:20px; background:linear-gradient(135deg,#fffdf7 0%,#f1f8e9 100%); box-shadow:0 8px 24px rgba(93,64,55,0.12);'>
     <div style='display:flex; align-items:center; justify-content:space-between; gap:1em; margin:0 0 1em; padding:0 0.35em;'>
-        <div>
-            <div style='color:#bf360c; font-size:0.76em; font-weight:800; letter-spacing:0.08em; text-transform:uppercase;'>Community dashboard</div>
-            <div style='font-size:1.45em; color:#3e2723; font-weight:800;'>Sponsorship &amp; Donation Summary</div>
-        </div>
-        <div style='font-size:2em;'>🛕</div>
+        <div style='font-size:1.45em; color:#3e2723; font-weight:800;'>Sponsorship &amp; Donation Summary</div>
     </div>
     <div style='display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:0.8em;'>
         <div style='padding:1em; border-radius:14px; background:#fff8e1; border-top:4px solid #ffb300;'>
@@ -300,6 +342,7 @@ def sponsorship_tab():
             <div style='margin-top:0.35em; font-size:1.35em; color:#880e4f; font-weight:800;'>${available_wallet:,.2f}</div>
             <div style='color:#6d4c41; font-size:0.82em;'>After approved expenses</div>
         </div>
+        {today_card_html}
 </div>
 """, unsafe_allow_html=True)
 
@@ -334,13 +377,6 @@ def sponsorship_tab():
             show_submission_inputs = False
 
     # Only show the info message if not on the submission thank you page and submission is allowed
-    if not (st.session_state.get('show_submission') and st.session_state.get('submitted_data')) and show_submission_inputs:
-        st.markdown("""
-<br>
-<div style='font-size:1.08em; color:#d32f2f; margin-bottom: 0.5em;'>
-Please fill in your details below to participate in the Ganesh Chaturthi celebrations. Your information helps us coordinate and keep you updated!
-</div>
-""", unsafe_allow_html=True)
 
     # Show submitted details if just submitted
     if st.session_state.get('show_submission') and st.session_state.get('submitted_data'):
@@ -468,7 +504,7 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
             ("Gothram", pending_submission["gothram"] or "Not provided"),
             ("Mobile", pending_submission["phone"] or "Not provided"),
             ("Sponsorship Items", ", ".join(pending_submission["selected_items"]) or "None"),
-            ("Donation", f"${pending_submission['donation']:.2f}"),
+            ("Donation (in addition to sponsorships)", f"${pending_submission['donation']:.2f}"),
             ("Total", f"${pending_submission['contributed_amount']:.2f}"),
         ]
         for label, value in confirmation_rows:
@@ -512,6 +548,14 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
     sponsorship_form = st.form("sponsorship_form")
     # Only show submission inputs if allowed
     if show_submission_inputs:
+        sponsorship_form.markdown("""
+<div style='background:linear-gradient(135deg,#e3f2fd 0%,#e8eaf6 100%); border:1px solid #90caf9; border-radius:10px; padding:0.8em 1.1em; margin-bottom:0.8em;'>
+    <div style='font-size:1.02em; color:#1565c0; line-height:1.55;'>
+        🙏 Please fill in your details below to participate in the <strong>Ganesh Chaturthi celebrations</strong>.
+        Your information helps us coordinate the festivities and keep you updated!
+    </div>
+</div>
+""", unsafe_allow_html=True)
         name = sponsorship_form.text_input("👤 Your Name", placeholder="E.g., Raghava Rao", key="sponsorship_name")
         apartment = sponsorship_form.text_input("🏢 Your Apartment Number", placeholder="E.g., 305", key="sponsorship_apartment")
         email = sponsorship_form.text_input("📧 Email Address (optional)", placeholder="your@email.com", key="sponsorship_email")
@@ -560,7 +604,7 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
 
     tab1, tab2 = st.tabs([
         "🛕 Sponsorship Items",
-        "💰 Donation"
+        "💰 Extra Donation"
     ])
     selected_items = []
     with tab1:
@@ -623,8 +667,9 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
                     )
                 # Only show sponsor checkbox if slots are available
                 if remaining > 0:
+                    slot_word = "slot" if remaining == 1 else "slots"
                     item_selected = sponsorship_form.checkbox(
-                        f"Select {item} **:green[${per_slot:,.2f}]**",
+                        f"Select {item} **:green[${per_slot:,.2f}]** :red[**({remaining} {slot_word} available)**]",
                         key=item
                     )
                     if item_selected:
@@ -682,13 +727,31 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
 </div>
 """
             st.markdown(donor_table_html, unsafe_allow_html=True)
+        cursor.execute("SELECT sponsor_limit FROM sponsorship_items")
+        total_item_slots = sum([r[0] for r in cursor.fetchall()])
+        cursor.execute("SELECT COUNT(*) FROM sponsors WHERE sponsorship IS NOT NULL AND sponsorship != ''")
+        filled_item_slots = cursor.fetchone()[0]
+        slots_available = (total_item_slots - filled_item_slots) > 0
+        if slots_available:
+            note_text = (
+                "📌 Fill this only if you want to give <strong>MORE</strong> than your selected sponsorship items, "
+                "or if you want to <strong>donate directly without selecting any sponsorship</strong>."
+            )
+        else:
+            note_text = "📌 You can <strong>donate directly</strong> by entering an amount here."
+        sponsorship_form.markdown(
+            "<div style='font-size:1rem; font-weight:600; color:#31333F;'>Donation amount (optional)</div>"
+            f"<div style='color:#e65100; font-size:0.9em; margin:4px 0 8px; line-height:1.5;'>{note_text}</div>",
+            unsafe_allow_html=True
+        )
         donation = sponsorship_form.number_input(
             "Donation amount (optional)",
             min_value=0.0,
             value=0.0,
             step=5.0,
             format="%.2f",
-            key="sponsorship_donation_amount"
+            key="sponsorship_donation_amount",
+            label_visibility="collapsed"
         )
 
     def validate_us_phone(phone):
@@ -761,7 +824,7 @@ Please fill in your details below to participate in the Ganesh Chaturthi celebra
 
     if show_submission_inputs:
         sponsorship_form.form_submit_button(
-            "🔍 Review",
+            "Review",
             disabled=submit_disabled,
             type="primary",
             on_click=prepare_review,

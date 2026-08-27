@@ -1,7 +1,7 @@
 import streamlit as st
 
 # Custom button styles for events section
-st.markdown('''
+EVENTS_CSS = '''
     <style>
     .event-card {
         position: relative;
@@ -102,13 +102,16 @@ st.markdown('''
         color: #fff !important;
     }
     </style>
-''', unsafe_allow_html=True)
+'''
 import pandas as pd
 import datetime
 from .db import get_connection
 
 def events_tab():
     st.session_state['active_tab'] = 'Events'
+    # Inject CSS on every rerun: module-level st.markdown only executes on first
+    # import, so the styles were lost after login/logout reruns.
+    st.markdown(EVENTS_CSS, unsafe_allow_html=True)
     conn = get_connection()
     cursor = conn.cursor()
     # Admin credentials for add/edit/delete
@@ -211,7 +214,7 @@ def events_tab():
             display_df['Date_obj'] = []
             upcoming_df = pd.DataFrame()
             past_df = pd.DataFrame()
-        tab_add, tab_active, tab_past, tab_edit = st.tabs(["Add Event", "Active Events", "Past Events", "Edit/Delete Event"])
+        tab_active, tab_past, tab_add, tab_edit = st.tabs(["Active Events", "Past Events", "Add Event", "Edit/Delete Event"])
 
         with tab_add:
             st.markdown("### ➕ Add New Event")

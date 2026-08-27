@@ -30,7 +30,6 @@ def statistics_tab():
     st.session_state['active_tab'] = 'Statistics'
     is_admin = st.session_state.get('is_admin', False)
     # --- Audit trail: Your Full Name ---
-    st.markdown("<h1 style='text-align: center; color: #1565C0;'>Sponsorship Statistics</h1>", unsafe_allow_html=True)
     # Removed audit trail full name requirement as requested
     # (Removed duplicate display of audit name in statistics page)
     conn = get_connection()
