@@ -604,7 +604,7 @@ def sponsorship_tab():
 
     tab1, tab2 = st.tabs([
         "🛕 Sponsorship Items",
-        "💰 Extra Donation"
+        "💰 Donation"
     ])
     selected_items = []
     with tab1:
