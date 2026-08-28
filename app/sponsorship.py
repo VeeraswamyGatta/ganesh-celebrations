@@ -738,6 +738,7 @@ def sponsorship_tab(dashboard_only=False):
                 st.session_state['show_submission'] = False
                 st.session_state['submitted_data'] = None
                 st.session_state['main_navigation'] = 'Dashboard'
+                st.session_state['scroll_to_top'] = True
                 st.rerun()
         return
 

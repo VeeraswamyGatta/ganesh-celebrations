@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 from streamlit_option_menu import option_menu
 import datetime
 import time
@@ -643,7 +644,12 @@ if not st.session_state.user_logged_in and not st.session_state.admin_logged_in:
                 use_container_width=True,
             ):
                 st.session_state.landing_navigation = label
+                st.session_state.scroll_to_top = True
                 st.rerun()
+
+    if st.session_state.get("scroll_to_top"):
+        components.html("<script>window.parent.scrollTo({top: 0, behavior: 'instant'});</script>", height=0)
+        st.session_state["scroll_to_top"] = False
 
     initial_menu = st.session_state.landing_navigation
     if initial_menu == "Prasad Seva":
@@ -766,7 +772,12 @@ else:
                     use_container_width=True,
                 ):
                     st.session_state.main_navigation = menu_item
+                    st.session_state.scroll_to_top = True
                     st.rerun()
+
+        if st.session_state.get("scroll_to_top"):
+            components.html("<script>window.parent.scrollTo({top: 0, behavior: 'instant'});</script>", height=0)
+            st.session_state["scroll_to_top"] = False
 
         main_menu = st.session_state.main_navigation
         if st.button(":material/logout:", help="Logout", key="logout_button"):
