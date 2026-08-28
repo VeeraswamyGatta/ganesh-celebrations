@@ -23,6 +23,12 @@ from .db import get_connection
 from .email_utils import send_email
 from .login_audit import ensure_login_audit_table
 
+
+def ensure_sponsorship_item_image_columns(cursor):
+    blob_type = "BINARY" if hasattr(cursor.connection, "account") else "BYTEA"
+    cursor.execute(f"ALTER TABLE sponsorship_items ADD COLUMN IF NOT EXISTS image_blob {blob_type}")
+    cursor.execute("ALTER TABLE sponsorship_items ADD COLUMN IF NOT EXISTS image_filename TEXT")
+
 def admin_tab(menu="Sponsorship Items"):
     st.session_state['active_tab'] = 'Admin'
     conn = get_connection()
@@ -288,6 +294,13 @@ def admin_tab(menu="Sponsorship Items"):
 
     if menu == "Sponsorship Items":
         st.markdown("<h2 style='color: #6A1B9A;'>Sponsorship Items</h2>", unsafe_allow_html=True)
+        try:
+            ensure_sponsorship_item_image_columns(cursor)
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            st.error(f"Unable to prepare sponsorship item images: {e}")
+            return
         df = pd.read_sql("SELECT * FROM sponsorship_items ORDER BY id", conn)
         df.columns = [c.lower() for c in df.columns]
         tabs = ["Add Sponsorship Item", "Sponsorship Items List", "Edit Sponsorship Item", "Delete Sponsorship Item"]
@@ -299,16 +312,28 @@ def admin_tab(menu="Sponsorship Items"):
                 new_name = st.text_input("New Item Name")
                 new_amt = st.number_input("Amount", min_value=0)
                 new_lim = st.number_input("Limit", min_value=1, value=3)
+                new_image = st.file_uploader(
+                    "Upload Item Image (JPG/PNG, max 10MB)",
+                    type=["jpg", "jpeg", "png"],
+                    key="new_sponsorship_item_image",
+                )
                 if st.form_submit_button("Add Item"):
                     try:
-                        if hasattr(cursor, 'execute') and hasattr(cursor.connection, 'account'):
-                            cursor.execute("INSERT INTO sponsorship_items (item, amount, sponsor_limit) VALUES (%s, %s, %s)",
-                                           (new_name, new_amt, new_lim))
+                        if not new_name.strip():
+                            st.error("Item name is required.")
+                        elif new_image is not None and new_image.size > 10 * 1024 * 1024:
+                            st.error("Image file size should not exceed 10 MB.")
+                        elif new_image is not None and new_image.type not in ["image/jpeg", "image/png"]:
+                            st.error("Only JPG and PNG files are allowed.")
                         else:
-                            cursor.execute("INSERT INTO sponsorship_items (item, amount, sponsor_limit) VALUES (%s, %s, %s)",
-                                           (new_name, new_amt, new_lim))
-                        conn.commit()
-                        st.success("✅ New item added!")
+                            image_bytes = new_image.getvalue() if new_image is not None else None
+                            image_filename = new_image.name if new_image is not None else None
+                            cursor.execute(
+                                "INSERT INTO sponsorship_items (item, amount, sponsor_limit, image_blob, image_filename) VALUES (%s, %s, %s, %s, %s)",
+                                (new_name.strip(), float(new_amt), int(new_lim), image_bytes, image_filename),
+                            )
+                            conn.commit()
+                            st.success("✅ New item added!")
                     except Exception as e:
                         conn.rollback()
                         st.error(f"❌ Failed to add item: {e}")
@@ -316,6 +341,9 @@ def admin_tab(menu="Sponsorship Items"):
         with tab_list:
             st.markdown("<h3 style='color: #6A1B9A;'>📋 Sponsorship Items List</h3>", unsafe_allow_html=True)
             df_display = df.copy()
+            if "image_blob" in df_display.columns:
+                df_display["Image Uploaded"] = df_display["image_blob"].notna().map({True: "Yes", False: "No"})
+                df_display = df_display.drop(columns=["image_blob", "image_filename"])
             if 'id' in df_display.columns:
                 df_display = df_display.drop(columns=["id"])
             df_display.index = df_display.index + 1
@@ -342,14 +370,29 @@ def admin_tab(menu="Sponsorship Items"):
                 step=1,
                 key=f"edit_sponsorship_limit_{item_row['id']}",
             )
+            edit_image = st.file_uploader(
+                "Replace Item Image (JPG/PNG, max 10MB)",
+                type=["jpg", "jpeg", "png"],
+                key=f"edit_sponsorship_item_image_{item_row['id']}",
+            )
             if st.button("Update Item"):
                 try:
-                    cursor.execute(
-                        "UPDATE sponsorship_items SET item=%s, amount=%s, sponsor_limit=%s WHERE id=%s",
-                        (new_item_name, new_amount, new_limit, item_row["id"]),
-                    )
-                    conn.commit()
-                    st.success("✅ Item updated successfully!")
+                    if edit_image is not None and edit_image.size > 10 * 1024 * 1024:
+                        st.error("Image file size should not exceed 10 MB.")
+                    elif edit_image is not None and edit_image.type not in ["image/jpeg", "image/png"]:
+                        st.error("Only JPG and PNG files are allowed.")
+                    else:
+                        image_sql = ""
+                        image_values = []
+                        if edit_image is not None:
+                            image_sql = ", image_blob=%s, image_filename=%s"
+                            image_values = [edit_image.getvalue(), edit_image.name]
+                        cursor.execute(
+                            f"UPDATE sponsorship_items SET item=%s, amount=%s, sponsor_limit=%s{image_sql} WHERE id=%s",
+                            (new_item_name.strip(), float(new_amount), int(new_limit), *image_values, int(item_row["id"])),
+                        )
+                        conn.commit()
+                        st.success("✅ Item updated successfully!")
                 except Exception as e:
                     conn.rollback()
                     st.error(f"❌ Failed to update: {e}")

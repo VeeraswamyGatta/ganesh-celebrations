@@ -2,6 +2,8 @@ import streamlit as st
 from streamlit_option_menu import option_menu
 import datetime
 import time
+import base64
+from io import BytesIO
 
 from app.login_audit import end_login_audit, get_today_visit_count, start_login_audit, touch_login_audit
 
@@ -9,6 +11,9 @@ from app.login_audit import end_login_audit, get_today_visit_count, start_login_
 st.set_page_config(page_title="Terrazzo Ganesh Celebrations 2026", page_icon="🙏", layout="wide")
 from PIL import Image
 ganesh_img = Image.open("ganesh.png")
+ganesh_image_buffer = BytesIO()
+ganesh_img.save(ganesh_image_buffer, format="PNG")
+ganesh_image_base64 = base64.b64encode(ganesh_image_buffer.getvalue()).decode("ascii")
 
 
 # ---------- Constants ----------
@@ -164,12 +169,12 @@ st.markdown("""
         position: relative;
         overflow: hidden;
         margin: 0.8rem auto 1.4rem;
-        padding: 2.4rem 2.6rem 2.2rem;
-        max-width: 900px;
-        border: 1px solid #d7ccc8;
-        border-radius: 22px;
-        background: linear-gradient(115deg, #fff8e1 0%, #fffdf7 48%, #e8f5e9 100%);
-        box-shadow: 0 12px 30px rgba(93, 64, 55, 0.13);
+        padding: 1.35rem;
+        max-width: 640px;
+        border: 1px solid #d7e3d4;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #fffaf0 0%, #ffffff 52%, #edf7ee 100%);
+        box-shadow: 0 10px 24px rgba(46, 125, 50, 0.1);
     }
     .landing-hero:after {
         content: "";
@@ -188,14 +193,95 @@ st.markdown("""
         letter-spacing: 0.08em;
         text-transform: uppercase;
     }
-    .landing-title {
+    .landing-event-label {
         position: relative;
         z-index: 1;
-        margin: 0.35rem 0 0.4rem;
-        color: #3e2723;
-        font-size: clamp(2rem, 4vw, 3.5rem);
-        line-height: 1.05;
+        margin: 0 auto 0.85rem;
+        color: #2e7d32;
+        font-size: 0.8rem;
+        line-height: 1.2;
         font-weight: 800;
+        text-align: center;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+    }
+    .landing-event-label:after {
+        content: "";
+        display: block;
+        width: 42px;
+        height: 2px;
+        margin: 0.45rem auto 0;
+        background: #e6a92f;
+    }
+    div[class*="st-key-landing_nav_login"],
+    div[class*="st-key-landing_nav_prasad_seva"],
+    div[class*="st-key-landing_nav_events"] {
+        width: 100% !important;
+    }
+    div[class*="st-key-landing_nav_login"] button,
+    div[class*="st-key-landing_nav_prasad_seva"] button,
+    div[class*="st-key-landing_nav_events"] button {
+        width: 100% !important;
+        min-height: 3.3rem !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        color: #8b1737 !important;
+        font-size: 1.02rem !important;
+        font-weight: 800 !important;
+        box-shadow: none !important;
+    }
+    div[class*="st-key-landing_nav_login"] button p:before,
+    div[class*="st-key-landing_nav_prasad_seva"] button p:before,
+    div[class*="st-key-landing_nav_events"] button p:before {
+        display: block;
+        margin-bottom: 0.22rem;
+        font-size: 1.2rem;
+        font-weight: 400;
+        line-height: 1;
+    }
+    div[class*="st-key-landing_nav_login"] button p:before { content: "⌂"; }
+    div[class*="st-key-landing_nav_prasad_seva"] button p:before { content: "♨"; }
+    div[class*="st-key-landing_nav_events"] button p:before { content: "▣"; }
+    div[class*="st-key-landing_nav_login"] button:hover,
+    div[class*="st-key-landing_nav_prasad_seva"] button:hover,
+    div[class*="st-key-landing_nav_events"] button:hover,
+    div[class*="st-key-landing_nav_login"] button:focus-visible,
+    div[class*="st-key-landing_nav_prasad_seva"] button:focus-visible,
+    div[class*="st-key-landing_nav_events"] button:focus-visible,
+    div[class*="st-key-landing_nav_login"] button:active,
+    div[class*="st-key-landing_nav_prasad_seva"] button:active,
+    div[class*="st-key-landing_nav_events"] button:active {
+        background: rgba(139, 23, 55, 0.04) !important;
+        color: #8b1737 !important;
+        outline: 0 !important;
+    }
+    div[class*="st-key-landing_nav_login"] button:hover p,
+    div[class*="st-key-landing_nav_prasad_seva"] button:hover p,
+    div[class*="st-key-landing_nav_events"] button:hover p,
+    div[class*="st-key-landing_nav_login"] button:focus-visible p,
+    div[class*="st-key-landing_nav_prasad_seva"] button:focus-visible p,
+    div[class*="st-key-landing_nav_events"] button:focus-visible p,
+    div[class*="st-key-landing_nav_login"] button:active p,
+    div[class*="st-key-landing_nav_prasad_seva"] button:active p,
+    div[class*="st-key-landing_nav_events"] button:active p {
+        color: inherit !important;
+    }
+    div[class*="st-key-landing_nav_login"] button[kind="primary"],
+    div[class*="st-key-landing_nav_prasad_seva"] button[kind="primary"],
+    div[class*="st-key-landing_nav_events"] button[kind="primary"] {
+        background: linear-gradient(135deg, #8b1737, #a12643) !important;
+        color: #ffffff !important;
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12) !important;
+    }
+    .landing-title .landing-kicker {
+        display: inline;
+        margin-right: 0.45rem;
+        font-size: inherit;
+        font-weight: inherit;
+        letter-spacing: 0;
+        text-transform: none;
+        vertical-align: middle;
     }
     .landing-subtitle {
         position: relative;
@@ -205,22 +291,36 @@ st.markdown("""
         color: #546e7a;
         font-size: 1.05rem;
     }
-    .landing-details {
+    .landing-showcase {
         position: relative;
         z-index: 1;
         display: flex;
-        flex-wrap: wrap;
-        gap: 0.6rem;
-        margin-top: 1.25rem;
+        align-items: center;
+        gap: 1rem;
+    }
+    .landing-image {
+        display: block;
+        width: 118px;
+        height: auto;
+        flex: 0 0 118px;
+        object-fit: contain;
+        padding: 0.25rem;
+        border: 2px solid #f0cf88;
+        border-radius: 10px;
+        background: #ffffff;
+        box-shadow: 0 6px 14px rgba(127, 92, 31, 0.16);
+    }
+    .landing-details {
+        flex: 1;
+        display: grid;
+        align-content: center;
+        gap: 0.45rem;
     }
     .landing-detail {
-        padding: 0.45rem 0.75rem;
-        border: 1px solid #c5d9c0;
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.72);
         color: #2e7d32;
-        font-size: 0.88rem;
+        font-size: 0.8rem;
         font-weight: 700;
+        line-height: 1.35;
     }
     .login-panel-title {
         margin: 0;
@@ -251,32 +351,212 @@ st.markdown("""
     }
     @media (max-width: 640px) {
         .block-container {
-            padding: 2.2rem 0.7rem 1rem;
+            padding: 2.2rem 0.7rem 6.2rem;
         }
-        .nav-pills:not(.flex-column) {
-            border-radius: 13px;
-            padding: 0.35rem;
-            margin-bottom: 0.8rem;
+        [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] div[class*="st-key-main_nav_dashboard"]) {
+            position: fixed !important;
+            z-index: 999 !important;
+            right: 0.35rem !important;
+            bottom: 0 !important;
+            left: 0.35rem !important;
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            gap: 0.1rem !important;
+            align-items: stretch !important;
+            padding: 0.22rem 0.1rem 0.1rem !important;
+            border-radius: 16px 16px 0 0 !important;
+            background: #ffffff !important;
+            box-shadow: 0 -2px 12px rgba(39, 31, 29, 0.1) !important;
         }
-        .nav-pills:not(.flex-column) {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 0.3rem;
-            overflow-x: visible !important;
+        [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] div[class*="st-key-main_nav_dashboard"]) > [data-testid="stColumn"] {
+            flex: 1 1 0 !important;
+            width: 0 !important;
+            min-width: 0 !important;
         }
-        .nav-pills:not(.flex-column) .nav-link {
-            min-height: 2.8rem;
-            padding: 0.55rem 0.3rem;
-            font-size: 0.82rem;
-            line-height: 1.15;
+        div[class*="st-key-main_nav_"] button {
+            min-height: 4.4rem !important;
+            padding: 0.3rem 0.08rem !important;
+            border: 0 !important;
+            border-radius: 10px !important;
+            background: #ffffff !important;
+            color: #4f5360 !important;
+            font-size: 0.55rem !important;
+            font-weight: 700 !important;
+            box-shadow: none !important;
+        }
+        div[class*="st-key-main_nav_"] button p {
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 0.22rem !important;
+            margin: 0 !important;
+            white-space: nowrap !important;
+        }
+        div[class*="st-key-main_nav_"] button [data-testid="stIconMaterial"] {
+            font-size: 1.18rem !important;
+        }
+        div[class*="st-key-main_nav_"] button:hover,
+        div[class*="st-key-main_nav_"] button:focus-visible,
+        div[class*="st-key-main_nav_"] button:active {
+            background: #f6f1fa !important;
+            color: #642196 !important;
+            outline: 0 !important;
+        }
+        div[class*="st-key-main_nav_"] button[kind="primary"] {
+            background: #ffffff !important;
+            color: #642196 !important;
+            box-shadow: none !important;
+        }
+        div[class*="st-key-landing_nav_login"],
+        div[class*="st-key-landing_nav_prasad_seva"],
+        div[class*="st-key-landing_nav_events"] {
+            position: fixed !important;
+            z-index: 999 !important;
+            bottom: 0 !important;
+            width: calc((100% - 1.7rem) / 3) !important;
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+        div[class*="st-key-landing_nav_login"] {
+            left: 0.35rem !important;
+        }
+        div[class*="st-key-landing_nav_prasad_seva"] {
+            left: calc(33.333% + 0.08rem) !important;
+        }
+        div[class*="st-key-landing_nav_events"] {
+            left: calc(66.666% - 0.18rem) !important;
+        }
+        div[class*="st-key-landing_nav_login"] button,
+        div[class*="st-key-landing_nav_prasad_seva"] button,
+        div[class*="st-key-landing_nav_events"] button {
+            min-height: 4.55rem !important;
+            border: 0 !important;
+            border-radius: 0 !important;
+            background: #ffffff !important;
+            color: #4f5360 !important;
+            font-size: 0.62rem !important;
+            font-weight: 700 !important;
+            box-shadow: 0 -2px 12px rgba(39, 31, 29, 0.08) !important;
+            line-height: 1.1 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+        div[class*="st-key-landing_nav_login"] button {
+            border-radius: 16px 0 0 0 !important;
+        }
+        div[class*="st-key-landing_nav_events"] button {
+            border-radius: 0 16px 0 0 !important;
+        }
+        div[class*="st-key-landing_nav_login"] button[kind="primary"],
+        div[class*="st-key-landing_nav_prasad_seva"] button[kind="primary"],
+        div[class*="st-key-landing_nav_events"] button[kind="primary"] {
+            background: #ffffff !important;
+            color: #642196 !important;
+            box-shadow: 0 -2px 12px rgba(39, 31, 29, 0.08) !important;
+        }
+        div[class*="st-key-landing_nav_login"] button p,
+        div[class*="st-key-landing_nav_prasad_seva"] button p,
+        div[class*="st-key-landing_nav_events"] button p {
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: center !important;
+            margin: 0 !important;
+        }
+        div[class*="st-key-main_navigation"] .nav-pills:not(.flex-column) {
+            position: fixed !important;
+            z-index: 999 !important;
+            right: 0.55rem !important;
+            bottom: 0.45rem !important;
+            left: 0.55rem !important;
+            display: flex !important;
+            flex-wrap: nowrap !important;
+            gap: 0.15rem !important;
+            overflow-x: auto !important;
+            border: 1px solid #e4ddd7;
+            border-radius: 10px;
+            background: #ffffff !important;
+            box-shadow: 0 3px 12px rgba(80, 38, 28, 0.1) !important;
+            padding: 0.25rem !important;
+            margin-bottom: 0.8rem !important;
+            scrollbar-width: none;
+        }
+        div[class*="st-key-main_navigation"] .nav-pills:not(.flex-column)::-webkit-scrollbar { display: none; }
+        div[class*="st-key-main_navigation"] .nav-pills:not(.flex-column) > li {
+            flex: 1 0 62px !important;
+        }
+        div[class*="st-key-main_navigation"] .nav-pills:not(.flex-column) .nav-link {
+            min-height: 3.65rem !important;
+            padding: 0.35rem 0.2rem !important;
+            border-radius: 8px !important;
+            flex-direction: column;
+            gap: 0.15rem !important;
+            font-size: 0.65rem !important;
+            line-height: 1.1;
+            white-space: normal !important;
+        }
+        div[class*="st-key-main_navigation"] .nav-pills:not(.flex-column) .nav-link i {
+            font-size: 1.1rem !important;
+        }
+        div[class*="st-key-main_navigation"] .nav-pills:not(.flex-column) .nav-link.active,
+        div[class*="st-key-main_navigation"] .nav-pills:not(.flex-column) .nav-link:hover {
+            background: #fff0f2 !important;
+            color: #8b1737 !important;
+            box-shadow: none !important;
+        }
+        div[class*="st-key-main_navigation"] .nav-pills:not(.flex-column) .nav-link.active i,
+        div[class*="st-key-main_navigation"] .nav-pills:not(.flex-column) .nav-link:hover i {
+            color: #8b1737 !important;
+        }
+        div[class*="st-key-landing_navigation"] {
+            position: fixed;
+            z-index: 999;
+            right: 0.55rem;
+            bottom: 0.45rem;
+            left: 0.55rem;
+            padding: 0.35rem 0.5rem;
+            border: 1px solid #e4ddd7;
+            border-radius: 10px;
+            background: #ffffff;
+            box-shadow: 0 3px 12px rgba(80, 38, 28, 0.1);
+        }
+        div[class*="st-key-landing_navigation"] [role="radiogroup"] {
+            display: flex;
+            justify-content: space-around;
+            gap: 0.25rem;
+        }
+        div[class*="st-key-landing_navigation"] label {
+            flex: 1;
+            justify-content: center;
+            margin: 0;
+            color: #694f43;
+            font-size: 0.78rem;
+            font-weight: 700;
+        }
+        div[class*="st-key-landing_navigation"] label > div:first-child {
+            display: none;
         }
         .landing-hero {
             margin-top: 0.4rem;
-            padding: 1.7rem 1.25rem 1.5rem;
-            border-radius: 17px;
+            padding: 1rem;
+            border-radius: 10px;
         }
         .landing-subtitle {
             font-size: 0.95rem;
+        }
+        .landing-image {
+            width: 96px;
+            flex-basis: 96px;
+            padding: 0.2rem;
+        }
+        .landing-showcase {
+            gap: 0.75rem;
+        }
+        .landing-detail {
+            font-size: 0.76rem;
         }
     }
 </style>
@@ -329,37 +609,43 @@ show_login_form = False
 # Only show the initial menu if not logged in
 if not st.session_state.user_logged_in and not st.session_state.admin_logged_in:
     st.markdown(
-        """
+        f"""
         <section class="landing-hero">
-            <div class="landing-kicker">Terrazzo Community • 2026</div>
-            <h1 class="landing-title">Ganesh Celebrations</h1>
-            <p class="landing-subtitle">A shared celebration of devotion, service, and community spirit.</p>
-            <div class="landing-details">
-                <span class="landing-detail">🗓️ 14–20 September 2026</span>
-                <span class="landing-detail">📍 3C Garage</span>
-                <span class="landing-detail">🙏 Austin, Texas</span>
+            <div class="landing-event-label">Ganesh Celebrations 2026</div>
+            <div class="landing-showcase">
+                <img class="landing-image" src="data:image/png;base64,{ganesh_image_base64}" alt="Lord Ganesh">
+                <div class="landing-details">
+                    <span class="landing-detail">🗓️ 14–20 September 2026</span>
+                    <span class="landing-detail">📍 3C Garage</span>
+                    <span class="landing-detail">🙏 Austin, Texas</span>
+                </div>
             </div>
         </section>
         """,
         unsafe_allow_html=True,
     )
-    # Open on Login while keeping the public pages available.
-    menu_left, menu_center, menu_right = st.columns([1, 1.15, 1])
-    with menu_center:
-        initial_menu = option_menu(
-            "",
-            ["Login", "Prasad Seva", "Events"],
-            icons=["box-arrow-in-right", "award", "calendar-event"],
-            menu_icon="cast",
-            default_index=0,
-            orientation="horizontal",
-            styles={
-                "container": {"padding": "0.55rem", "background-color": "#fffaf0", "border": "1px solid #d7ccc8", "border-radius": "16px", "box-shadow": "0 7px 18px rgba(93, 64, 55, 0.12)"},
-                "icon": {"color": "#bf360c", "font-size": "1rem"},
-                "nav-link": {"color": "#5d4037", "font-size": "0.92rem", "text-align": "center", "margin": "0 0.15rem", "border-radius": "9px"},
-                "nav-link-selected": {"background-color": "#bf360c", "color": "#ffffff", "font-weight": "700"}
-            }
-        )
+    if "landing_navigation" not in st.session_state:
+        st.session_state.landing_navigation = "Login"
+
+    nav_cols = st.columns(3)
+    nav_items = [
+        ("Login", "landing_nav_login"),
+        ("Prasad Seva", "landing_nav_prasad_seva"),
+        ("Events", "landing_nav_events"),
+    ]
+    for idx, (label, key_name) in enumerate(nav_items):
+        with nav_cols[idx]:
+            is_active = st.session_state.landing_navigation == label
+            if st.button(
+                label,
+                key=key_name,
+                type="primary" if is_active else "secondary",
+                use_container_width=True,
+            ):
+                st.session_state.landing_navigation = label
+                st.rerun()
+
+    initial_menu = st.session_state.landing_navigation
     if initial_menu == "Prasad Seva":
         from app.prasad_seva import prasad_seva_tab
         prasad_seva_tab()
@@ -448,38 +734,70 @@ if show_login_form:
 else:
     # Show menu based on role after successful login
     if st.session_state.admin_logged_in:
-        menu_items = ["Contributions", "Events", "Prasad", "Stats", "Expenses", "Payments", "Admin"]
-        menu_icons = ["gift", "calendar-event", "award", "bar-chart", "cash-coin", "credit-card", "lock"]
+        menu_items = ["Dashboard", "Donate", "Events", "Prasad", "Expenses", "Payments", "Admin"]
+        menu_icons = ["bar-chart", "gift", "calendar-event", "award", "cash-coin", "credit-card", "lock"]
     elif st.session_state.user_logged_in:
-        menu_items = ["Contributions", "Events", "Prasad", "Stats", "Expenses"]
-        menu_icons = ["gift", "calendar-event", "award", "bar-chart", "cash-coin"]
+        menu_items = ["Dashboard", "Donate", "Events", "Prasad", "Expenses"]
+        menu_icons = ["bar-chart", "gift", "calendar-event", "award", "cash-coin"]
     else:
         menu_items = []
         menu_icons = []
     if menu_items:
-        menu_left, menu_column, logout_column = st.columns([0.1, 0.82, 0.08])
-        with menu_column:
-            main_menu = option_menu(
-                "",
-                menu_items,
-                icons=menu_icons,
-                menu_icon="cast",
-                default_index=0,
-                orientation="horizontal",
-                styles={
-                    "container": {"padding": "0.55rem", "background-color": "#fffaf0", "border": "1px solid #d7ccc8", "border-radius": "16px", "box-shadow": "0 7px 18px rgba(93, 64, 55, 0.12)"},
-                    "icon": {"color": "#bf360c", "font-size": "1rem"},
-                    "nav-link": {"color": "#5d4037", "font-size": "0.92rem", "text-align": "center", "margin": "0 0.15rem", "border-radius": "9px"},
-                    "nav-link-selected": {"background-color": "#bf360c", "color": "#ffffff", "font-weight": "700"}
-                }
-            )
-        with logout_column:
-            if st.button(":material/logout:", help="Logout", key="logout_button", use_container_width=True):
-                end_session()
-                st.session_state.pop('is_admin', None)
-                st.rerun()
+        if st.session_state.get("main_navigation") not in menu_items:
+            st.session_state.main_navigation = "Dashboard"
 
-        if st.session_state.admin_logged_in and main_menu == "Contributions":
+        menu_labels = {
+            "Dashboard": ":material/dashboard: Home",
+            "Donate": ":material/volunteer_activism: Donate",
+            "Events": ":material/calendar_month: Events",
+            "Prasad": ":material/restaurant: Prasad",
+            "Expenses": ":material/receipt_long: Expenses",
+            "Payments": ":material/credit_card: Pay",
+            "Admin": ":material/admin_panel_settings: Admin",
+        }
+        menu_columns = st.columns(len(menu_items))
+        for idx, menu_item in enumerate(menu_items):
+            with menu_columns[idx]:
+                is_active = st.session_state.main_navigation == menu_item
+                if st.button(
+                    menu_labels[menu_item],
+                    key=f"main_nav_{menu_item.lower()}",
+                    type="primary" if is_active else "secondary",
+                    use_container_width=True,
+                ):
+                    st.session_state.main_navigation = menu_item
+                    st.rerun()
+
+        main_menu = st.session_state.main_navigation
+        if st.button(":material/logout:", help="Logout", key="logout_button"):
+            end_session()
+            st.session_state.pop('is_admin', None)
+            st.rerun()
+
+        if main_menu == "Dashboard":
+            from app.sponsorship import sponsorship_tab
+            sponsorship_tab(dashboard_only=True)
+        elif main_menu == "Donate":
+            from app.sponsorship import sponsorship_tab
+            sponsorship_tab()
+        elif main_menu == "Events":
+            if 'admin_full_name' not in st.session_state or not st.session_state['admin_full_name']:
+                st.session_state['admin_full_name'] = ''
+            from app.events import events_tab
+            events_tab()
+        elif main_menu == "Prasad":
+            from app.prasad_seva import prasad_seva_tab
+            prasad_seva_tab()
+        elif main_menu == "Expenses":
+            from app.expenses import expenses_tab
+            expenses_tab()
+        elif st.session_state.admin_logged_in and main_menu == "Payments":
+            from app.admin import admin_tab
+            admin_tab(menu="Sponsorship Payment Details")
+        elif st.session_state.admin_logged_in and main_menu == "Admin":
+            if 'admin_full_name' not in st.session_state:
+                st.session_state.admin_full_name = ''
+            from app.admin import admin_tab
             try:
                 admin_visits, user_visits, total_visits = get_today_visit_count()
                 today_label = datetime.datetime.now().strftime("%A, %d %B %Y")
@@ -494,53 +812,16 @@ else:
                         background: linear-gradient(100deg, #f1f8e9 0%, #fffde7 100%);
                         box-shadow: 0 3px 12px rgba(46, 125, 50, 0.12);
                     ">
-                        <div style="color:#2e7d32; font-size:0.9rem; font-weight:700;">
-                            TODAY'S VISITS
-                        </div>
-                        <div style="color:#263238; font-size:2rem; font-weight:800; line-height:1.15; margin-top:0.25rem;">
-                            {total_visits}
-                        </div>
-                        <div style="color:#546e7a; font-size:0.9rem; margin-top:0.2rem;">
-                            Today's Date &nbsp;•&nbsp; {today_label}
-                        </div>
-                        <div style="color:#546e7a; font-size:0.9rem; margin-top:0.55rem;">
-                            Admin: <strong>{admin_visits}</strong>
-                            &nbsp;&nbsp;|&nbsp;&nbsp;
-                            Users: <strong>{user_visits}</strong>
-                        </div>
+                        <div style="color:#2e7d32; font-size:0.9rem; font-weight:700;">TODAY'S VISITS</div>
+                        <div style="color:#263238; font-size:2rem; font-weight:800; line-height:1.15; margin-top:0.25rem;">{total_visits}</div>
+                        <div style="color:#546e7a; font-size:0.9rem; margin-top:0.2rem;">Today's Date &nbsp;•&nbsp; {today_label}</div>
+                        <div style="color:#546e7a; font-size:0.9rem; margin-top:0.55rem;">Admin: <strong>{admin_visits}</strong> &nbsp;&nbsp;|&nbsp;&nbsp; Users: <strong>{user_visits}</strong></div>
                     </div>
                     """,
                     unsafe_allow_html=True,
                 )
             except Exception:
                 st.warning("Today's visit count is currently unavailable.")
-
-        if main_menu == "Contributions":
-            from app.sponsorship import sponsorship_tab
-            sponsorship_tab()
-        elif main_menu == "Events":
-            if 'admin_full_name' not in st.session_state or not st.session_state['admin_full_name']:
-                st.session_state['admin_full_name'] = ''
-            from app.events import events_tab
-            events_tab()
-        elif main_menu == "Prasad":
-            from app.prasad_seva import prasad_seva_tab
-            prasad_seva_tab()
-        elif main_menu == "Stats":
-            # Set is_admin flag for statistics
-            st.session_state['is_admin'] = st.session_state.admin_logged_in
-            from app.statistics import statistics_tab
-            statistics_tab()
-        elif main_menu == "Expenses":
-            from app.expenses import expenses_tab
-            expenses_tab()
-        elif st.session_state.admin_logged_in and main_menu == "Payments":
-            from app.admin import admin_tab
-            admin_tab(menu="Sponsorship Payment Details")
-        elif st.session_state.admin_logged_in and main_menu == "Admin":
-            if 'admin_full_name' not in st.session_state:
-                st.session_state.admin_full_name = ''
-            from app.admin import admin_tab
             admin_menu = option_menu(
                 "Admin Sections",
                 [

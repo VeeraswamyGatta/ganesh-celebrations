@@ -35,8 +35,13 @@ CREATE TABLE IF NOT EXISTS sponsorship_items (
     id SERIAL PRIMARY KEY,
     item TEXT UNIQUE NOT NULL,
     amount NUMERIC NOT NULL,
-    sponsor_limit INTEGER NOT NULL
+    sponsor_limit INTEGER NOT NULL,
+    image_blob BYTEA,
+    image_filename TEXT
 );
+
+ALTER TABLE sponsorship_items ADD COLUMN IF NOT EXISTS image_blob BYTEA;
+ALTER TABLE sponsorship_items ADD COLUMN IF NOT EXISTS image_filename TEXT;
 
 CREATE TABLE IF NOT EXISTS sponsors (
     id SERIAL PRIMARY KEY,
