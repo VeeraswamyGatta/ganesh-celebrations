@@ -604,15 +604,45 @@ def sponsorship_tab(dashboard_only=False):
             cursor.execute("SELECT name, donation, submitted_at FROM sponsors WHERE donation IS NOT NULL AND donation > 0 ORDER BY submitted_at DESC")
             donor_rows = cursor.fetchall()
             if donor_rows:
-                donation_rows = [
-                    {
-                        "Donor": row[0] or "Anonymous",
-                        "Donation": f"${float(row[1]):,.2f}",
-                        "Submitted": row[2].strftime("%d %b %Y") if row[2] else "",
-                    }
-                    for row in donor_rows
-                ]
-                st.dataframe(donation_rows, use_container_width=True, hide_index=True)
+                total_donations_val = sum(float(row[1]) for row in donor_rows if row[1])
+                rows_html = ""
+                for idx, row in enumerate(donor_rows):
+                    donor_name = escape(str(row[0] or "Anonymous"))
+                    donation_amt = float(row[1] or 0)
+                    date_str = row[2].strftime("%d %b %Y") if row[2] else "N/A"
+                    bg_color = "#fdfbf7" if idx % 2 == 1 else "#ffffff"
+                    rows_html += (
+                        f"<tr style='background:{bg_color};'>"
+                        f"<td style='padding:11px 16px; font-weight:700; color:#263238;'>👤 {donor_name}</td>"
+                        f"<td style='padding:11px 16px; font-weight:800; color:#1b5e20;'>${donation_amt:,.2f}</td>"
+                        f"<td style='padding:11px 16px; color:#546e7a;'>📅 {date_str}</td>"
+                        f"</tr>"
+                    )
+
+                donations_card_html = (
+                    "<div class='rich-table-card'>"
+                    "<div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:1.1rem; flex-wrap:wrap; gap:0.6rem;'>"
+                    "<div>"
+                    "<div style='font-size:1.15rem; font-weight:850; color:#1b5e20;'>💝 Extra Donations Summary</div>"
+                    "<div style='font-size:0.8rem; color:#558b2f; margin-top:2px;'>Generous direct contributions from devotees</div>"
+                    "</div>"
+                    f"<div style='background:linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border:1px solid #a5d6a7; padding:0.5rem 1rem; border-radius:12px; font-size:1.05rem; font-weight:850; color:#1b5e20; box-shadow:0 2px 8px rgba(46,125,50,0.12);'>Total: ${total_donations_val:,.2f} ({len(donor_rows)} donors)</div>"
+                    "</div>"
+                    "<table class='rich-table'>"
+                    "<thead>"
+                    "<tr>"
+                    "<th>Donor</th>"
+                    "<th>Donation Amount</th>"
+                    "<th>Date Submitted</th>"
+                    "</tr>"
+                    "</thead>"
+                    "<tbody>"
+                    f"{rows_html}"
+                    "</tbody>"
+                    "</table>"
+                    "</div>"
+                )
+                st.markdown(donations_card_html, unsafe_allow_html=True)
             else:
                 st.info("No donations have been submitted yet.")
         return
