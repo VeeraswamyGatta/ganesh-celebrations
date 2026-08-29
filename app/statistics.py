@@ -79,7 +79,38 @@ def statistics_tab():
         display_columns = ['Name', 'Apartment', 'Gothram', 'Amount'] if is_admin else ['Name', 'Amount']
         table_df = df_display[display_columns].copy()
         table_df.index = range(1, len(table_df) + 1)
-        st.dataframe(table_df)
+
+        filter_cols = st.columns(3 if is_admin else 2)
+        name_filter = filter_cols[0].text_input("Filter by Name", value="", key="stats_name_filter")
+        if is_admin:
+            apartment_filter = filter_cols[1].text_input("Filter by Apartment", value="", key="stats_apartment_filter")
+            gothram_filter = filter_cols[2].text_input("Filter by Gothram", value="", key="stats_gothram_filter")
+        else:
+            apartment_filter = ""
+            gothram_filter = ""
+
+        filtered_table = table_df.copy()
+        if name_filter:
+            filtered_table = filtered_table[filtered_table['Name'].astype(str).str.contains(name_filter, case=False, na=False)]
+        if is_admin and apartment_filter:
+            filtered_table = filtered_table[filtered_table['Apartment'].astype(str).str.contains(apartment_filter, case=False, na=False)]
+        if is_admin and gothram_filter:
+            filtered_table = filtered_table[filtered_table['Gothram'].astype(str).str.contains(gothram_filter, case=False, na=False)]
+
+        filtered_table = filtered_table.reset_index(drop=True)
+        filtered_table.index = range(1, len(filtered_table) + 1)
+
+        st.dataframe(filtered_table, use_container_width=True)
+        csv_records = filtered_table.copy()
+        if not csv_records.empty and 'Amount' in csv_records.columns:
+            csv_records['Amount'] = csv_records['Amount'].apply(lambda x: float(x))
+        st.download_button(
+            label="Download filtered records (CSV)",
+            data=csv_records.to_csv(index=False),
+            file_name="sponsorship_records_filtered.csv",
+            mime="text/csv",
+            key="stats_records_download"
+        )
 
     with chart_tab:
         if df_display.empty:
@@ -173,7 +204,20 @@ def statistics_tab():
     df_available = pd.DataFrame(available_data)
 
     st.markdown("### 📋 Available Sponsorship Items")
-    st.dataframe(df_available)
+    avail_filter_cols = st.columns([1.2, 1])
+    avail_name_filter = avail_filter_cols[0].text_input("Filter available items by name", value="", key="stats_available_item_filter")
+    avail_filtered = df_available.copy()
+    if avail_name_filter:
+        avail_filtered = avail_filtered[avail_filtered['Item'].astype(str).str.contains(avail_name_filter, case=False, na=False)]
+    avail_filtered = avail_filtered.reset_index(drop=True)
+    st.dataframe(avail_filtered, use_container_width=True)
+    st.download_button(
+        label="Download available items (CSV)",
+        data=avail_filtered.to_csv(index=False),
+        file_name="available_sponsorship_items.csv",
+        mime="text/csv",
+        key="stats_available_download"
+    )
 
     # Move the CSV export button here
     if is_admin:

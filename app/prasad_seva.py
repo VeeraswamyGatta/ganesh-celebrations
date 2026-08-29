@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import datetime
 import pytz
+from streamlit_option_menu import option_menu
 from datetime import datetime as dt, time as dttime
 from .db import get_connection
 from .email_utils import send_email
@@ -33,7 +34,45 @@ def prasad_seva_tab():
         ]
     # Prepend Laddu Auction Winners as default option
     tab_names = [laddu_winners_option] + tab_names
-    selected_tab = st.selectbox("Select Section", tab_names, index=tab_names.index("Add Prasad Seva"))
+    if "prasad_tab" not in st.session_state or st.session_state["prasad_tab"] not in tab_names:
+        st.session_state["prasad_tab"] = "Add Prasad Seva"
+    selected_tab = option_menu(
+        "Prasad Seva Management",
+        tab_names,
+        icons=["trophy", "plus-circle", "pencil-square", "bar-chart", "people", "person-lines-fill"][:len(tab_names)],
+        menu_icon="gift",
+        default_index=tab_names.index(st.session_state["prasad_tab"]),
+        orientation="horizontal",
+        styles={
+            "container": {
+                "padding": "0.5rem 0.75rem",
+                "background": "linear-gradient(135deg, #ffffff 0%, #fffaf0 100%)",
+                "border": "1.5px solid #e4ddd7",
+                "border-radius": "16px",
+                "box-shadow": "0 4px 16px rgba(80, 38, 28, 0.1)",
+                "margin-bottom": "1.4rem",
+            },
+            "icon": {"color": "#8b1737", "font-size": "1rem"},
+            "nav-link": {
+                "font-size": "0.82rem",
+                "font-weight": "600",
+                "text-align": "center",
+                "margin": "0 4px",
+                "padding": "0.55rem 0.85rem",
+                "border-radius": "12px",
+                "color": "#5d4037",
+                "--hover-color": "#f5efe6",
+            },
+            "nav-link-selected": {
+                "background": "linear-gradient(135deg, #6a1b1b 0%, #8b1737 100%)",
+                "color": "#ffffff",
+                "font-weight": "700",
+                "box-shadow": "0 4px 12px rgba(106, 27, 27, 0.3)",
+            },
+            "menu-title": {"color": "#5d4037", "font-weight": "800", "font-size": "0.95rem", "margin-right": "1rem"},
+        },
+    )
+    st.session_state["prasad_tab"] = selected_tab
 
     if selected_tab == laddu_winners_option:
         st.markdown(

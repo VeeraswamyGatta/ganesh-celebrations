@@ -207,23 +207,22 @@ def admin_tab(menu="Sponsorship Items"):
                 with col1:
                     st.write(f"Name: **{name}**")
                     amount = st.number_input("Amount (editable)", min_value=0.0, value=default_amount, step=1.0, format="%.2f", key="add_pay_amount_input")
-                    st.write("Payment Type: **Cash**")
                 with col2:
                     date = st.date_input("Date", key="add_pay_date")
                     try:
-                        cursor.execute("SELECT name, apartment FROM committee_members WHERE recieve_cash_enable = TRUE ORDER BY name")
+                        cursor.execute("SELECT name, apartment FROM committee_members WHERE recieve_cash_enable = TRUE OR zelle_enable = TRUE ORDER BY name")
                         member_names = [row[0] for row in cursor.fetchall() if row[0]]
                     except Exception:
                         member_names = []
-                    cash_collector_options = ["-- Select Cash Collector --"] + member_names
-                    recieved_zelle_acc_name = st.selectbox("Cash Received By", cash_collector_options, key="add_pay_zelle_acc_name")
+                    cash_collector_options = ["-- Select Received By --"] + member_names
+                    recieved_zelle_acc_name = st.selectbox("Received By", cash_collector_options, key="add_pay_zelle_acc_name")
                     comments = st.text_input("Comments", key="add_pay_comments")
                 submit = st.form_submit_button("Add Payment Detail")
                 if submit:
                     if name == "-- Select Name --" or name == "-- No Names Available --":
                         st.warning("Please select a name before submitting.")
-                    elif recieved_zelle_acc_name == "-- Select Cash Collector --":
-                        st.warning("Please select the committee member who received the cash.")
+                    elif recieved_zelle_acc_name == "-- Select Received By --":
+                        st.warning("Please select the committee member who received the payment.")
                     else:
                         try:
                             tz = pytz.timezone('America/Chicago')
@@ -680,8 +679,14 @@ def admin_tab(menu="Sponsorship Items"):
     if menu == "Committee Members":
         st.markdown("<h2 style='color: #6A1B9A;'>👥 Committee Members</h2>", unsafe_allow_html=True)
         try:
-            df_members = pd.read_sql("SELECT id, name, apartment, recieve_cash_enable FROM committee_members ORDER BY name", conn)
+            member_cols = pd.read_sql("SELECT * FROM committee_members LIMIT 0", conn).columns.str.lower().tolist()
+            select_cols = ["id", "name", "apartment", "recieve_cash_enable"]
+            if "zelle_enable" in member_cols:
+                select_cols.append("zelle_enable")
+            df_members = pd.read_sql(f"SELECT {', '.join(select_cols)} FROM committee_members ORDER BY name", conn)
             df_members.columns = [c.lower() for c in df_members.columns]
+            if "zelle_enable" not in df_members.columns:
+                df_members["zelle_enable"] = False
         except Exception as e:
             st.error(f"Unable to load committee members: {e}")
             return
@@ -692,14 +697,15 @@ def admin_tab(menu="Sponsorship Items"):
                 new_member_name = st.text_input("Member Name")
                 new_member_apartment = st.text_input("Apartment Number")
                 new_member_cash_enable = st.checkbox("Enable for cash collection", value=False)
+                new_member_zelle_enable = st.checkbox("Enable for Zelle collection", value=False)
                 if st.form_submit_button("Add Member"):
                     if not new_member_name.strip() or not new_member_apartment.strip():
                         st.warning("Member name and apartment number are required.")
                     else:
                         try:
                             cursor.execute(
-                                "INSERT INTO committee_members (name, apartment, recieve_cash_enable) VALUES (%s, %s, %s)",
-                                (new_member_name.strip(), new_member_apartment.strip(), new_member_cash_enable)
+                                "INSERT INTO committee_members (name, apartment, recieve_cash_enable, zelle_enable) VALUES (%s, %s, %s, %s)",
+                                (new_member_name.strip(), new_member_apartment.strip(), new_member_cash_enable, new_member_zelle_enable)
                             )
                             conn.commit()
                             st.success("✅ Committee member added!")
@@ -709,7 +715,12 @@ def admin_tab(menu="Sponsorship Items"):
                             st.error(f"❌ Failed to add committee member: {e}")
 
         with member_tabs[0]:
-            display_members = df_members.rename(columns={"name": "Name", "apartment": "Apartment Number", "recieve_cash_enable": "Cash Collection Enabled"})
+            display_members = df_members.rename(columns={
+                "name": "Name",
+                "apartment": "Apartment Number",
+                "recieve_cash_enable": "Cash Collection Enabled",
+                "zelle_enable": "Zelle Collection Enabled"
+            })
             display_members = display_members.drop(columns=["id"])
             display_members.index = display_members.index + 1
             st.dataframe(display_members, use_container_width=True)
@@ -726,6 +737,7 @@ def admin_tab(menu="Sponsorship Items"):
                     updated_row = df_members[df_members["name"] == updated_member].iloc[0]
                     st.session_state["edit_committee_member_apartment"] = str(updated_row["apartment"] or "")
                     st.session_state["edit_committee_member_cash_enable"] = bool(updated_row["recieve_cash_enable"])
+                    st.session_state["edit_committee_member_zelle_enable"] = bool(updated_row["zelle_enable"])
 
                 def sync_member_name():
                     selected_name = st.session_state["edit_committee_member_selection"]
@@ -733,6 +745,7 @@ def admin_tab(menu="Sponsorship Items"):
                     st.session_state["edit_committee_member_name"] = selected_name
                     st.session_state["edit_committee_member_apartment"] = str(selected_row["apartment"] or "")
                     st.session_state["edit_committee_member_cash_enable"] = bool(selected_row["recieve_cash_enable"])
+                    st.session_state["edit_committee_member_zelle_enable"] = bool(selected_row["zelle_enable"])
                     st.session_state["edit_committee_member_last_selection"] = selected_name
 
                 selected_member = st.selectbox(
@@ -746,18 +759,20 @@ def admin_tab(menu="Sponsorship Items"):
                     st.session_state["edit_committee_member_name"] = member_row["name"]
                     st.session_state["edit_committee_member_apartment"] = str(member_row["apartment"] or "")
                     st.session_state["edit_committee_member_cash_enable"] = bool(member_row["recieve_cash_enable"])
+                    st.session_state["edit_committee_member_zelle_enable"] = bool(member_row["zelle_enable"])
                     st.session_state["edit_committee_member_last_selection"] = selected_member
                 member_name = st.text_input("Member Name", key="edit_committee_member_name")
                 member_apartment = st.text_input("Apartment Number", key="edit_committee_member_apartment")
                 member_cash_enable = st.checkbox("Enable for cash collection", key="edit_committee_member_cash_enable")
+                member_zelle_enable = st.checkbox("Enable for Zelle collection", key="edit_committee_member_zelle_enable")
                 if st.button("Update Committee Member"):
                     if not member_name.strip() or not member_apartment.strip():
                         st.warning("Member name and apartment number are required.")
                     else:
                         try:
                             cursor.execute(
-                                "UPDATE committee_members SET name=%s, apartment=%s, recieve_cash_enable=%s WHERE id=%s",
-                                (member_name.strip(), member_apartment.strip(), member_cash_enable, int(member_row["id"]))
+                                "UPDATE committee_members SET name=%s, apartment=%s, recieve_cash_enable=%s, zelle_enable=%s WHERE id=%s",
+                                (member_name.strip(), member_apartment.strip(), member_cash_enable, member_zelle_enable, int(member_row["id"]))
                             )
                             conn.commit()
                             st.session_state["updated_committee_member"] = member_name.strip()
@@ -777,6 +792,7 @@ def admin_tab(menu="Sponsorship Items"):
                 st.write(f"Member: **{member_row['name']}**")
                 st.write(f"Apartment Number: **{member_row['apartment']}**")
                 st.write(f"Cash Collection Enabled: **{bool(member_row['recieve_cash_enable'])}**")
+                st.write(f"Zelle Collection Enabled: **{bool(member_row['zelle_enable'])}**")
                 if st.button("Delete Committee Member"):
                     try:
                         cursor.execute("DELETE FROM committee_members WHERE id=%s", (int(member_row["id"]),))

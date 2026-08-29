@@ -90,6 +90,18 @@ def sponsorship_tab(dashboard_only=False):
         ]
     except Exception:
         cash_collectors = []
+    try:
+        member_cols = pd.read_sql("SELECT * FROM committee_members LIMIT 0", conn).columns.str.lower().tolist()
+        if "zelle_enable" in member_cols:
+            cursor.execute("SELECT name, apartment FROM committee_members WHERE zelle_enable = TRUE ORDER BY name")
+            zelle_collectors = [
+                f"{row[0]} (Apartment {row[1]})" for row in cursor.fetchall()
+                if row[0] and row[1]
+            ]
+        else:
+            zelle_collectors = []
+    except Exception:
+        zelle_collectors = []
     cash_payment_html = ""
     if cash_collectors:
         cash_payment_html = (
@@ -99,6 +111,16 @@ def sponsorship_tab(dashboard_only=False):
                 for collector in cash_collectors
             )
         )
+    zelle_payment_html = ""
+    if zelle_collectors:
+        zelle_payment_html = (
+            "<br><b>Please reach out to one of these members for Zelle payment:</b><br>"
+            + "<br>".join(
+                f"<span style='color:#1565C0;'>{collector}</span>"
+                for collector in zelle_collectors
+            )
+        )
+    payment_info_html = f"{cash_payment_html}{zelle_payment_html}<br><b>If any doubts, reach out to the Ganesh Celebrations 2026 WhatsApp group.</b>"
     st.markdown(
         """
         <style>
@@ -623,7 +645,7 @@ def sponsorship_tab(dashboard_only=False):
                     "<div class='rich-table-card'>"
                     "<div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:1.1rem; flex-wrap:wrap; gap:0.6rem;'>"
                     "<div>"
-                    "<div style='font-size:1.15rem; font-weight:850; color:#1b5e20;'>💝 Extra Donations Summary</div>"
+                    "<div style='font-size:1.15rem; font-weight:850; color:#1b5e20;'>💝 Donations Summary</div>"
                     "<div style='font-size:0.8rem; color:#558b2f; margin-top:2px;'>Generous direct contributions from devotees</div>"
                     "</div>"
                     f"<div style='background:linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border:1px solid #a5d6a7; padding:0.5rem 1rem; border-radius:12px; font-size:1.05rem; font-weight:850; color:#1b5e20; box-shadow:0 2px 8px rgba(46,125,50,0.12);'>Total: ${total_donations_val:,.2f} ({len(donor_rows)} donors)</div>"
@@ -783,27 +805,15 @@ def sponsorship_tab(dashboard_only=False):
         contributed_amount = pending["contributed_amount"]
 
         for item in selected_items:
-            if hasattr(cursor, 'execute') and hasattr(cursor.connection, 'account'):
-                cursor.execute("""
-                    INSERT INTO sponsors (name, email, gothram, mobile, apartment, sponsorship, donation, submitted_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP())
-                """, (name_val, email, gothram, phone_fmt, apartment, item, 0))
-            else:
-                cursor.execute("""
-                    INSERT INTO sponsors (name, email, gothram, mobile, apartment, sponsorship, donation)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                """, (name_val, email, gothram, phone_fmt, apartment, item, 0))
+            cursor.execute("""
+                INSERT INTO sponsors (name, email, gothram, mobile, apartment, sponsorship, donation, submitted_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            """, (name_val, email, gothram, phone_fmt, apartment, item, 0))
         if donation > 0:
-            if hasattr(cursor, 'execute') and hasattr(cursor.connection, 'account'):
-                cursor.execute("""
-                    INSERT INTO sponsors (name, email, gothram, mobile, apartment, sponsorship, donation, submitted_at)
-                    VALUES (%s, %s, %s, %s, %s, NULL, %s, CURRENT_TIMESTAMP())
-                """, (name_val, email, gothram, phone_fmt, apartment, donation))
-            else:
-                cursor.execute("""
-                    INSERT INTO sponsors (name, email, gothram, mobile, apartment, sponsorship, donation)
-                    VALUES (%s, %s, %s, %s, %s, NULL, %s)
-                """, (name_val, email, gothram, phone_fmt, apartment, donation))
+            cursor.execute("""
+                INSERT INTO sponsors (name, email, gothram, mobile, apartment, sponsorship, donation, submitted_at)
+                VALUES (%s, %s, %s, %s, %s, NULL, %s, CURRENT_TIMESTAMP)
+            """, (name_val, email, gothram, phone_fmt, apartment, donation))
         conn.commit()
 
         submitted_data = {
@@ -819,8 +829,8 @@ def sponsorship_tab(dashboard_only=False):
             submitted_data["Donation"] = f"${donation:.2f}"
         if contributed_amount:
             submitted_data["Contributed Amount"] = f"${contributed_amount:.2f}"
-        if cash_collectors:
-            submitted_data["How to Pay"] = cash_payment_html.lstrip("<br>")
+        if payment_info_html:
+            submitted_data["How to Pay"] = payment_info_html.lstrip("<br>")
 
         notification_emails = get_notification_emails()
         recipients = list(notification_emails)
