@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import datetime
+from streamlit_option_menu import option_menu
 from .db import get_connection
 import io
 
@@ -54,7 +55,45 @@ def expenses_tab():
         section_names = ["Add Expense", "Expenses List", "Receipts", "Expense Summary by Person", "Edit/Delete Expense", "Settlements"]
     else:
         section_names = ["Expenses List", "Receipts"]
-    selected_section = st.selectbox("Select Section", section_names, index=0)
+    if "expenses_section" not in st.session_state or st.session_state["expenses_section"] not in section_names:
+        st.session_state["expenses_section"] = section_names[0]
+    selected_section = option_menu(
+        "Expenses Management",
+        section_names,
+        icons=["plus-circle", "list-ul", "file-earmark-image", "bar-chart", "pencil-square", "wallet2"][:len(section_names)],
+        menu_icon="cash-stack",
+        default_index=section_names.index(st.session_state["expenses_section"]),
+        orientation="horizontal",
+        styles={
+            "container": {
+                "padding": "0.5rem 0.75rem",
+                "background": "linear-gradient(135deg, #ffffff 0%, #fffaf0 100%)",
+                "border": "1.5px solid #e4ddd7",
+                "border-radius": "16px",
+                "box-shadow": "0 4px 16px rgba(80, 38, 28, 0.1)",
+                "margin-bottom": "1.4rem",
+            },
+            "icon": {"color": "#8b1737", "font-size": "1rem"},
+            "nav-link": {
+                "font-size": "0.82rem",
+                "font-weight": "600",
+                "text-align": "center",
+                "margin": "0 4px",
+                "padding": "0.55rem 0.85rem",
+                "border-radius": "12px",
+                "color": "#5d4037",
+                "--hover-color": "#f5efe6",
+            },
+            "nav-link-selected": {
+                "background": "linear-gradient(135deg, #6a1b1b 0%, #8b1737 100%)",
+                "color": "#ffffff",
+                "font-weight": "700",
+                "box-shadow": "0 4px 12px rgba(106, 27, 27, 0.3)",
+            },
+            "menu-title": {"color": "#5d4037", "font-weight": "800", "font-size": "0.95rem", "margin-right": "1rem"},
+        },
+    )
+    st.session_state["expenses_section"] = selected_section
     # Settlements Section (admin only)
     if is_admin and selected_section == "Settlements":
 
@@ -177,10 +216,11 @@ def expenses_tab():
                     "Pending Transaction Amount": pending_amount,
                     "Comments": received_comments
                 })
-            summary_df = pd.DataFrame(summary)
-            summary_df.index = summary_df.index + 1
-            # Reorder columns to show Pending Transaction Amount before Comments
             cols = ["Name", "Total Spent Amount", "Total Received Amount", "Pending Transaction Amount", "Comments"]
+            summary_df = pd.DataFrame(summary, columns=cols)
+            if not summary_df.empty:
+                summary_df.index = summary_df.index + 1
+            # Reorder columns to show Pending Transaction Amount before Comments
             summary_df = summary_df[cols]
             st.dataframe(summary_df, use_container_width=True)
 
