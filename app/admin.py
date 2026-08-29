@@ -99,7 +99,9 @@ def admin_tab(menu="Sponsorship Items"):
 
     # Always show Payment Details by default and display its tabs first
     if menu == "Sponsorship Payment Details" or menu is None:
-        st.markdown("<h2 style='color: #6A1B9A;'>💳 Sponsorship Payment Details</h2>", unsafe_allow_html=True)
+        from streamlit_option_menu import option_menu
+        
+        # Redesigned horizontal menu bar using option_menu
         def get_sponsor_df():
             df = pd.read_sql("SELECT name, SUM(COALESCE(donation,0)) AS donation_sum FROM sponsors GROUP BY name", conn)
             df.columns = [c.lower() for c in df.columns]
@@ -117,10 +119,65 @@ def admin_tab(menu="Sponsorship Items"):
             return df
         sponsor_df = get_sponsor_df()
         sponsor_names = sorted(sponsor_df["name"].tolist())
-        payment_tabs = ["Add Payment Detail", "Received", "Not Received", "Mismatch Records", "Delete Payment Detail"]
-        tab_add, tab_received, tab_not_received, tab_mismatch, tab_delete = st.tabs(payment_tabs)
-
-        with tab_add:
+        
+        # Initialize payment menu state
+        if "payment_menu" not in st.session_state:
+            st.session_state.payment_menu = "Add Payment Detail"
+        
+        # Create horizontal menu bar using option_menu
+        payment_menu = option_menu(
+            "Payment Management",
+            ["Add Payment Detail", "Received", "Not Received", "Mismatch Records", "Delete Payment Detail"],
+            icons=["plus-circle", "check-circle", "x-circle", "exclamation-triangle", "trash"],
+            menu_icon="credit-card",
+            default_index=0 if st.session_state.payment_menu == "Add Payment Detail" else (
+                1 if st.session_state.payment_menu == "Received" else (
+                2 if st.session_state.payment_menu == "Not Received" else (
+                3 if st.session_state.payment_menu == "Mismatch Records" else 4
+            ))),
+            orientation="horizontal",
+            styles={
+                "container": {
+                    "padding": "0.5rem 0.75rem",
+                    "background": "linear-gradient(135deg, #ffffff 0%, #fffbf0 100%)",
+                    "border": "1.5px solid #e4ddd7",
+                    "border-radius": "16px",
+                    "box-shadow": "0 4px 16px rgba(80, 38, 28, 0.1)",
+                    "margin-bottom": "1.4rem",
+                },
+                "icon": {
+                    "color": "#8b1737",
+                    "font-size": "1rem"
+                },
+                "nav-link": {
+                    "font-size": "0.82rem",
+                    "font-weight": "600",
+                    "text-align": "center",
+                    "margin": "0 4px",
+                    "padding": "0.55rem 0.85rem",
+                    "border-radius": "12px",
+                    "color": "#5d4037",
+                    "--hover-color": "#f5efe6"
+                },
+                "nav-link-selected": {
+                    "background": "linear-gradient(135deg, #6a1b1b 0%, #8b1737 100%)",
+                    "color": "#ffffff",
+                    "font-weight": "700",
+                    "box-shadow": "0 4px 12px rgba(106, 27, 27, 0.3)"
+                },
+                "menu-title": {
+                    "color": "#5d4037",
+                    "font-weight": "800",
+                    "font-size": "0.95rem",
+                    "margin-right": "1rem"
+                }
+            }
+        )
+        
+        st.session_state.payment_menu = payment_menu
+        
+        # Display content based on selected menu item
+        if payment_menu == "Add Payment Detail":
             # Add Payment Detail tab
             df_pay_names = pd.read_sql("SELECT name FROM payment_details", conn)
             df_pay_names.columns = [c.lower() for c in df_pay_names.columns]
@@ -190,7 +247,7 @@ def admin_tab(menu="Sponsorship Items"):
                             conn.rollback()
                             st.error(f"❌ Failed to add payment detail: {e}")
 
-        with tab_received:
+        elif payment_menu == "Received":
             # Received: Payment details table
             payment_columns = pd.read_sql("SELECT * FROM payment_details LIMIT 0", conn).columns.str.lower()
             zelle_column = ", recieved_zelle_acc_name" if "recieved_zelle_acc_name" in payment_columns else ""
@@ -220,7 +277,7 @@ def admin_tab(menu="Sponsorship Items"):
             else:
                 st.info("No payment details found.")
 
-        with tab_not_received:
+        elif payment_menu == "Not Received":
             df_pay = pd.read_sql("SELECT name FROM payment_details", conn)
             df_pay.columns = [c.lower() for c in df_pay.columns]
             paid_names = set(df_pay["name"].tolist())
@@ -233,7 +290,7 @@ def admin_tab(menu="Sponsorship Items"):
             st.dataframe(not_received_df, use_container_width=True)
             st.markdown(f"<div style='text-align:right; font-size:1.1em; margin-top:0.5em;'><b>Total Not Received:</b> <span style='color:#6A1B9A;'>${not_received_df['Amount'].sum():,.2f}</span></div>", unsafe_allow_html=True)
 
-        with tab_mismatch:
+        elif payment_menu == "Mismatch Records":
             df_pay = pd.read_sql("SELECT name, amount FROM payment_details", conn)
             df_pay.columns = [c.lower() for c in df_pay.columns]
             mismatch_rows = []
@@ -253,7 +310,7 @@ def admin_tab(menu="Sponsorship Items"):
             else:
                 st.info("No mismatch records found.")
 
-        with tab_delete:
+        elif payment_menu == "Delete Payment Detail":
             df_pay = pd.read_sql("SELECT id, name, amount, date, comments FROM payment_details ORDER BY name ASC, id DESC", conn)
             df_pay.columns = [c.lower() for c in df_pay.columns]
             if not df_pay.empty:

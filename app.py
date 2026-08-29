@@ -32,10 +32,45 @@ def get_admin_password():
 # ---------- Styling ----------
 st.markdown("""
 <style>
+    /* Hide Streamlit header to give more space */
+    header {
+        display: none !important;
+    }
     .block-container {
         padding: 2rem;
-        padding-top: 3rem;
+        padding-top: 2rem;
         border-radius: 10px;
+    }
+    div[class*="st-key-logout_button"] {
+        display: none !important;
+    }
+    /* Make landing nav buttons display in one row */
+    [data-testid="column"] {
+        flex: 1 !important;
+        min-width: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+    .stColumns {
+        display: flex !important;
+        gap: 0.75rem !important;
+        flex-direction: row !important;
+        width: 100% !important;
+    }
+    [data-testid="stHorizontalBlock"] {
+        display: flex !important;
+        gap: 0.75rem !important;
+        flex-direction: row !important;
+        width: 100% !important;
+    }
+    /* Ensure login nav items are in one row */
+    div[class*="st-key-landing_nav_login"],
+    div[class*="st-key-landing_nav_prasad_seva"],
+    div[class*="st-key-landing_nav_events"] {
+        width: 33.33% !important;
+        flex: 1 !important;
+        display: flex !important;
+        flex-direction: column !important;
     }
     .nav-pills:not(.flex-column) {
         margin-top: 0.4rem;
@@ -217,27 +252,45 @@ st.markdown("""
     div[class*="st-key-landing_nav_login"],
     div[class*="st-key-landing_nav_prasad_seva"],
     div[class*="st-key-landing_nav_events"] {
+        width: 33.33% !important;
+        flex: 1 !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+    /* Parent container for landing nav - force horizontal layout */
+    [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_login"]),
+    [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_prasad_seva"]),
+    [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_events"]) {
+        display: flex !important;
+        flex-direction: row !important;
+        gap: 0.75rem !important;
         width: 100% !important;
+    }
+    [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_login"]) > [data-testid="stColumn"],
+    [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_prasad_seva"]) > [data-testid="stColumn"],
+    [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_events"]) > [data-testid="stColumn"] {
+        flex: 1 !important;
+        width: 33.33% !important;
     }
     div[class*="st-key-landing_nav_login"] button,
     div[class*="st-key-landing_nav_prasad_seva"] button,
     div[class*="st-key-landing_nav_events"] button {
         width: 100% !important;
         min-height: 3.3rem !important;
-        border: 0 !important;
-        border-radius: 0 !important;
-        background: transparent !important;
+        border: 1px solid #e4ddd7 !important;
+        border-radius: 10px !important;
+        background: #ffffff !important;
         color: #8b1737 !important;
-        font-size: 1.02rem !important;
+        font-size: 0.95rem !important;
         font-weight: 800 !important;
-        box-shadow: none !important;
+        box-shadow: 0 2px 6px rgba(80, 38, 28, 0.08) !important;
     }
     div[class*="st-key-landing_nav_login"] button p:before,
     div[class*="st-key-landing_nav_prasad_seva"] button p:before,
     div[class*="st-key-landing_nav_events"] button p:before {
         display: block;
-        margin-bottom: 0.22rem;
-        font-size: 1.2rem;
+        margin-bottom: 0.35rem;
+        font-size: 1.4rem;
         font-weight: 400;
         line-height: 1;
     }
@@ -253,9 +306,17 @@ st.markdown("""
     div[class*="st-key-landing_nav_login"] button:active,
     div[class*="st-key-landing_nav_prasad_seva"] button:active,
     div[class*="st-key-landing_nav_events"] button:active {
-        background: rgba(139, 23, 55, 0.04) !important;
+        background: #f5f0e8 !important;
         color: #8b1737 !important;
-        outline: 0 !important;
+        border-color: #d7ccc8 !important;
+    }
+    div[class*="st-key-landing_nav_login"] button[kind="primary"],
+    div[class*="st-key-landing_nav_prasad_seva"] button[kind="primary"],
+    div[class*="st-key-landing_nav_events"] button[kind="primary"] {
+        background: linear-gradient(135deg, #6a1b1b, #8b1737) !important;
+        color: #ffffff !important;
+        border-color: #6a1b1b !important;
+        box-shadow: 0 3px 8px rgba(106, 27, 27, 0.22) !important;
     }
     div[class*="st-key-landing_nav_login"] button:hover p,
     div[class*="st-key-landing_nav_prasad_seva"] button:hover p,
@@ -267,13 +328,6 @@ st.markdown("""
     div[class*="st-key-landing_nav_prasad_seva"] button:active p,
     div[class*="st-key-landing_nav_events"] button:active p {
         color: inherit !important;
-    }
-    div[class*="st-key-landing_nav_login"] button[kind="primary"],
-    div[class*="st-key-landing_nav_prasad_seva"] button[kind="primary"],
-    div[class*="st-key-landing_nav_events"] button[kind="primary"] {
-        background: linear-gradient(135deg, #8b1737, #a12643) !important;
-        color: #ffffff !important;
-        box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12) !important;
     }
     .landing-title .landing-kicker {
         display: inline;
@@ -449,11 +503,12 @@ st.markdown("""
             flex-wrap: nowrap !important;
             gap: 0.25rem !important;
             overflow-x: auto !important;
+            overflow-y: visible !important;
             border: 1px solid #e4ddd7;
             border-radius: 12px;
             background: #ffffff !important;
             box-shadow: 0 3px 12px rgba(80, 38, 28, 0.08) !important;
-            padding: 0.35rem !important;
+            padding: 0.8rem !important;
             margin: 0.5rem 0 1.2rem !important;
             scrollbar-width: thin;
         }
@@ -487,12 +542,13 @@ st.markdown("""
         div[class*="st-key-landing_navigation"] {
             position: relative;
             z-index: 10;
-            padding: 0.35rem 0.5rem;
+            padding: 0.8rem 0.5rem;
             border: 1px solid #e4ddd7;
             border-radius: 12px;
             background: #ffffff;
             box-shadow: 0 3px 12px rgba(80, 38, 28, 0.08);
             margin: 0.5rem 0 1.2rem;
+            overflow: visible !important;
         }
         div[class*="st-key-landing_navigation"] [role="radiogroup"] {
             display: flex;
@@ -528,6 +584,27 @@ st.markdown("""
         }
         .landing-detail {
             font-size: 0.76rem;
+        }
+        /* Ensure landing nav buttons stay in one row on mobile */
+        [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_login"]),
+        [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_prasad_seva"]),
+        [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_events"]) {
+            display: flex !important;
+            flex-direction: row !important;
+            gap: 0.5rem !important;
+            width: 100% !important;
+        }
+        [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_login"]) > [data-testid="stColumn"],
+        [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_prasad_seva"]) > [data-testid="stColumn"],
+        [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_events"]) > [data-testid="stColumn"] {
+            flex: 1 !important;
+            width: 33.33% !important;
+            min-width: 0 !important;
+        }
+        div[class*="st-key-landing_nav_login"],
+        div[class*="st-key-landing_nav_prasad_seva"],
+        div[class*="st-key-landing_nav_events"] {
+            width: 100% !important;
         }
     }
     /* Global Rich Table & DataFrame Styling */
@@ -627,25 +704,10 @@ enforce_idle_timeout()
 show_login_form = False
 # Only show the initial menu if not logged in
 if not st.session_state.user_logged_in and not st.session_state.admin_logged_in:
-    st.markdown(
-        f"""
-        <section class="landing-hero">
-            <div class="landing-event-label">Ganesh Celebrations 2026</div>
-            <div class="landing-showcase">
-                <img class="landing-image" src="data:image/png;base64,{ganesh_image_base64}" alt="Lord Ganesh">
-                <div class="landing-details">
-                    <span class="landing-detail">🗓️ 14–20 September 2026</span>
-                    <span class="landing-detail">📍 3C Garage</span>
-                    <span class="landing-detail">🙏 Austin, Texas</span>
-                </div>
-            </div>
-        </section>
-        """,
-        unsafe_allow_html=True,
-    )
     if "landing_navigation" not in st.session_state:
         st.session_state.landing_navigation = "Login"
 
+    # Show navigation menu at the top
     nav_cols = st.columns(3)
     nav_items = [
         ("Login", "landing_nav_login"),
@@ -664,6 +726,24 @@ if not st.session_state.user_logged_in and not st.session_state.admin_logged_in:
                 st.session_state.landing_navigation = label
                 st.session_state.scroll_to_top = True
                 st.rerun()
+
+    # Then show the landing hero section below
+    st.markdown(
+        f"""
+        <section class="landing-hero">
+            <div class="landing-event-label">Ganesh Celebrations 2026</div>
+            <div class="landing-showcase">
+                <img class="landing-image" src="data:image/png;base64,{ganesh_image_base64}" alt="Lord Ganesh">
+                <div class="landing-details">
+                    <span class="landing-detail">🗓️ 14–20 September 2026</span>
+                    <span class="landing-detail">📍 3C Garage</span>
+                    <span class="landing-detail">🙏 Austin, Texas</span>
+                </div>
+            </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
 
     if st.session_state.get("scroll_to_top"):
         components.html("<script>window.parent.scrollTo({top: 0, behavior: 'instant'});</script>", height=0)
@@ -758,11 +838,11 @@ if show_login_form:
 else:
     # Show menu based on role after successful login
     if st.session_state.admin_logged_in:
-        menu_items = ["Dashboard", "Donate", "Events", "Prasad", "Expenses", "Payments", "Admin"]
-        menu_icons = ["bar-chart", "gift", "calendar-event", "award", "cash-coin", "credit-card", "lock"]
+        menu_items = ["Dashboard", "Donate", "Statistics", "Prasad", "Expenses", "Payments", "Admin"]
+        menu_icons = ["bar-chart", "gift", "chart-line", "award", "cash-coin", "credit-card", "lock"]
     elif st.session_state.user_logged_in:
-        menu_items = ["Dashboard", "Donate", "Events", "Prasad", "Expenses"]
-        menu_icons = ["bar-chart", "gift", "calendar-event", "award", "cash-coin"]
+        menu_items = ["Dashboard", "Donate", "Statistics", "Prasad", "Expenses"]
+        menu_icons = ["bar-chart", "gift", "chart-line", "award", "cash-coin"]
     else:
         menu_items = []
         menu_icons = []
@@ -773,7 +853,7 @@ else:
         menu_labels = {
             "Dashboard": ":material/dashboard: Home",
             "Donate": ":material/volunteer_activism: Donate",
-            "Events": ":material/calendar_month: Events",
+            "Statistics": ":material/trending_up: Stats",
             "Prasad": ":material/restaurant: Prasad",
             "Expenses": ":material/receipt_long: Expenses",
             "Payments": ":material/credit_card: Pay",
@@ -809,11 +889,9 @@ else:
         elif main_menu == "Donate":
             from app.sponsorship import sponsorship_tab
             sponsorship_tab()
-        elif main_menu == "Events":
-            if 'admin_full_name' not in st.session_state or not st.session_state['admin_full_name']:
-                st.session_state['admin_full_name'] = ''
-            from app.events import events_tab
-            events_tab()
+        elif main_menu == "Statistics":
+            from app.statistics import statistics_tab
+            statistics_tab()
         elif main_menu == "Prasad":
             from app.prasad_seva import prasad_seva_tab
             prasad_seva_tab()
