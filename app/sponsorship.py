@@ -370,6 +370,13 @@ def sponsorship_tab(dashboard_only=False):
             .sponsor-item-availability {
                 font-size: 0.58rem !important;
             }
+            .sponsor-item-pricing {
+                display: flex !important;
+                flex-direction: row !important;
+                align-items: baseline !important;
+                gap: 0.35rem !important;
+                white-space: nowrap !important;
+            }
         }
         div[data-testid="stTooltipIcon"] {
             display: none !important;
@@ -629,8 +636,10 @@ def sponsorship_tab(dashboard_only=False):
                         f"<strong style='color:#3e2723; font-size:0.96rem; line-height:1.3;'>{escape(str(item_name))}</strong>"
                         "<div style='display:flex; flex-direction:column; align-items:flex-end; gap:0.18rem;'>"
                         f"{badge_html}"
+                        "<div class='sponsor-item-pricing'>"
                         f"<span style='white-space:nowrap; color:#bf360c; font-size:0.83rem; font-weight:800;'>Per slot: ${per_slot_amount:,.2f}</span>"
-                        f"<span style='white-space:nowrap; color:#6d4c41; font-size:0.72rem; font-weight:700;'>Total: ${total_amount:,.2f}</span>"
+                        f"<span style='white-space:nowrap; color:#2e7d32; font-size:0.72rem; font-weight:700;'>Total: ${total_amount:,.2f}</span>"
+                        "</div>"
                         "</div>"
                         "</div>"
                         f"{avail_html}"

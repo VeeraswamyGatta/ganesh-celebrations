@@ -723,6 +723,7 @@ show_login_form = False
 if not st.session_state.user_logged_in and not st.session_state.admin_logged_in:
     if "landing_navigation" not in st.session_state:
         st.session_state.landing_navigation = "Login"
+    selected_landing_navigation = st.session_state.landing_navigation
 
     # Show navigation menu at the top
     nav_cols = st.columns(3)
@@ -741,8 +742,8 @@ if not st.session_state.user_logged_in and not st.session_state.admin_logged_in:
                 use_container_width=True,
             ):
                 st.session_state.landing_navigation = label
+                selected_landing_navigation = label
                 st.session_state.scroll_to_top = True
-                st.rerun()
 
     # Then show the landing hero section below
     st.markdown(
@@ -766,7 +767,7 @@ if not st.session_state.user_logged_in and not st.session_state.admin_logged_in:
         components.html("<script>window.parent.scrollTo({top: 0, behavior: 'instant'});</script>", height=0)
         st.session_state["scroll_to_top"] = False
 
-    initial_menu = st.session_state.landing_navigation
+    initial_menu = selected_landing_navigation
     if initial_menu == "Prasad Seva":
         from app.prasad_seva import prasad_seva_tab
         prasad_seva_tab()
