@@ -37,16 +37,21 @@ st.markdown("""
         display: none !important;
     }
     .block-container {
-        padding: 0.5rem 2rem 2rem 2rem !important;
+        padding: 2rem;
+        padding-top: 1rem !important;
         border-radius: 10px;
     }
-    div[data-testid="stVerticalBlock"] {
-        gap: 0 !important;
-    }
-    div[data-testid="stVerticalBlock"] > div:first-child {
+    #main-menu-wrapper {
         margin-bottom: 0 !important;
     }
-    div[data-testid="stVerticalBlock"] > div:nth-child(2) {
+    #main-menu-wrapper [data-testid="stHorizontalBlock"] {
+        margin-bottom: 0 !important;
+        gap: 0.75rem !important;
+    }
+    #main-menu-wrapper + div {
+        margin-top: 0 !important;
+    }
+    #main-menu-wrapper + div > div:first-child {
         margin-top: 0 !important;
     }
     div[class*="st-key-logout_button"] {
@@ -64,14 +69,12 @@ st.markdown("""
         gap: 0.75rem !important;
         flex-direction: row !important;
         width: 100% !important;
-        margin-bottom: 0 !important;
     }
     [data-testid="stHorizontalBlock"] {
         display: flex !important;
         gap: 0.75rem !important;
         flex-direction: row !important;
         width: 100% !important;
-        margin-bottom: 0 !important;
     }
     /* Ensure login nav items are in one row */
     div[class*="st-key-landing_nav_login"],
@@ -718,7 +721,7 @@ if st.session_state.get("auth_loading"):
         """
         <div style='display:flex; align-items:center; justify-content:center; min-height:45vh; flex-direction:column; gap:0.8rem;'>
             <div style='width:54px; height:54px; border:5px solid rgba(46,125,50,0.15); border-top:5px solid #2e7d32; border-radius:50%; animation:spin 0.9s linear infinite;'></div>
-            <div style='font-size:1.05rem; font-weight:700; color:#2e7d32;'>Logging in...</div>
+            <div style='font-size:1.05rem; font-weight:700; color:#2e7d32;'>Logging you in...</div>
         </div>
         <style>
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
@@ -726,6 +729,8 @@ if st.session_state.get("auth_loading"):
         """,
         unsafe_allow_html=True,
     )
+    with st.spinner("Please wait while we load your dashboard..."):
+        time.sleep(0.75)
     st.session_state.auth_loading = False
     st.rerun()
 
@@ -880,6 +885,7 @@ else:
         if st.session_state.get("main_navigation") not in menu_items:
             st.session_state.main_navigation = "Dashboard"
 
+        st.markdown('<div id="main-menu-wrapper">', unsafe_allow_html=True)
         menu_labels = {
             "Dashboard": ":material/dashboard: Home",
             "Donate": ":material/volunteer_activism: Donate",
@@ -902,6 +908,7 @@ else:
                     st.session_state.main_navigation = menu_item
                     st.session_state.scroll_to_top = True
                     st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
         if st.session_state.get("scroll_to_top"):
             components.html("<script>window.parent.scrollTo({top: 0, behavior: 'instant'});</script>", height=0)
