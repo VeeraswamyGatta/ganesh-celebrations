@@ -510,7 +510,34 @@ def sponsorship_tab(dashboard_only=False):
 
     if dashboard_only:
         st.markdown("""
-<div style='margin:0.65rem 0 0.85rem; padding:0.9rem 1rem; border:1px solid #d8e2cd; border-left:5px solid #2e7d32; border-radius:10px; background:linear-gradient(110deg,#fffdf3,#edf7ee);'>
+<style>
+    button#dashboard_donate_cta {
+        background: linear-gradient(135deg, #ff8f00 0%, #ff5e00 45%, #d81b60 100%) !important;
+        color: #ffffff !important;
+        border: 1px solid #ffb300 !important;
+        border-radius: 14px !important;
+        box-shadow: 0 8px 22px rgba(255, 94, 0, 0.28), 0 0 0 rgba(255, 170, 0, 0.7);
+        font-weight: 800 !important;
+        font-size: 1rem !important;
+        padding: 0.85rem 1.3rem !important;
+        letter-spacing: 0.02em;
+        margin-top: 0.15rem !important;
+        margin-bottom: 0.2rem !important;
+        animation: sponsorDonateBlink 1.2s infinite;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    button#dashboard_donate_cta:hover {
+        transform: translateY(-1px) scale(1.01);
+        box-shadow: 0 10px 26px rgba(216, 27, 96, 0.28), 0 0 18px rgba(255, 170, 0, 0.55);
+    }
+    @keyframes sponsorDonateBlink {
+        0%, 100% { opacity: 1; box-shadow: 0 8px 22px rgba(255, 94, 0, 0.28), 0 0 0 rgba(255, 170, 0, 0.7); }
+        50% { opacity: 0.84; box-shadow: 0 8px 22px rgba(216, 27, 96, 0.32), 0 0 18px rgba(255, 170, 0, 0.7); }
+    }
+</style>
+""", unsafe_allow_html=True)
+        st.markdown("""
+<div style='margin:0.18rem 0 0.45rem; padding:0.9rem 1rem; border:1px solid #d8e2cd; border-left:5px solid #2e7d32; border-radius:10px; background:linear-gradient(110deg,#fffdf3,#edf7ee);'>
     <div style='color:#1b5e20; font-size:1rem; font-weight:800;'>Welcome to Terrazzo Ganesh Celebrations 2026!</div>
     <div style='margin-top:0.28rem; color:#455a64; font-size:0.88rem; line-height:1.5;'>
         📅 14th Sep 2026 to 20th Sep 2026 <span style='color:#2e7d32;'>(7 days)</span><br>
@@ -524,6 +551,12 @@ def sponsorship_tab(dashboard_only=False):
     </div>
 </div>
 """, unsafe_allow_html=True)
+
+        if st.button("✨ Click here to sponsor/donate ✨", key="dashboard_donate_cta", type="primary", use_container_width=True):
+            st.session_state.main_navigation = "Donate"
+            st.session_state.scroll_to_top = True
+            st.rerun()
+
         st.markdown(f"""
 {style_html}
 <div class='sponsorship-summary' style='max-width:1080px; margin:1.2em auto 1.5em; padding:1.2em; border:1px solid #d7ccc8; border-radius:20px; background:linear-gradient(135deg,#fffdf7 0%,#f1f8e9 100%); box-shadow:0 8px 24px rgba(93,64,55,0.12);'>
