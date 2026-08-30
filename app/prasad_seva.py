@@ -20,6 +20,7 @@ def prasad_seva_tab():
     if is_admin:
         tab_names = [
             "Add Prasad Seva",
+            laddu_winners_option,
             "Edit/Delete Prasad Seva Entry",
             "Prasad Seva Summary",
             "Prasad Seva Sponsors List",
@@ -28,21 +29,21 @@ def prasad_seva_tab():
     else:
         tab_names = [
             "Add Prasad Seva",
+            laddu_winners_option,
             "Prasad Seva Summary",
             "Prasad Seva Sponsors List",
             "Total Served by Name/Group"
         ]
-    # Prepend Laddu Auction Winners as default option
-    tab_names = [laddu_winners_option] + tab_names
     if "prasad_tab" not in st.session_state or st.session_state["prasad_tab"] not in tab_names:
         st.session_state["prasad_tab"] = "Add Prasad Seva"
     selected_tab = option_menu(
         "Prasad Seva Management",
         tab_names,
-        icons=["trophy", "plus-circle", "pencil-square", "bar-chart", "people", "person-lines-fill"][:len(tab_names)],
+        icons=["plus-circle", "trophy", "pencil-square", "bar-chart", "people", "person-lines-fill"][:len(tab_names)],
         menu_icon="gift",
         default_index=tab_names.index(st.session_state["prasad_tab"]),
         orientation="horizontal",
+        key="prasad_seva_management_menu_v2",
         styles={
             "container": {
                 "padding": "0.5rem 0.75rem",

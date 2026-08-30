@@ -64,6 +64,7 @@ def expenses_tab():
         menu_icon="cash-stack",
         default_index=section_names.index(st.session_state["expenses_section"]),
         orientation="horizontal",
+        key="expenses_management_menu",
         styles={
             "container": {
                 "padding": "0.5rem 0.75rem",

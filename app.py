@@ -716,7 +716,8 @@ if st.session_state.get("auth_loading"):
         """,
         unsafe_allow_html=True,
     )
-    st.stop()
+    st.session_state.auth_loading = False
+    st.rerun()
 
 show_login_form = False
 # Only show the initial menu if not logged in
@@ -825,20 +826,14 @@ if show_login_form:
                 password = pwd.strip()
                 if username == ADMIN_USERNAME.lower() and password == get_admin_password():
                     st.session_state.auth_loading = True
-                    with st.spinner("Logging in as admin..."):
-                        time.sleep(0.6)
                     st.session_state.admin_audit_name_pending = True
-                    st.session_state.auth_loading = False
                     st.rerun()
                 elif username == USER_USERNAME.lower() and password == USER_PASSWORD:
                     st.session_state.auth_loading = True
-                    with st.spinner("Logging in..."):
-                        time.sleep(0.6)
                     st.session_state.user_logged_in = True
                     st.session_state.user_apartment = ""
                     st.session_state.login_audit_session_id = start_login_audit("User", USER_USERNAME)
                     st.session_state.last_activity_at = time.monotonic()
-                    st.session_state.auth_loading = False
                     st.rerun()
                 else:
                     login_error.markdown(
@@ -967,6 +962,7 @@ else:
                 menu_icon="shield-lock-fill",
                 default_index=0,
                 orientation="horizontal",
+                key="admin_sections_menu",
                 styles={
                     "container": {
                         "padding": "0.5rem 0.75rem",
