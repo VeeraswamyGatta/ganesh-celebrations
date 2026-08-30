@@ -37,9 +37,17 @@ st.markdown("""
         display: none !important;
     }
     .block-container {
-        padding: 2rem;
-        padding-top: 2rem;
+        padding: 0.5rem 2rem 2rem 2rem !important;
         border-radius: 10px;
+    }
+    div[data-testid="stVerticalBlock"] {
+        gap: 0 !important;
+    }
+    div[data-testid="stVerticalBlock"] > div:first-child {
+        margin-bottom: 0 !important;
+    }
+    div[data-testid="stVerticalBlock"] > div:nth-child(2) {
+        margin-top: 0 !important;
     }
     div[class*="st-key-logout_button"] {
         display: none !important;
@@ -56,12 +64,14 @@ st.markdown("""
         gap: 0.75rem !important;
         flex-direction: row !important;
         width: 100% !important;
+        margin-bottom: 0 !important;
     }
     [data-testid="stHorizontalBlock"] {
         display: flex !important;
         gap: 0.75rem !important;
         flex-direction: row !important;
         width: 100% !important;
+        margin-bottom: 0 !important;
     }
     /* Ensure login nav items are in one row */
     div[class*="st-key-landing_nav_login"],
