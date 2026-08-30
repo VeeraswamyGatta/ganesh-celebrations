@@ -136,6 +136,7 @@ def admin_tab(menu="Sponsorship Items"):
                 3 if st.session_state.payment_menu == "Mismatch Records" else 4
             ))),
             orientation="horizontal",
+            key="payment_management_menu",
             styles={
                 "container": {
                     "padding": "0.5rem 0.75rem",
@@ -252,11 +253,16 @@ def admin_tab(menu="Sponsorship Items"):
             zelle_column = ", recieved_zelle_acc_name" if "recieved_zelle_acc_name" in payment_columns else ""
             df_pay = pd.read_sql(f"SELECT id, name, amount, date, payment_type{zelle_column}, comments FROM payment_details ORDER BY date DESC, id DESC", conn)
             df_pay.columns = [c.lower() for c in df_pay.columns]
+            _, search_col, download_col = st.columns([6, 2.5, 1])
+            with search_col:
+                payment_search = st.text_input("🔍 Search", value="", key="received_payment_search", label_visibility="collapsed", placeholder="Search payments")
             if not df_pay.empty:
-                comments_filter = st.text_input("Filter by Comments (contains)", value="")
                 filtered_df = df_pay.copy()
-                if comments_filter:
-                    filtered_df = filtered_df[filtered_df["comments"].str.contains(comments_filter, case=False, na=False)]
+                if payment_search:
+                    matches = filtered_df.astype(str).apply(
+                        lambda column: column.str.contains(payment_search, case=False, na=False, regex=False)
+                    )
+                    filtered_df = filtered_df[matches.any(axis=1)]
                 display_df = filtered_df.copy()
                 if 'id' in display_df.columns:
                     display_df = display_df.drop(columns=["id"])
@@ -271,6 +277,8 @@ def admin_tab(menu="Sponsorship Items"):
                     "comments": "Comments"
                 })
                 display_df.index = display_df.index + 1
+                with download_col:
+                    st.download_button("⬇️", data=display_df.to_csv(index=False), file_name="received_payments.csv", mime="text/csv", key="download_received_payments", help="Download received payments")
                 st.dataframe(display_df, use_container_width=True)
                 st.markdown(f"<div style='text-align:right; font-size:1.1em; margin-top:0.5em;'><b>Total Amount:</b> <span style='color:#6A1B9A;'>${total_amount:,.2f}</span></div>", unsafe_allow_html=True)
             else:
@@ -286,8 +294,19 @@ def admin_tab(menu="Sponsorship Items"):
             not_received_df.index = not_received_df.index + 1
             if 'id' in not_received_df.columns:
                 not_received_df = not_received_df.drop(columns=["id"])
-            st.dataframe(not_received_df, use_container_width=True)
-            st.markdown(f"<div style='text-align:right; font-size:1.1em; margin-top:0.5em;'><b>Total Not Received:</b> <span style='color:#6A1B9A;'>${not_received_df['Amount'].sum():,.2f}</span></div>", unsafe_allow_html=True)
+            _, search_col, download_col = st.columns([6, 2.5, 1])
+            with search_col:
+                not_received_search = st.text_input("🔍 Search", value="", key="not_received_search", label_visibility="collapsed", placeholder="Search unpaid sponsors")
+            filtered_not_received_df = not_received_df.copy()
+            if not_received_search:
+                matches = filtered_not_received_df.astype(str).apply(
+                    lambda column: column.str.contains(not_received_search, case=False, na=False, regex=False)
+                )
+                filtered_not_received_df = filtered_not_received_df[matches.any(axis=1)]
+            with download_col:
+                st.download_button("⬇️", data=filtered_not_received_df.to_csv(index=False), file_name="not_received_payments.csv", mime="text/csv", key="download_not_received_payments", help="Download not received payments")
+            st.dataframe(filtered_not_received_df, use_container_width=True)
+            st.markdown(f"<div style='text-align:right; font-size:1.1em; margin-top:0.5em;'><b>Total Not Received:</b> <span style='color:#6A1B9A;'>${filtered_not_received_df['Amount'].sum():,.2f}</span></div>", unsafe_allow_html=True)
 
         elif payment_menu == "Mismatch Records":
             df_pay = pd.read_sql("SELECT name, amount FROM payment_details", conn)

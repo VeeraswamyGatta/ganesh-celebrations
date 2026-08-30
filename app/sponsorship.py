@@ -575,6 +575,18 @@ def sponsorship_tab(dashboard_only=False):
             cursor.execute("SELECT item, amount, sponsor_limit, image_blob, image_filename FROM sponsorship_items ORDER BY id")
             dashboard_items = cursor.fetchall()
             if dashboard_items:
+                all_items_sponsored = all(
+                    row[2] - sponsored_counts.get(row[0], 0) <= 0
+                    for row in dashboard_items
+                )
+                if all_items_sponsored:
+                    st.markdown(
+                        "<div style='margin:0.8rem 0 1rem; padding:1rem 1.2rem; border:1px solid #a5d6a7; border-left:5px solid #2e7d32; border-radius:12px; background:linear-gradient(100deg,#f1f8e9,#fffde7); color:#3e2723;'>"
+                        "<div style='font-size:1.05rem; font-weight:800; color:#1b5e20;'>🎉 All sponsorship items are fully sponsored!</div>"
+                        "<div style='margin-top:0.35rem; font-size:0.9rem; line-height:1.5;'>You can still contribute a donation to help support our celebration events, food distribution, and other community activities.</div>"
+                        "</div>",
+                        unsafe_allow_html=True,
+                    )
                 # Show available sponsorship items first, then sold-out items.
                 dashboard_items = sorted(
                     dashboard_items,
@@ -892,6 +904,7 @@ def sponsorship_tab(dashboard_only=False):
 {email_rows}
 </table>
 {cash_payment_html}
+{zelle_payment_html}
 """,
             recipients
         )
@@ -1095,14 +1108,16 @@ def sponsorship_tab(dashboard_only=False):
     filled_item_slots = cursor.fetchone()[0]
     slots_available = (total_item_slots - filled_item_slots) > 0
     if slots_available:
+        donation_label = "Donation amount (optional)"
         note_text = (
             "📌 Fill this only if you want to give <strong>MORE</strong> than your selected sponsorship items, "
             "or if you want to <strong>donate directly without selecting any sponsorship</strong>."
         )
     else:
+        donation_label = "Donation amount (required)"
         note_text = "📌 You can <strong>donate directly</strong> by entering an amount here."
     sponsorship_form.markdown(
-        "<div style='font-size:1rem; font-weight:600; color:#31333F;'>Donation amount (optional)</div>"
+        f"<div style='font-size:1rem; font-weight:600; color:#31333F;'>{donation_label}</div>"
         f"<div style='color:#e65100; font-size:0.9em; margin:4px 0 8px; line-height:1.5;'>{note_text}</div>",
         unsafe_allow_html=True
     )
@@ -1142,9 +1157,10 @@ def sponsorship_tab(dashboard_only=False):
 
     if show_submission_inputs:
         submit_review = sponsorship_form.form_submit_button(
-            "Review",
+            "🔎 Preview & Confirm",
             disabled=submit_disabled,
             type="primary",
+            use_container_width=True,
         )
         if submit_review:
             name_val = format_name(st.session_state.get("sponsorship_name", name))
@@ -1175,7 +1191,10 @@ def sponsorship_tab(dashboard_only=False):
                 except ValueError:
                     errors.append("Apartment Number must be a number between 100 and 1600.")
             if not selected_items_val and donation_val == 0:
-                errors.append("Please sponsor at least one item or donate an amount.")
+                if slots_available:
+                    errors.append("Please sponsor at least one item or donate an amount.")
+                else:
+                    errors.append("Please enter a donation amount because all sponsorship items are currently full.")
             if email_val and ('@' not in email_val or not email_val.lower().endswith('.com')):
                 errors.append("Please enter a valid email address (must contain '@' and end with .com)")
 

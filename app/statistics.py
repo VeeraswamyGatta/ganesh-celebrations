@@ -37,16 +37,23 @@ def statistics_tab():
 
     # Build sponsorship records with the correct per-item amount.
     raw_df = pd.read_sql(
-        "SELECT name, apartment, gothram, sponsorship, donation FROM sponsors ORDER BY id",
+        "SELECT name, apartment, gothram, sponsorship, donation, submitted_at FROM sponsors ORDER BY id",
         conn,
     )
     raw_df.columns = [c.lower() for c in raw_df.columns]
     cursor.execute("SELECT item, amount, sponsor_limit FROM sponsorship_items")
     item_amt_map = {row[0]: (row[1], row[2]) for row in cursor.fetchall()}
     records = []
+    daily_records = []
+    cst_tz = "US/Central"
     for _, row in raw_df.iterrows():
         # pd.read_sql can return NaN (truthy) instead of None for NULL text columns, so use pd.notna()
         has_sponsorship = pd.notna(row['sponsorship']) and bool(str(row['sponsorship']).strip())
+        submission_date = None
+        if pd.notna(row['submitted_at']):
+            submitted_dt = pd.to_datetime(row['submitted_at'], errors='coerce', utc=True)
+            if pd.notna(submitted_dt):
+                submission_date = submitted_dt.tz_convert(cst_tz).date()
         if has_sponsorship:
             amt, limit = item_amt_map.get(row['sponsorship'], (0, 1))
             per_item_amt = round(amt / limit, 2) if limit else amt
@@ -56,6 +63,8 @@ def statistics_tab():
                 'Gothram': row['gothram'],
                 'Amount': per_item_amt
             })
+            if submission_date:
+                daily_records.append({'Date': submission_date, 'Amount': per_item_amt})
         if pd.notna(row['donation']) and row['donation'] > 0:
             records.append({
                 'Name': row['name'],
@@ -63,8 +72,9 @@ def statistics_tab():
                 'Gothram': row['gothram'],
                 'Amount': row['donation']
             })
+            if submission_date:
+                daily_records.append({'Date': submission_date, 'Amount': row['donation']})
     df = pd.DataFrame(records)
-    st.markdown("### 📋 Sponsorship Records")
     aggregation = {'Amount': 'sum'}
     if is_admin:
         aggregation.update({'Apartment': 'first', 'Gothram': 'first'})
@@ -74,6 +84,45 @@ def statistics_tab():
     else:
         df_display = pd.DataFrame(columns=['Name', 'Apartment', 'Gothram', 'Amount'])
 
+    daily_df = pd.DataFrame(daily_records)
+    daily_export = daily_df.reindex(columns=['Date', 'Amount'])
+    daily_export['Date'] = daily_export['Date'].astype(str)
+    daily_title_col, daily_download_col = st.columns([8, 1])
+    with daily_title_col:
+        st.markdown(
+            "<div style='padding:0.8rem 1rem; border-left:5px solid #1565C0; border-radius:10px; background:linear-gradient(100deg,#e3f2fd,#f8fbff); color:#0d47a1; font-size:1.15rem; font-weight:800;'>📈 Daily Submitted Sponsorship Amount</div>",
+            unsafe_allow_html=True,
+        )
+    with daily_download_col:
+        st.download_button(
+            "⬇️",
+            data=daily_export.to_csv(index=False),
+            file_name="daily_submitted_sponsorship_amount.csv",
+            mime="text/csv",
+            key="stats_daily_amount_download",
+            help="Download daily submitted amounts",
+        )
+    if daily_df.empty:
+        st.info("No dated sponsorship submissions available to chart.")
+    else:
+        daily_df = daily_df.groupby('Date', as_index=False)['Amount'].sum()
+        daily_df['Amount'] = daily_df['Amount'].astype(float).round(2)
+        daily_chart = alt.Chart(daily_df).mark_bar(color='#1565C0').encode(
+            x=alt.X('Date:T', title='Submission Date', axis=alt.Axis(format='%d %b', labelAngle=0)),
+            y=alt.Y('Amount:Q', title='Submitted Amount ($)'),
+            tooltip=[alt.Tooltip('Date:T', title='Date', format='%d %b %Y'), alt.Tooltip('Amount:Q', title='Amount', format='$,.2f')],
+        )
+        daily_labels = alt.Chart(daily_df).mark_text(dy=-8, color='#263238').encode(
+            x='Date:T',
+            y='Amount:Q',
+            text=alt.Text('Amount:Q', format='$,.2f'),
+        )
+        st.altair_chart((daily_chart + daily_labels).properties(height=350), use_container_width=True)
+
+    st.markdown(
+        "<div style='margin-top:1.1rem; padding:0.8rem 1rem; border-left:5px solid #2E7D32; border-radius:10px; background:linear-gradient(100deg,#e8f5e9,#fbfffb); color:#1b5e20; font-size:1.15rem; font-weight:800;'>📋 Sponsored Records</div>",
+        unsafe_allow_html=True,
+    )
     records_tab, chart_tab = st.tabs(["Records", "Chart"])
     with records_tab:
         display_columns = ['Name', 'Apartment', 'Gothram', 'Amount'] if is_admin else ['Name', 'Amount']
@@ -105,11 +154,12 @@ def statistics_tab():
         if not csv_records.empty and 'Amount' in csv_records.columns:
             csv_records['Amount'] = csv_records['Amount'].apply(lambda x: float(x))
         st.download_button(
-            label="Download filtered records (CSV)",
+            label="⬇️",
             data=csv_records.to_csv(index=False),
             file_name="sponsorship_records_filtered.csv",
             mime="text/csv",
-            key="stats_records_download"
+            key="stats_records_download",
+            help="Download filtered sponsored records",
         )
 
     with chart_tab:
@@ -212,11 +262,12 @@ def statistics_tab():
     avail_filtered = avail_filtered.reset_index(drop=True)
     st.dataframe(avail_filtered, use_container_width=True)
     st.download_button(
-        label="Download available items (CSV)",
+        label="⬇️",
         data=avail_filtered.to_csv(index=False),
         file_name="available_sponsorship_items.csv",
         mime="text/csv",
-        key="stats_available_download"
+        key="stats_available_download",
+        help="Download available sponsorship items",
     )
 
     # Move the CSV export button here
