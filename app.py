@@ -698,8 +698,25 @@ USER_PASSWORD = st.secrets["user_password"]
 
 if "user_logged_in" not in st.session_state:
     st.session_state.user_logged_in = False
+if "auth_loading" not in st.session_state:
+    st.session_state.auth_loading = False
 
 enforce_idle_timeout()
+
+if st.session_state.get("auth_loading"):
+    st.markdown(
+        """
+        <div style='display:flex; align-items:center; justify-content:center; min-height:45vh; flex-direction:column; gap:0.8rem;'>
+            <div style='width:54px; height:54px; border:5px solid rgba(46,125,50,0.15); border-top:5px solid #2e7d32; border-radius:50%; animation:spin 0.9s linear infinite;'></div>
+            <div style='font-size:1.05rem; font-weight:700; color:#2e7d32;'>Logging in...</div>
+        </div>
+        <style>
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.stop()
 
 show_login_form = False
 # Only show the initial menu if not logged in
@@ -806,14 +823,21 @@ if show_login_form:
                 username = user.strip().lower()
                 password = pwd.strip()
                 if username == ADMIN_USERNAME.lower() and password == get_admin_password():
+                    st.session_state.auth_loading = True
+                    with st.spinner("Logging in as admin..."):
+                        time.sleep(0.6)
                     st.session_state.admin_audit_name_pending = True
+                    st.session_state.auth_loading = False
                     st.rerun()
                 elif username == USER_USERNAME.lower() and password == USER_PASSWORD:
+                    st.session_state.auth_loading = True
+                    with st.spinner("Logging in..."):
+                        time.sleep(0.6)
                     st.session_state.user_logged_in = True
                     st.session_state.user_apartment = ""
                     st.session_state.login_audit_session_id = start_login_audit("User", USER_USERNAME)
                     st.session_state.last_activity_at = time.monotonic()
-                    st.success("✅ User login successful!")
+                    st.session_state.auth_loading = False
                     st.rerun()
                 else:
                     login_error.markdown(

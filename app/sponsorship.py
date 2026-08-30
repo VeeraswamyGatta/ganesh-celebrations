@@ -198,11 +198,13 @@ def sponsorship_tab(dashboard_only=False):
         .sponsor-item-card-meta {
             display: flex;
             justify-content: center;
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
+            align-items: center;
             gap: 0.25rem 0.45rem;
             margin-top: 0.35rem;
             font-size: 0.7rem;
             text-align: center;
+            white-space: nowrap;
         }
         .sponsor-items-heading {
             margin: 0.4rem 0 0.9rem;
@@ -215,6 +217,10 @@ def sponsorship_tab(dashboard_only=False):
         }
         .sponsor-item-amount {
             color: #8b1737;
+            font-weight: 800;
+        }
+        .sponsor-item-total {
+            color: #2e7d32;
             font-weight: 800;
         }
         .sponsor-item-availability {
@@ -353,6 +359,17 @@ def sponsorship_tab(dashboard_only=False):
             .sponsorship-summary-title { font-size: 1.12em !important; }
             .sponsorship-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 0.55em !important; }
             .sponsorship-summary-card { padding: 0.7em !important; }
+            .sponsor-item-card-meta {
+                font-size: 0.58rem !important;
+                gap: 0.18rem !important;
+                white-space: nowrap !important;
+                overflow: hidden !important;
+            }
+            .sponsor-item-amount,
+            .sponsor-item-total,
+            .sponsor-item-availability {
+                font-size: 0.58rem !important;
+            }
         }
         div[data-testid="stTooltipIcon"] {
             display: none !important;
@@ -551,19 +568,21 @@ def sponsorship_tab(dashboard_only=False):
             cursor.execute("SELECT item, amount, sponsor_limit, image_blob, image_filename FROM sponsorship_items ORDER BY id")
             dashboard_items = cursor.fetchall()
             if dashboard_items:
-                # Show 0 available slots (fully sponsored) first with distinct highlight!
+                # Show available sponsorship items first, then sold-out items.
                 dashboard_items = sorted(
                     dashboard_items,
                     key=lambda row: (
-                        (row[2] - sponsored_counts.get(row[0], 0)) > 0,  # 0 available comes first (False < True)
-                        -(sponsored_counts.get(row[0], 0)),             # most sponsored next
-                        row[0]                                          # alphabetical
+                        (row[2] - sponsored_counts.get(row[0], 0)) <= 0,  # available items first (False < True)
+                        -(row[2] - sponsored_counts.get(row[0], 0)),      # more open slots first
+                        row[0]                                            # alphabetical
                     )
                 )
                 for item_name, cost, sponsor_limit, image_blob, image_filename in dashboard_items:
                     sponsor_count = sponsored_counts.get(item_name, 0)
                     available_count = sponsor_limit - sponsor_count
                     item_slot_pct = round((sponsor_count / sponsor_limit * 100), 1) if sponsor_limit else 0
+                    per_slot_amount = (cost / sponsor_limit) if sponsor_limit else cost
+                    total_amount = float(cost)
                     cursor.execute("SELECT name FROM sponsors WHERE sponsorship = %s", (item_name,))
                     sponsor_names = [escape(str(row[0])) for row in cursor.fetchall() if row[0]]
                     sponsor_chips = "".join(
@@ -608,9 +627,10 @@ def sponsorship_tab(dashboard_only=False):
                         "<div style='min-width:0; flex:1;'>"
                         "<div style='display:flex; justify-content:space-between; align-items:flex-start; gap:0.5rem; flex-wrap:wrap;'>"
                         f"<strong style='color:#3e2723; font-size:0.96rem; line-height:1.3;'>{escape(str(item_name))}</strong>"
-                        "<div style='display:flex; align-items:center; gap:0.4rem;'>"
+                        "<div style='display:flex; flex-direction:column; align-items:flex-end; gap:0.18rem;'>"
                         f"{badge_html}"
-                        f"<span style='white-space:nowrap; color:#bf360c; font-size:0.85rem; font-weight:800;'>${cost / sponsor_limit:,.2f}</span>"
+                        f"<span style='white-space:nowrap; color:#bf360c; font-size:0.83rem; font-weight:800;'>Per slot: ${per_slot_amount:,.2f}</span>"
+                        f"<span style='white-space:nowrap; color:#6d4c41; font-size:0.72rem; font-weight:700;'>Total: ${total_amount:,.2f}</span>"
                         "</div>"
                         "</div>"
                         f"{avail_html}"
@@ -971,16 +991,6 @@ def sponsorship_tab(dashboard_only=False):
 
     sponsorship_form = st.form("sponsorship_form")
     name = apartment = email = gothram = mobile = ""
-    if show_submission_inputs:
-        sponsorship_form.markdown("""
-<div style='background:linear-gradient(135deg,#e3f2fd 0%,#e8eaf6 100%); border:1px solid #90caf9; border-radius:10px; padding:0.8em 1.1em; margin-bottom:0.8em;'>
-    <div style='font-size:1.02em; color:#1565c0; line-height:1.55;'>
-        🙏 Please fill in your details below to participate in the <strong>Ganesh Chaturthi celebrations</strong> and support the event through sponsorship or donation.
-        Your information helps us coordinate the festivities and keep you updated!
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
     # --- High-level statistics ---
     # Get all sponsorship items
     cursor.execute("SELECT item, amount, sponsor_limit FROM sponsorship_items")
@@ -1028,6 +1038,10 @@ def sponsorship_tab(dashboard_only=False):
         for item, cost, limit, image_blob, image_filename in item_rows
         if limit - sponsorship_counts.get(item, 0) > 0
     ]
+    available_items = sorted(
+        available_items,
+        key=lambda row: (-(row[5]), row[0])
+    )
     sponsorship_form.markdown(
         "<div class='sponsor-items-heading'>Select Items to Sponsor</div>",
         unsafe_allow_html=True,
@@ -1039,6 +1053,7 @@ def sponsorship_tab(dashboard_only=False):
         card_cols = sponsorship_form.columns(len(row_items))
         for card_col, (item, cost, limit, image_blob, image_filename, remaining) in zip(card_cols, row_items):
             per_slot = cost / limit if limit else cost
+            total_amount = float(cost)
             toggle_key = f"sponsor_toggle_{re.sub(r'[^a-z0-9]+', '_', item.lower())}"
             has_uploaded_image = image_blob is not None and len(image_blob) > 0
             with card_col.container(border=True):
@@ -1049,7 +1064,7 @@ def sponsorship_tab(dashboard_only=False):
                         unsafe_allow_html=True,
                     )
                     image_col.markdown(
-                        f"<div class='sponsor-item-card-meta'><span class='sponsor-item-amount'>${per_slot:,.2f}</span><span class='sponsor-item-availability'>&bull; {remaining} available</span></div>",
+                        f"<div class='sponsor-item-card-meta' style='display:flex; flex-wrap:nowrap; align-items:center; gap:0.35rem; justify-content:center; white-space:nowrap;'><span class='sponsor-item-amount'>Per slot: ${per_slot:,.2f}</span><span style='color:#6d4c41; font-weight:700;'>|</span><span class='sponsor-item-total'>Total: ${total_amount:,.2f}</span><span class='sponsor-item-availability'>&bull; {remaining} available</span></div>",
                         unsafe_allow_html=True,
                     )
                 else:
@@ -1057,7 +1072,7 @@ def sponsorship_tab(dashboard_only=False):
                     details_col.markdown(
                         f"""
 <div class='sponsor-item-card-title'>{escape(str(item))}</div>
-<div class='sponsor-item-card-meta'><span class='sponsor-item-amount'>${per_slot:,.2f}</span><span class='sponsor-item-availability'>&bull; {remaining} available</span></div>
+<div class='sponsor-item-card-meta' style='display:flex; flex-wrap:nowrap; align-items:center; gap:0.35rem; justify-content:center; white-space:nowrap;'><span class='sponsor-item-amount'>Per slot: ${per_slot:,.2f}</span><span style='color:#6d4c41; font-weight:700;'>|</span><span class='sponsor-item-total'>Total: ${total_amount:,.2f}</span><span class='sponsor-item-availability'>&bull; {remaining} available</span></div>
 """,
                         unsafe_allow_html=True,
                     )
