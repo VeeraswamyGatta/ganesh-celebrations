@@ -18,6 +18,7 @@ st.markdown('''
 ''', unsafe_allow_html=True)
 import pandas as pd
 import datetime
+import pytz
 import altair as alt
 from .db import get_connection
 from .email_utils import send_email
@@ -45,7 +46,7 @@ def statistics_tab():
     item_amt_map = {row[0]: (row[1], row[2]) for row in cursor.fetchall()}
     records = []
     daily_records = []
-    cst_tz = "US/Central"
+    cst_tz = pytz.timezone("America/Chicago")
     for _, row in raw_df.iterrows():
         # pd.read_sql can return NaN (truthy) instead of None for NULL text columns, so use pd.notna()
         has_sponsorship = pd.notna(row['sponsorship']) and bool(str(row['sponsorship']).strip())
