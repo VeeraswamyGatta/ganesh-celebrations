@@ -2,6 +2,7 @@ snowflake-connector-python
 streamlit
 streamlit-option-menu
 pandas
+pytz
 psycopg2-binary
 XlsxWriter
 requests
