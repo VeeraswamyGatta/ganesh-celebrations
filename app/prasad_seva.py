@@ -7,6 +7,14 @@ from datetime import datetime as dt, time as dttime
 from .db import get_connection
 from .email_utils import send_email
 
+
+def get_pooja_options_for_date(seva_date):
+    start_date = datetime.date(2026, 9, 14)
+    if seva_date is None:
+        seva_date = start_date
+    return ["Evening Pooja"] if seva_date == start_date else ["Morning Pooja", "Evening Pooja"]
+
+
 def prasad_seva_tab():
     laddu_winners_option = "Laddu Auction Winners"
     conn = get_connection()
@@ -16,24 +24,15 @@ def prasad_seva_tab():
         {"laddu": row[0], "name": row[1], "amount": row[2]} for row in cursor.fetchall()
     ]
     is_admin = st.session_state.get("admin_logged_in", False)
-    # Define tab_names for admin/non-admin
-    if is_admin:
-        tab_names = [
-            "Add Prasad Seva",
-            laddu_winners_option,
-            "Edit/Delete Prasad Seva Entry",
-            "Prasad Seva Summary",
-            "Prasad Seva Sponsors List",
-            "Total Served by Name/Group"
-        ]
-    else:
-        tab_names = [
-            "Add Prasad Seva",
-            laddu_winners_option,
-            "Prasad Seva Summary",
-            "Prasad Seva Sponsors List",
-            "Total Served by Name/Group"
-        ]
+    # Define tab_names for all users by default
+    tab_names = [
+        "Add Prasad Seva",
+        "Edit/Delete Prasad Seva Entry",
+        "Prasad Seva Summary",
+        "Prasad Seva Sponsors List",
+        "Total Served by Name/Group",
+        laddu_winners_option,
+    ]
     if "prasad_tab" not in st.session_state or st.session_state["prasad_tab"] not in tab_names:
         st.session_state["prasad_tab"] = "Add Prasad Seva"
     selected_tab = option_menu(
@@ -134,10 +133,131 @@ def prasad_seva_tab():
     # ...existing code...
 
     if selected_tab == "Add Prasad Seva":
+        st.markdown(
+            """
+            <style>
+            div[data-testid="stForm"] > div {
+                background: linear-gradient(135deg, #f8f5f7 0%, #f1edf2 100%);
+                border: 1px solid #d8c8d5;
+                border-radius: 22px;
+                padding: 1.25rem 1.1rem 1rem 1.1rem;
+                box-shadow: 0 10px 24px rgba(60, 41, 61, 0.06);
+            }
+            div[data-testid="stForm"] .stBaseButton button {
+                border-radius: 12px;
+            }
+            div[data-testid="stRadio"] > div {
+                gap: 0.6rem;
+            }
+            div[data-testid="stRadio"] label {
+                background: #ffffff;
+                border: 1px solid #d9c6d7;
+                border-radius: 12px;
+                padding: 0.55rem 0.85rem;
+                margin: 0.1rem 0;
+                color: #3f2d3d;
+            }
+            div[data-testid="stRadio"] > div[role="radiogroup"] {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.45rem;
+            }
+            button[kind="primary"] {
+                background: linear-gradient(135deg, #2a5c7a 0%, #3d7e9b 100%);
+                border: none;
+                border-radius: 12px;
+                font-weight: 700;
+                box-shadow: 0 8px 18px rgba(42, 92, 122, 0.18);
+            }
+            .stDateInput > div > div,
+            .stTextInput > div > div,
+            .stTextArea > div > div,
+            .stNumberInput > div > div {
+                background: #fffdfd;
+                border-radius: 12px;
+                border: 1px solid #d6c5d2;
+            }
+            .stDateInput [data-testid="stWidgetLabel"],
+            .stTextInput [data-testid="stWidgetLabel"],
+            .stTextArea [data-testid="stWidgetLabel"],
+            .stNumberInput [data-testid="stWidgetLabel"],
+            .stRadio [data-testid="stWidgetLabel"] {
+                font-size: 1rem;
+                font-weight: 700;
+                color: #3e2b3d;
+            }
+            .stRadio > div:nth-child(2) {
+                background: #f4eef3;
+                border: 1px solid #dbc9d8;
+                border-radius: 14px;
+                padding: 0.35rem 0.4rem;
+            }
+            .stRadio > div:nth-child(2) > div {
+                display: flex !important;
+                flex-direction: row !important;
+                align-items: center;
+                gap: 0.7rem;
+            }
+            .stRadio > div:nth-child(2) label {
+                min-width: 150px;
+            }
+            .pooja-time-card {
+                background: #fff9f5;
+                border: 1px solid #e3ced5;
+                border-radius: 14px;
+                padding: 0.7rem 0.8rem 0.55rem 0.8rem;
+                margin-top: 0.1rem;
+                margin-bottom: 0.75rem;
+            }
+            .pooja-time-label {
+                font-size: 1rem;
+                font-weight: 700;
+                color: #3e2b3d;
+                margin-bottom: 0.45rem;
+                display: block;
+            }
+            .pooja-time-card .stCheckbox {
+                margin-top: 0.15rem;
+                margin-bottom: 0.15rem;
+            }
+            [data-testid="stHorizontalBlock"] {
+                gap: 0.75rem;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
         st.markdown("### ➕ Add Prasad Seva")
+        st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
+        min_date = datetime.date(2026, 9, 14)
+        selected_date = st.session_state.get("prasad_seva_date", min_date)
+        if selected_date < min_date:
+            selected_date = min_date
+            st.session_state["prasad_seva_date"] = selected_date
+
+        seva_date = st.date_input("Date", value=selected_date, min_value=min_date, key="prasad_seva_date")
+
         prasad_form = st.form("add_prasad_seva_form")
         prasad_submit_disabled = st.session_state.get("prasad_submission_in_progress", False)
         seva_type = prasad_form.radio("Type", ["Group", "Individual"], horizontal=True, key="prasad_seva_type_tab0")
+
+        pooja_container = prasad_form.container()
+        with pooja_container:
+            pooja_container.markdown("<div class='pooja-time-label'>Pooja Time</div>", unsafe_allow_html=True)
+            pooja_options = get_pooja_options_for_date(seva_date)
+            selected_poojas = []
+            pooja_checkbox_columns = pooja_container.columns(len(pooja_options) if pooja_options else 1)
+            for index, option in enumerate(pooja_options):
+                default_value = option == "Evening Pooja" and seva_date == datetime.date(2026, 9, 14)
+                if option in st.session_state.get("prasad_pooja_times", []):
+                    default_value = True
+                with pooja_checkbox_columns[index]:
+                    is_checked = st.checkbox(option, value=default_value, key=f"prasad_pooja_checkbox_{option}")
+                if is_checked:
+                    selected_poojas.append(option)
+            st.session_state["prasad_pooja_times"] = selected_poojas
+            pooja_time = ", ".join(selected_poojas)
+
         names = []
         item_names = []
         if seva_type == "Group":
@@ -154,49 +274,34 @@ def prasad_seva_tab():
             apartment = prasad_form.text_input("Apartment Number", key="prasad_individual_apartment", placeholder="e.g. 1203")
 
         num_people = prasad_form.number_input("How many people are you bringing item for?", min_value=1, value=st.session_state.get('prasad_num_people', 1), key="prasad_num_people")
-        min_date = datetime.date(2026, 9, 14)
-        selected_date = st.session_state.get("prasad_seva_date", min_date)
-        if selected_date < min_date:
-            selected_date = min_date
-            st.session_state["prasad_seva_date"] = selected_date
-        seva_date = prasad_form.date_input(
-            "Date",
-            value=selected_date,
-            min_value=min_date,
-            key="prasad_seva_date"
-        )
-        pooja_options = ["Morning Pooja", "Evening Pooja"]
-        if seva_date == datetime.date(2026, 9, 14):
-            pooja_options = ["Evening Pooja"]
-        pooja_time = prasad_form.radio("Pooja Time", pooja_options, horizontal=True, key="prasad_pooja_time")
 
         if prasad_form.form_submit_button("✅ Add Prasad Seva", disabled=prasad_submit_disabled, type="primary"):
             st.session_state["prasad_submission_in_progress"] = True
             prasad_status = st.status("Adding Prasad Seva...", expanded=False)
             if not names:
                 st.session_state["prasad_submission_in_progress"] = False
-                prasad_status.update(label="Please complete the required fields", state="error", expanded=True)
-                st.error("Please enter at least one name.")
+                prasad_status.update(label="Please enter at least one name.", state="error", expanded=True)
+                prasad_form.error("Please enter at least one name.")
             elif not item_names:
                 st.session_state["prasad_submission_in_progress"] = False
-                prasad_status.update(label="Please complete the required fields", state="error", expanded=True)
-                st.error("Please enter at least one item name.")
+                prasad_status.update(label="Please enter at least one item name.", state="error", expanded=True)
+                prasad_form.error("Please enter at least one item name.")
             elif not apartment.strip():
                 st.session_state["prasad_submission_in_progress"] = False
-                prasad_status.update(label="Please complete the required fields", state="error", expanded=True)
-                st.error("Apartment Number is required.")
+                prasad_status.update(label="Apartment Number is required.", state="error", expanded=True)
+                prasad_form.error("Apartment Number is required.")
             elif not num_people:
                 st.session_state["prasad_submission_in_progress"] = False
-                prasad_status.update(label="Please complete the required fields", state="error", expanded=True)
-                st.error("Number of people is required.")
+                prasad_status.update(label="Number of people is required.", state="error", expanded=True)
+                prasad_form.error("Number of people is required.")
             elif not seva_date:
                 st.session_state["prasad_submission_in_progress"] = False
-                prasad_status.update(label="Please complete the required fields", state="error", expanded=True)
-                st.error("Date is required.")
+                prasad_status.update(label="Date is required.", state="error", expanded=True)
+                prasad_form.error("Date is required.")
             elif not pooja_time:
                 st.session_state["prasad_submission_in_progress"] = False
-                prasad_status.update(label="Please complete the required fields", state="error", expanded=True)
-                st.error("Pooja Time is required.")
+                prasad_status.update(label="Please select at least one Pooja Time.", state="error", expanded=True)
+                prasad_form.error("Please select at least one Pooja Time.")
             else:
                 st.info("Add Prasad Seva is in progress...")
                 for item in item_names:
@@ -386,16 +491,14 @@ def prasad_seva_tab():
                 action = st.radio("Action", ["Edit", "Delete"], key=f"edit_delete_action_{selected_id}")
                 if action == "Edit":
                     st.markdown(f"<b>Type:</b> " + (f"<span style='background-color:#B2DFDB;color:#4E342E;padding:4px 10px;border-radius:12px;font-weight:bold;'>👥 Group</span>" if entry['Type']=='Group' else f"<span style='background-color:#FFCCBC;color:#4E342E;padding:4px 10px;border-radius:12px;font-weight:bold;'>🧑 Individual</span>"), unsafe_allow_html=True)
-                    st.markdown(f"<b>Names:</b> <span style='font-size:16px;'>&#128100;</span> <b>{entry['Names']}</b>", unsafe_allow_html=True)
+                    new_names = st.text_input("Names", value=str(entry["Names"]), key=f"edit_names_{selected_id}")
                     new_item = st.text_input("Item Name", value=entry["Item Name"], key=f"edit_item_{selected_id}")
                     new_num = st.number_input("How many people are you bringing item for?", min_value=1, value=int(entry["How many people are you bringing item for"]), key=f"edit_num_{selected_id}")
                     st.markdown(f"<b>Apartment Number:</b> <span style='font-size:16px;'>&#127968;</span> <b>{entry['Apartemnt Number']}</b>", unsafe_allow_html=True)
                     min_date = datetime.date(2026, 9, 14)
                     current_date = pd.to_datetime(entry["Date"]).date() if pd.notna(entry["Date"]) else min_date
                     new_date = st.date_input("Date", value=current_date, min_value=min_date, key=f"edit_prasad_date_{selected_id}")
-                    pooja_options = ["Morning Pooja", "Evening Pooja"]
-                    if new_date == datetime.date(2026, 9, 14):
-                        pooja_options = ["Evening Pooja"]
+                    pooja_options = get_pooja_options_for_date(new_date)
                     if entry["Pooja Time"] in pooja_options:
                         pooja_index = pooja_options.index(entry["Pooja Time"])
                     else:
@@ -404,7 +507,7 @@ def prasad_seva_tab():
                     if st.button("Update Prasad Seva", key=f"update_prasad_{selected_id}"):
                         cursor.execute(
                             "UPDATE prasad_seva SET seva_type=%s, names=%s, item_name=%s, num_people=%s, apartment=%s, seva_date=%s, pooja_time=%s, status=%s WHERE id=%s",
-                            (entry["Type"], entry["Names"], new_item, new_num, entry["Apartemnt Number"], new_date, new_pooja_time, 'active', selected_id)
+                            (entry["Type"], new_names.strip(), new_item, new_num, entry["Apartemnt Number"], new_date, new_pooja_time, 'active', selected_id)
                         )
                         conn.commit()
                         st.success("✅ Updated!")
@@ -417,6 +520,7 @@ def prasad_seva_tab():
                         if entered_name.strip() == entry['Names']:
                             cursor.execute("UPDATE prasad_seva SET status='inactive' WHERE id=%s", (selected_id,))
                             conn.commit()
+                            st.session_state.pop("edit_delete_selectbox", None)
                             st.success("🗑️ Deleted!")
                             st.rerun()
                         else:

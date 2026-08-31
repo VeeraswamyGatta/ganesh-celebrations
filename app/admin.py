@@ -277,10 +277,28 @@ def admin_tab(menu="Sponsorship Items"):
                     "comments": "Comments"
                 })
                 display_df.index = display_df.index + 1
-                with download_col:
-                    st.download_button("⬇️", data=display_df.to_csv(index=False), file_name="received_payments.csv", mime="text/csv", key="download_received_payments", help="Download received payments")
-                st.dataframe(display_df, use_container_width=True)
-                st.markdown(f"<div style='text-align:right; font-size:1.1em; margin-top:0.5em;'><b>Total Amount:</b> <span style='color:#6A1B9A;'>${total_amount:,.2f}</span></div>", unsafe_allow_html=True)
+                table_tab, chart_tab = st.tabs(["Payments Table", "Received By"])
+                with table_tab:
+                    with download_col:
+                        st.download_button("⬇️", data=display_df.to_csv(index=False), file_name="received_payments.csv", mime="text/csv", key="download_received_payments", help="Download received payments")
+                    st.dataframe(display_df, use_container_width=True)
+                    st.markdown(f"<div style='text-align:right; font-size:1.1em; margin-top:0.5em;'><b>Total Amount:</b> <span style='color:#6A1B9A;'>${total_amount:,.2f}</span></div>", unsafe_allow_html=True)
+                with chart_tab:
+                    if "recieved_zelle_acc_name" in filtered_df.columns:
+                        chart_df = filtered_df.copy()
+                        chart_df["recieved_zelle_acc_name"] = (
+                            chart_df["recieved_zelle_acc_name"]
+                            .fillna("Not specified")
+                            .astype(str)
+                            .str.strip()
+                            .replace("", "Not specified")
+                        )
+                        chart_data = chart_df.groupby("recieved_zelle_acc_name")["amount"].sum().sort_values(ascending=False)
+                        st.bar_chart(chart_data.rename("Total Amount"))
+                        receiver_summary = chart_data.rename_axis("Received By").rename("Total Amount").reset_index()
+                        st.dataframe(receiver_summary, hide_index=True, use_container_width=True)
+                    else:
+                        st.info("Receiver details are not available in the payment table.")
             else:
                 st.info("No payment details found.")
 
