@@ -42,7 +42,7 @@ st.markdown("""
         border-radius: 10px;
     }
     #main-menu-wrapper {
-        margin-bottom: 0 !important;
+        margin-bottom: -1rem !important;
     }
     #main-menu-wrapper [data-testid="stHorizontalBlock"] {
         margin-bottom: 0 !important;
@@ -53,6 +53,22 @@ st.markdown("""
     }
     #main-menu-wrapper + div > div:first-child {
         margin-top: 0 !important;
+    }
+    [data-testid="stVerticalBlock"]:has(#main-menu-wrapper),
+    [data-testid="stHorizontalBlock"]:has(#main-menu-wrapper) {
+        gap: 0 !important;
+    }
+    div[data-testid="stVerticalBlock"].st-key-dashboard_content {
+        margin-top: -1rem !important;
+    }
+    div[class*="st-key-landing_navigation"] {
+        margin-bottom: -1rem !important;
+    }
+    div[class*="st-key-landing_navigation"] + div {
+        margin-top: 0 !important;
+    }
+    div[data-testid="stVerticalBlock"].st-key-landing_top {
+        gap: 0 !important;
     }
     div[class*="st-key-logout_button"] {
         display: none !important;
@@ -217,7 +233,7 @@ st.markdown("""
     .landing-hero {
         position: relative;
         overflow: hidden;
-        margin: 0.8rem auto 1.4rem;
+        margin: 0 auto 1.4rem;
         padding: 1.35rem;
         max-width: 640px;
         border: 1px solid #d7e3d4;
@@ -560,7 +576,7 @@ st.markdown("""
             border-radius: 12px;
             background: #ffffff;
             box-shadow: 0 3px 12px rgba(80, 38, 28, 0.08);
-            margin: 0.5rem 0 1.2rem;
+            margin: 0.5rem 0 -1rem;
             overflow: visible !important;
         }
         div[class*="st-key-landing_navigation"] [role="radiogroup"] {
@@ -713,15 +729,16 @@ if "user_logged_in" not in st.session_state:
     st.session_state.user_logged_in = False
 if "auth_loading" not in st.session_state:
     st.session_state.auth_loading = False
-
 enforce_idle_timeout()
 
-if st.session_state.get("auth_loading"):
+if st.session_state.get("auth_loading") or st.session_state.get("home_loading"):
     st.markdown(
         """
-        <div style='display:flex; align-items:center; justify-content:center; min-height:45vh; flex-direction:column; gap:0.8rem;'>
-            <div style='width:54px; height:54px; border:5px solid rgba(46,125,50,0.15); border-top:5px solid #2e7d32; border-radius:50%; animation:spin 0.9s linear infinite;'></div>
-            <div style='font-size:1.05rem; font-weight:700; color:#2e7d32;'>Logging you in...</div>
+        <div style='position:fixed; inset:0; z-index:9999; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.92);'>
+            <div style='display:flex; align-items:center; flex-direction:column; gap:0.8rem; padding:1.5rem 2rem; border:1px solid #d7e3d4; border-radius:14px; background:#ffffff; box-shadow:0 8px 24px rgba(46,125,50,0.16);'>
+                <div style='width:54px; height:54px; border:5px solid rgba(46,125,50,0.15); border-top:5px solid #2e7d32; border-radius:50%; animation:spin 0.9s linear infinite;'></div>
+                <div style='font-size:1.05rem; font-weight:700; color:#2e7d32;'>Loading...</div>
+            </div>
         </div>
         <style>
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
@@ -729,9 +746,10 @@ if st.session_state.get("auth_loading"):
         """,
         unsafe_allow_html=True,
     )
-    with st.spinner("Please wait while we load your dashboard..."):
+    with st.spinner("Please wait while we load the page..."):
         time.sleep(0.75)
     st.session_state.auth_loading = False
+    st.session_state.home_loading = False
     st.rerun()
 
 show_login_form = False
@@ -741,43 +759,45 @@ if not st.session_state.user_logged_in and not st.session_state.admin_logged_in:
         st.session_state.landing_navigation = "Login"
     selected_landing_navigation = st.session_state.landing_navigation
 
-    # Show navigation menu at the top
-    nav_cols = st.columns(3)
-    nav_items = [
-        ("Login", "landing_nav_login"),
-        ("Prasad Seva", "landing_nav_prasad_seva"),
-        ("Events", "landing_nav_events"),
-    ]
-    for idx, (label, key_name) in enumerate(nav_items):
-        with nav_cols[idx]:
-            is_active = st.session_state.landing_navigation == label
-            if st.button(
-                label,
-                key=key_name,
-                type="primary" if is_active else "secondary",
-                use_container_width=True,
-            ):
-                st.session_state.landing_navigation = label
-                selected_landing_navigation = label
-                st.session_state.scroll_to_top = True
+    with st.container(key="landing_top"):
+        # Show navigation menu at the top
+        with st.container(key="landing_navigation"):
+            nav_cols = st.columns(3)
+            nav_items = [
+                ("Login", "landing_nav_login"),
+                ("Prasad Seva", "landing_nav_prasad_seva"),
+                ("Events", "landing_nav_events"),
+            ]
+            for idx, (label, key_name) in enumerate(nav_items):
+                with nav_cols[idx]:
+                    is_active = st.session_state.landing_navigation == label
+                    if st.button(
+                        label,
+                        key=key_name,
+                        type="primary" if is_active else "secondary",
+                        use_container_width=True,
+                    ):
+                        st.session_state.landing_navigation = label
+                        selected_landing_navigation = label
+                        st.session_state.scroll_to_top = True
 
-    # Then show the landing hero section below
-    st.markdown(
-        f"""
-        <section class="landing-hero">
-            <div class="landing-event-label">Ganesh Celebrations 2026</div>
-            <div class="landing-showcase">
-                <img class="landing-image" src="data:image/png;base64,{ganesh_image_base64}" alt="Lord Ganesh">
-                <div class="landing-details">
-                    <span class="landing-detail">🗓️ 14–20 September 2026</span>
-                    <span class="landing-detail">📍 3C Garage</span>
-                    <span class="landing-detail">🙏 Austin, Texas</span>
+        # Then show the landing hero section below
+        st.markdown(
+            f"""
+            <section class="landing-hero">
+                <div class="landing-event-label">Ganesh Celebrations 2026</div>
+                <div class="landing-showcase">
+                    <img class="landing-image" src="data:image/png;base64,{ganesh_image_base64}" alt="Lord Ganesh">
+                    <div class="landing-details">
+                        <span class="landing-detail">🗓️ 14–20 September 2026</span>
+                        <span class="landing-detail">📍 3C Garage</span>
+                        <span class="landing-detail">🙏 Austin, Texas</span>
+                    </div>
                 </div>
-            </div>
-        </section>
-        """,
-        unsafe_allow_html=True,
-    )
+            </section>
+            """,
+            unsafe_allow_html=True,
+        )
 
     if st.session_state.get("scroll_to_top"):
         components.html("<script>window.parent.scrollTo({top: 0, behavior: 'instant'});</script>", height=0)
@@ -824,6 +844,7 @@ if show_login_form:
                 st.session_state.admin_full_name = full_name.strip()
                 st.session_state.admin_logged_in = True
                 st.session_state.admin_audit_name_pending = False
+                st.session_state.auth_loading = True
                 st.session_state.login_audit_session_id = start_login_audit("Admin", ADMIN_USERNAME)
                 st.session_state.last_activity_at = time.monotonic()
                 st.success("✅ Admin access granted!")
@@ -905,7 +926,10 @@ else:
                     type="primary" if is_active else "secondary",
                     use_container_width=True,
                 ):
+                    previous_main_navigation = st.session_state.main_navigation
                     st.session_state.main_navigation = menu_item
+                    if menu_item == "Dashboard" and previous_main_navigation != "Dashboard":
+                        st.session_state.home_loading = True
                     st.session_state.scroll_to_top = True
                     st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
@@ -922,7 +946,8 @@ else:
 
         if main_menu == "Dashboard":
             from app.sponsorship import sponsorship_tab
-            sponsorship_tab(dashboard_only=True)
+            with st.container(key="dashboard_content"):
+                sponsorship_tab(dashboard_only=True)
         elif main_menu == "Donate":
             from app.sponsorship import sponsorship_tab
             sponsorship_tab()
