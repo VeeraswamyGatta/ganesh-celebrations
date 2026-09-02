@@ -75,6 +75,7 @@ def admin_tab(menu="Sponsorship Items"):
         login_counts["login_date"] = pd.to_datetime(login_counts["login_date"])
         login_counts = all_dates.merge(login_counts, on="login_date", how="left").fillna({"login_count": 0})
         login_counts["login_count"] = login_counts["login_count"].astype(int)
+        st.caption(f"Total logins: {login_counts['login_count'].sum():,}")
         st.bar_chart(login_counts.set_index("login_date"), y="login_count")
 
         audit_df = pd.read_sql(
@@ -103,7 +104,19 @@ def admin_tab(menu="Sponsorship Items"):
         
         # Redesigned horizontal menu bar using option_menu
         def get_sponsor_df():
-            df = pd.read_sql("SELECT name, SUM(COALESCE(donation,0)) AS donation_sum FROM sponsors GROUP BY name", conn)
+            df = pd.read_sql(
+                """
+                SELECT
+                    name,
+                    MAX(apartment) AS apartment,
+                    MAX(mobile) AS mobile,
+                    MAX(email) AS email,
+                    SUM(COALESCE(donation, 0)) AS donation_sum
+                FROM sponsors
+                GROUP BY name
+                """,
+                conn,
+            )
             df.columns = [c.lower() for c in df.columns]
             cursor2 = conn.cursor()
             cursor2.execute("""
@@ -151,7 +164,7 @@ def admin_tab(menu="Sponsorship Items"):
                     "font-size": "1rem"
                 },
                 "nav-link": {
-                    "font-size": "0.82rem",
+                    "font-size": "0.85rem",
                     "font-weight": "600",
                     "text-align": "center",
                     "margin": "0 4px",
@@ -294,6 +307,7 @@ def admin_tab(menu="Sponsorship Items"):
                             .replace("", "Not specified")
                         )
                         chart_data = chart_df.groupby("recieved_zelle_acc_name")["amount"].sum().sort_values(ascending=False)
+                        st.caption(f"Total received: ${chart_data.sum():,.2f}")
                         st.bar_chart(chart_data.rename("Total Amount"))
                         receiver_summary = chart_data.rename_axis("Received By").rename("Total Amount").reset_index()
                         st.dataframe(receiver_summary, hide_index=True, use_container_width=True)
@@ -306,8 +320,16 @@ def admin_tab(menu="Sponsorship Items"):
             df_pay = pd.read_sql("SELECT name FROM payment_details", conn)
             df_pay.columns = [c.lower() for c in df_pay.columns]
             paid_names = set(df_pay["name"].tolist())
-            not_received_df = sponsor_df[~sponsor_df["name"].isin(paid_names)][["name", "total_amount"]]
-            not_received_df = not_received_df.rename(columns={"name": "Name", "total_amount": "Amount"})
+            not_received_df = sponsor_df[~sponsor_df["name"].isin(paid_names)][
+                ["name", "total_amount", "apartment", "mobile", "email"]
+            ]
+            not_received_df = not_received_df.rename(columns={
+                "name": "Name",
+                "total_amount": "Amount",
+                "apartment": "Apartment Number",
+                "mobile": "Mobile",
+                "email": "Email",
+            })
             not_received_df = not_received_df.sort_values(by=["Name"]).reset_index(drop=True)
             not_received_df.index = not_received_df.index + 1
             if 'id' in not_received_df.columns:

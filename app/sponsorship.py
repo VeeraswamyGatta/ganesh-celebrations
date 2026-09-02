@@ -554,6 +554,7 @@ def sponsorship_tab(dashboard_only=False):
 
         if st.button("✨ Click here to sponsor/donate ✨", key="dashboard_donate_cta", type="primary", use_container_width=True):
             st.session_state.main_navigation = "Donate"
+            st.session_state.page_loading_message = "Loading sponsorship details"
             st.session_state.scroll_to_top = True
             st.rerun()
 

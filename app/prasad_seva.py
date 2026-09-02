@@ -361,27 +361,9 @@ def prasad_seva_tab():
 
     elif selected_tab == "Prasad Seva Sponsors List":
         min_date = datetime.date(2026, 9, 14)
-        filter_col1, filter_col2, filter_col3 = st.columns(3)
-        filter_date = filter_col1.date_input("Filter by Date", value=None, min_value=min_date, key="prasad_filter_date_tab2")
-        filter_name = filter_col2.text_input("Filter by Name", value="", key="prasad_filter_name_tab2")
-        pooja_time_options = ["All", "Morning Pooja", "Evening Pooja"]
-        filter_pooja_time = filter_col3.selectbox("Filter by Pooja Time", pooja_time_options, key="prasad_filter_pooja_time_tab2")
         query = "SELECT id, seva_type, names, item_name, num_people, apartment, seva_date, pooja_time, created_by, status FROM prasad_seva WHERE status='active'"
-        filters = []
-        params = []
-        if filter_date:
-            filters.append("seva_date = %s")
-            params.append(filter_date)
-        if filter_name:
-            filters.append("names ILIKE %s")
-            params.append(f"%{filter_name}%")
-        if filter_pooja_time != "All":
-            filters.append("pooja_time = %s")
-            params.append(filter_pooja_time)
-        if filters:
-            query += " AND " + " AND ".join(filters)
         query += " ORDER BY seva_date, CASE WHEN pooja_time='Morning Pooja' THEN 0 ELSE 1 END, names, id"
-        cursor.execute(query, tuple(params))
+        cursor.execute(query)
         rows = cursor.fetchall()
         if rows and len(rows) > 0:
             df = pd.DataFrame(rows, columns=["ID", "Type", "Names", "Item Name", "How many people are you bringing item for", "Apartemnt Number", "Date", "Pooja Time", "Created By", "Status"])
@@ -396,8 +378,50 @@ def prasad_seva_tab():
             tab1, tab2 = st.tabs(["Active", "Past"])
             for tab, df_tab, label in [(tab1, df_active, "Active"), (tab2, df_past, "Past")]:
                 with tab:
-                    if len(df_tab) > 0:
-                        df_display = df_tab.drop(columns=["ID", "Created By"])
+                    toolbar_key = f"prasad-sponsor-toolbar-{label.lower()}"
+                    st.markdown(
+                        f"""
+                        <style>
+                        @media (max-width: 640px) {{
+                            .st-key-{toolbar_key} [data-testid="stHorizontalBlock"] {{ flex-wrap: nowrap !important; }}
+                            .st-key-{toolbar_key} [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(-n+2) {{
+                                flex: 0 0 52px !important;
+                                min-width: 52px !important;
+                            }}
+                        }}
+                        </style>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+                    with st.container(key=toolbar_key):
+                        search_column, download_column, _ = st.columns([1, 1, 8])
+                        with search_column:
+                            with st.popover("🔍", help="Search sponsors", use_container_width=True):
+                                filter_name = st.text_input(
+                                    "Name", value="", key=f"prasad_filter_name_{label.lower()}"
+                                )
+                                filter_date = st.date_input(
+                                    "Date", value=None, min_value=min_date, key=f"prasad_filter_date_{label.lower()}"
+                                )
+                                filter_pooja_time = st.selectbox(
+                                    "Pooja Time", ["All", "Morning Pooja", "Evening Pooja"], key=f"prasad_filter_pooja_time_{label.lower()}"
+                                )
+                    filtered_df_tab = df_tab
+                    if filter_name:
+                        filtered_df_tab = filtered_df_tab[
+                            filtered_df_tab["Names"].str.contains(filter_name, case=False, na=False)
+                        ]
+                    if filter_date:
+                        filtered_df_tab = filtered_df_tab[
+                            pd.to_datetime(filtered_df_tab["Date"]).dt.date == filter_date
+                        ]
+                    if filter_pooja_time != "All":
+                        filtered_df_tab = filtered_df_tab[filtered_df_tab["Pooja Time"] == filter_pooja_time]
+                    if len(filtered_df_tab) > 0:
+                        raw_sponsors_df = filtered_df_tab.drop(columns=["ID", "Created By"])
+                        csv_sponsors = raw_sponsors_df.to_csv(index=False)
+                        download_column.download_button(label="📥", data=csv_sponsors, file_name=f"prasad_seva_sponsors_list_{label.lower()}.csv", mime="text/csv", key=f"download_sponsors_tab_{label.lower()}", help="Download sponsors list", use_container_width=True)
+                        df_display = filtered_df_tab.drop(columns=["ID", "Created By"])
                         df_display["Date"] = df_display["Date"].apply(lambda d: f"<span style='font-size:16px;'>&#128197;</span> <b>{pd.to_datetime(d).strftime('%d-%b-%Y')}</b>")
                         def pooja_time_display(row):
                             if row["Date"].startswith("<span") and "14-Sep-2026" in row["Date"] and row["Pooja Time"].find("Morning") != -1:
@@ -410,20 +434,75 @@ def prasad_seva_tab():
                         df_display["Item Name"] = df_display["Item Name"].apply(lambda item: f"<span style='font-size:16px;'>&#127858;</span> <b>{item}</b>" if item else "")
                         df_display["How many people are you bringing item for"] = df_display["How many people are you bringing item for"].apply(lambda x: f"<span style='background-color:#FFECB3;color:#6D4C41;padding:4px 12px;border-radius:16px;font-weight:bold;display:inline-block;text-align:center;'>{x}</span>")
                         # Sort by Date, Pooja Time (morning before evening), then Name
-                        df_display["_date_sort"] = pd.to_datetime(df_tab["Date"])
-                        df_display["_pooja_sort"] = df_tab["Pooja Time"].apply(lambda x: 0 if str(x).lower().find("morning") != -1 else 1)
+                        df_display["_date_sort"] = pd.to_datetime(filtered_df_tab["Date"])
+                        df_display["_pooja_sort"] = filtered_df_tab["Pooja Time"].apply(lambda x: 0 if str(x).lower().find("morning") != -1 else 1)
                         df_display = df_display.sort_values(by=["_date_sort", "_pooja_sort", "Names"])
                         df_display = df_display.drop(columns=["_date_sort", "_pooja_sort"])
                         df_display.index = range(1, len(df_display) + 1)
-                        st.markdown(df_display.to_html(escape=False, index=True, justify='center'), unsafe_allow_html=True)
-                        raw_sponsors_df = df_tab.drop(columns=["ID", "Created By"])
-                        csv_sponsors = raw_sponsors_df.to_csv(index=False)
-                        st.download_button(label="📥", data=csv_sponsors, file_name=f"prasad_seva_sponsors_list_{label.lower()}.csv", mime="text/csv", key=f"download_sponsors_tab_{label.lower()}")
+                        table_html = df_display.to_html(
+                            escape=False, index=True, justify='center', classes="sponsor-table"
+                        )
+                        st.markdown(
+                            f"""
+                            <style>
+                            .sponsor-table-wrap {{
+                                overflow-x: auto;
+                                border: 1px solid #dce7df;
+                                border-radius: 8px;
+                                background: #ffffff;
+                                box-shadow: 0 4px 14px rgba(44, 92, 62, 0.08);
+                            }}
+                            .sponsor-table {{
+                                width: 100%;
+                                min-width: 920px;
+                                border-collapse: separate;
+                                border-spacing: 0;
+                                color: #22372b;
+                                font-size: 0.94rem;
+                            }}
+                            .sponsor-table th {{
+                                background: #eff7f1;
+                                color: #1f5135;
+                                font-weight: 700;
+                                padding: 0.8rem 0.7rem;
+                                border: 0;
+                                border-bottom: 2px solid #b8d5c0;
+                                white-space: normal;
+                            }}
+                            .sponsor-table td {{
+                                padding: 0.85rem 0.7rem;
+                                border: 0;
+                                border-bottom: 1px solid #e6eee8;
+                                vertical-align: middle;
+                            }}
+                            .sponsor-table tbody tr:nth-child(even) td {{ background: #fbfdfb; }}
+                            .sponsor-table tbody tr:hover td {{ background: #fff8e7; }}
+                            .sponsor-table tbody tr:last-child td {{ border-bottom: 0; }}
+                            .sponsor-table th:first-child,
+                            .sponsor-table td:first-child {{
+                                width: 42px;
+                                text-align: center;
+                                color: #a35715;
+                                font-weight: 700;
+                            }}
+                            .sponsor-table th:nth-child(3),
+                            .sponsor-table td:nth-child(3) {{ min-width: 175px; }}
+                            .sponsor-table th:nth-child(4),
+                            .sponsor-table td:nth-child(4) {{ min-width: 130px; }}
+                            @media (max-width: 640px) {{
+                                .sponsor-table-wrap {{ border-radius: 6px; }}
+                                .sponsor-table {{ font-size: 0.9rem; }}
+                            }}
+                            </style>
+                            <div class="sponsor-table-wrap">{table_html}</div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
                         if st.session_state.get('admin_logged_in', False):
                             if st.button(f"Send Prasad Seva Details to Email ({label})"):
                                 cursor.execute("SELECT email FROM notification_emails")
                                 notification_emails = [row[0] for row in cursor.fetchall() if row[0]]
-                                html_table = df_tab.drop(columns=["ID", "Created By"]).to_html(index=False, border=1, justify='center')
+                                html_table = filtered_df_tab.drop(columns=["ID", "Created By"]).to_html(index=False, border=1, justify='center')
                                 send_email(
                                     f"Prasad Seva Sponsors List ({label})",
                                     f"<b>Current Prasad Seva List ({label})</b><br><br>{html_table}",
@@ -431,7 +510,7 @@ def prasad_seva_tab():
                                 )
                                 st.success("✅ Email sent!")
                     else:
-                        st.info(f"No {label} Prasad Seva entries yet.")
+                        st.info(f"No {label} Prasad Seva entries match these filters.")
         else:
             st.info("No Prasad Seva entries yet.")
 

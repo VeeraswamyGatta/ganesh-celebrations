@@ -118,6 +118,7 @@ def statistics_tab():
             y='Amount:Q',
             text=alt.Text('Amount:Q', format='$,.2f'),
         )
+        st.caption(f"Total submitted: ${daily_df['Amount'].sum():,.2f}")
         st.altair_chart((daily_chart + daily_labels).properties(height=350), use_container_width=True)
 
     st.markdown(
@@ -130,14 +131,14 @@ def statistics_tab():
         table_df = df_display[display_columns].copy()
         table_df.index = range(1, len(table_df) + 1)
 
-        filter_cols = st.columns(3 if is_admin else 2)
-        name_filter = filter_cols[0].text_input("Filter by Name", value="", key="stats_name_filter")
-        if is_admin:
-            apartment_filter = filter_cols[1].text_input("Filter by Apartment", value="", key="stats_apartment_filter")
-            gothram_filter = filter_cols[2].text_input("Filter by Gothram", value="", key="stats_gothram_filter")
-        else:
-            apartment_filter = ""
-            gothram_filter = ""
+        with st.popover("🔍", help="Search sponsored records"):
+            name_filter = st.text_input("Name", value="", key="stats_name_filter")
+            if is_admin:
+                apartment_filter = st.text_input("Apartment", value="", key="stats_apartment_filter")
+                gothram_filter = st.text_input("Gothram", value="", key="stats_gothram_filter")
+            else:
+                apartment_filter = ""
+                gothram_filter = ""
 
         filtered_table = table_df.copy()
         if name_filter:
@@ -151,23 +152,13 @@ def statistics_tab():
         filtered_table.index = range(1, len(filtered_table) + 1)
 
         st.dataframe(filtered_table, use_container_width=True)
-        csv_records = filtered_table.copy()
-        if not csv_records.empty and 'Amount' in csv_records.columns:
-            csv_records['Amount'] = csv_records['Amount'].apply(lambda x: float(x))
-        st.download_button(
-            label="⬇️",
-            data=csv_records.to_csv(index=False),
-            file_name="sponsorship_records_filtered.csv",
-            mime="text/csv",
-            key="stats_records_download",
-            help="Download filtered sponsored records",
-        )
 
     with chart_tab:
         if df_display.empty:
             st.info("No sponsorship records available to chart.")
         else:
             chart_data = df_display[['Name', 'Amount']].sort_values('Amount', ascending=True)
+            st.caption(f"Total sponsored: ${chart_data['Amount'].sum():,.2f}")
             chart = alt.Chart(chart_data).mark_bar().encode(
                 x=alt.X('Amount:Q', title='Aggregated Amount'),
                 y=alt.Y('Name:N', title='Name', sort='-x'),

@@ -315,19 +315,19 @@ def expenses_tab():
                     st.rerun()
     # Expenses List Section
     if selected_section == "Expenses List":
-        # Category filter (for all)
         category_options = ["All"] + sorted(df["Category"].dropna().unique().tolist())
-        selected_category = st.selectbox("Filter by Category", category_options, key="filter_category")
+        with st.popover("🔍", help="Search expenses"):
+            selected_category = st.selectbox("Category", category_options, key="filter_category")
+            selected_spent_by = "All"
+            if is_admin:
+                spent_by_options = ["All"] + sorted(df["Spent By"].dropna().unique().tolist())
+                selected_spent_by = st.selectbox("Spent By", spent_by_options, key="filter_spent_by")
         filtered_df = df.copy()
         if selected_category != "All":
             filtered_df = filtered_df[filtered_df["Category"] == selected_category]
 
-        # Spent By filter (admin only)
-        if is_admin:
-            spent_by_options = ["All"] + sorted(filtered_df["Spent By"].dropna().unique().tolist())
-            selected_spent_by = st.selectbox("Filter by Spent By", spent_by_options, key="filter_spent_by")
-            if selected_spent_by != "All":
-                filtered_df = filtered_df[filtered_df["Spent By"] == selected_spent_by]
+        if selected_spent_by != "All":
+            filtered_df = filtered_df[filtered_df["Spent By"] == selected_spent_by]
 
         drop_cols = ["Receipt Blob", "Receipt"]
         if not is_admin and "Spent By" in filtered_df.columns:
