@@ -1,11 +1,89 @@
 import streamlit as st
 import pandas as pd
 import datetime
+import textwrap
 import pytz
 from streamlit_option_menu import option_menu
 from datetime import datetime as dt, time as dttime
 from .db import get_connection
 from .email_utils import send_email
+
+SPONSOR_TABLE_CSS = """
+<style>
+.sponsor-table-wrap {
+    overflow-x: auto;
+    border: 1px solid #dce7df;
+    border-radius: 8px;
+    background: #ffffff;
+    box-shadow: 0 4px 14px rgba(44, 92, 62, 0.08);
+}
+.sponsor-table {
+    width: 100%;
+    min-width: 620px;
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 0;
+    color: #22372b;
+    font-size: 0.9rem;
+}
+.sponsor-table th {
+    background: #eff7f1;
+    color: #1f5135;
+    font-weight: 700;
+    padding: 0.55rem 0.45rem;
+    border: 0;
+    border-bottom: 2px solid #b8d5c0;
+    white-space: normal;
+}
+.sponsor-table td {
+    padding: 0.55rem 0.45rem;
+    border: 0;
+    border-bottom: 1px solid #e6eee8;
+    vertical-align: middle;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+}
+.sponsor-table tbody tr:nth-child(even) td { background: #fbfdfb; }
+.sponsor-table tbody tr:hover td { background: #fff8e7; }
+.sponsor-table tbody tr:last-child td { border-bottom: 0; }
+.sponsor-table th:first-child,
+.sponsor-table td:first-child {
+    width: 5%;
+    text-align: center;
+    color: #a35715;
+    font-weight: 700;
+}
+.sponsor-table th:nth-child(2),
+.sponsor-table td:nth-child(2) { width: 22%; }
+.sponsor-table th:nth-child(3),
+.sponsor-table td:nth-child(3) { width: 18%; }
+.sponsor-table th:nth-child(4),
+.sponsor-table td:nth-child(4) { width: 11%; }
+.sponsor-table th:nth-child(5),
+.sponsor-table td:nth-child(5) { width: 8%; }
+.sponsor-table th:nth-child(6),
+.sponsor-table td:nth-child(6) {
+    width: 17%;
+    white-space: nowrap;
+}
+.sponsor-table th:nth-child(7),
+.sponsor-table td:nth-child(7) {
+    width: 19%;
+    white-space: nowrap;
+}
+.sponsor-table th:nth-child(7),
+.sponsor-table td:nth-child(7) { width: 13%; }
+.sponsor-table td:nth-child(2) b { font-weight: 600; }
+.sponsor-table td span {
+    max-width: 100%;
+}
+@media (max-width: 640px) {
+    .sponsor-table-wrap { border-radius: 6px; }
+    .sponsor-table { font-size: 0.82rem; min-width: 580px; }
+    .sponsor-table th, .sponsor-table td { padding: 0.42rem 0.32rem; }
+}
+</style>
+"""
 
 
 def get_pooja_options_for_date(seva_date):
@@ -380,7 +458,7 @@ def prasad_seva_tab():
                 with tab:
                     toolbar_key = f"prasad-sponsor-toolbar-{label.lower()}"
                     st.markdown(
-                        f"""
+                        textwrap.dedent(f"""
                         <style>
                         @media (max-width: 640px) {{
                             .st-key-{toolbar_key} [data-testid="stHorizontalBlock"] {{ flex-wrap: nowrap !important; }}
@@ -390,7 +468,7 @@ def prasad_seva_tab():
                             }}
                         }}
                         </style>
-                        """,
+                        """),
                         unsafe_allow_html=True,
                     )
                     with st.container(key=toolbar_key):
@@ -428,9 +506,12 @@ def prasad_seva_tab():
                                 return ""
                             return f"<span style='font-size:18px;'>{'🌅' if row['Pooja Time']=='Morning Pooja' else '🌇'}</span> <b>{row['Pooja Time'].replace('Pooja','')}</b>"
                         df_display["Pooja Time"] = df_display.apply(pooja_time_display, axis=1)
-                        df_display["Type"] = df_display["Type"].apply(lambda t: f"<span style='background-color:{'#B2DFDB' if t=='Group' else '#FFCCBC'};color:#4E342E;padding:4px 10px;border-radius:12px;font-weight:bold;'>{'👥 Group' if t=='Group' else '🧑 Individual'}</span>")
                         df_display["Apartemnt Number"] = df_display["Apartemnt Number"].apply(lambda apt: f"<span style='font-size:16px;'>&#127968;</span> <b>{apt}</b>" if apt else "")
-                        df_display["Names"] = df_display["Names"].apply(lambda n: f"<span style='font-size:16px;'>&#128100;</span> <b>{n}</b>" if n else "")
+                        df_display["Names"] = df_display.apply(
+                            lambda r: f"<span style='font-size:16px;'>{'👥' if r['Type'] == 'Group' else '🧑'}</span> <b>{r['Names']}</b>" if r["Names"] else "",
+                            axis=1,
+                        )
+                        df_display = df_display.drop(columns=["Type"])
                         df_display["Item Name"] = df_display["Item Name"].apply(lambda item: f"<span style='font-size:16px;'>&#127858;</span> <b>{item}</b>" if item else "")
                         df_display["How many people are you bringing item for"] = df_display["How many people are you bringing item for"].apply(lambda x: f"<span style='background-color:#FFECB3;color:#6D4C41;padding:4px 12px;border-radius:16px;font-weight:bold;display:inline-block;text-align:center;'>{x}</span>")
                         # Sort by Date, Pooja Time (morning before evening), then Name
@@ -443,59 +524,7 @@ def prasad_seva_tab():
                             escape=False, index=True, justify='center', classes="sponsor-table"
                         )
                         st.markdown(
-                            f"""
-                            <style>
-                            .sponsor-table-wrap {{
-                                overflow-x: auto;
-                                border: 1px solid #dce7df;
-                                border-radius: 8px;
-                                background: #ffffff;
-                                box-shadow: 0 4px 14px rgba(44, 92, 62, 0.08);
-                            }}
-                            .sponsor-table {{
-                                width: 100%;
-                                min-width: 920px;
-                                border-collapse: separate;
-                                border-spacing: 0;
-                                color: #22372b;
-                                font-size: 0.94rem;
-                            }}
-                            .sponsor-table th {{
-                                background: #eff7f1;
-                                color: #1f5135;
-                                font-weight: 700;
-                                padding: 0.8rem 0.7rem;
-                                border: 0;
-                                border-bottom: 2px solid #b8d5c0;
-                                white-space: normal;
-                            }}
-                            .sponsor-table td {{
-                                padding: 0.85rem 0.7rem;
-                                border: 0;
-                                border-bottom: 1px solid #e6eee8;
-                                vertical-align: middle;
-                            }}
-                            .sponsor-table tbody tr:nth-child(even) td {{ background: #fbfdfb; }}
-                            .sponsor-table tbody tr:hover td {{ background: #fff8e7; }}
-                            .sponsor-table tbody tr:last-child td {{ border-bottom: 0; }}
-                            .sponsor-table th:first-child,
-                            .sponsor-table td:first-child {{
-                                width: 42px;
-                                text-align: center;
-                                color: #a35715;
-                                font-weight: 700;
-                            }}
-                            .sponsor-table th:nth-child(3),
-                            .sponsor-table td:nth-child(3) {{ min-width: 175px; }}
-                            .sponsor-table th:nth-child(4),
-                            .sponsor-table td:nth-child(4) {{ min-width: 130px; }}
-                            @media (max-width: 640px) {{
-                                .sponsor-table-wrap {{ border-radius: 6px; }}
-                                .sponsor-table {{ font-size: 0.9rem; }}
-                            }}
-                            </style>
-                            <div class="sponsor-table-wrap">{table_html}</div>
-                            """,
+                            f"{SPONSOR_TABLE_CSS}<div class='sponsor-table-wrap'>{table_html}</div>",
                             unsafe_allow_html=True,
                         )
                         if st.session_state.get('admin_logged_in', False):
