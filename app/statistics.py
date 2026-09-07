@@ -57,7 +57,7 @@ def statistics_tab():
                 submission_date = submitted_dt.tz_convert(cst_tz).date()
         if has_sponsorship:
             amt, limit = item_amt_map.get(row['sponsorship'], (0, 1))
-            per_item_amt = round(amt / limit, 2) if limit else amt
+            per_item_amt = float(round(amt / limit, 2) if limit else amt)
             records.append({
                 'Name': row['name'],
                 'Apartment': row['apartment'],
@@ -67,14 +67,15 @@ def statistics_tab():
             if submission_date:
                 daily_records.append({'Date': submission_date, 'Amount': per_item_amt})
         if pd.notna(row['donation']) and row['donation'] > 0:
+            donation_amt = float(row['donation'])
             records.append({
                 'Name': row['name'],
                 'Apartment': row['apartment'],
                 'Gothram': row['gothram'],
-                'Amount': row['donation']
+                'Amount': donation_amt
             })
             if submission_date:
-                daily_records.append({'Date': submission_date, 'Amount': row['donation']})
+                daily_records.append({'Date': submission_date, 'Amount': donation_amt})
     df = pd.DataFrame(records)
     aggregation = {'Amount': 'sum'}
     if is_admin:

@@ -196,10 +196,10 @@ def expenses_tab():
             cursor.execute("SELECT spent_by, SUM(amount) FROM expenses WHERE status='active' GROUP BY spent_by")
             spent_rows = cursor.fetchall()
             spent_dict = {row[0]: row[1] for row in spent_rows}
-            if hasattr(cursor, 'connection') and hasattr(cursor.connection, 'account'):
+            if st.secrets.get("db_type", "postgres").lower() == "snowflake":
                 cursor.execute("SELECT name, SUM(amount), LISTAGG(comments, '\n') WITHIN GROUP (ORDER BY name) FROM settlements GROUP BY name")
             else:
-                cursor.execute("SELECT name, SUM(amount), GROUP_CONCAT(comments) FROM settlements GROUP BY name")
+                cursor.execute("SELECT name, SUM(amount), STRING_AGG(comments, '\n') FROM settlements GROUP BY name")
             settlement_rows = cursor.fetchall()
             # Show all names, even if their net amount is zero or negative
             all_names = set(spent_dict.keys()) | set(row[0] for row in settlement_rows)

@@ -68,8 +68,9 @@ def touch_login_audit(session_id):
         return
     connection = get_connection()
     cursor = connection.cursor()
+    now_expr = "CURRENT_TIMESTAMP()" if st.secrets.get("db_type", "postgres").lower() == "snowflake" else "CURRENT_TIMESTAMP"
     cursor.execute(
-        "UPDATE user_login_audit SET last_activity_at=CURRENT_TIMESTAMP() WHERE session_id=%s AND logout_at IS NULL",
+        f"UPDATE user_login_audit SET last_activity_at={now_expr} WHERE session_id=%s AND logout_at IS NULL",
         (session_id,),
     )
     connection.commit()
@@ -80,10 +81,11 @@ def end_login_audit(session_id):
         return
     connection = get_connection()
     cursor = connection.cursor()
+    now_expr = "CURRENT_TIMESTAMP()" if st.secrets.get("db_type", "postgres").lower() == "snowflake" else "CURRENT_TIMESTAMP"
     cursor.execute(
-        """
+        f"""
         UPDATE user_login_audit
-        SET logout_at=CURRENT_TIMESTAMP(), last_activity_at=CURRENT_TIMESTAMP()
+        SET logout_at={now_expr}, last_activity_at={now_expr}
         WHERE session_id=%s AND logout_at IS NULL
         """,
         (session_id,),

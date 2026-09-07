@@ -461,7 +461,7 @@ def sponsorship_tab(dashboard_only=False):
     available_wallet = total_received - float(get_total_expense_amount(conn))
     slots_filled_count = total_slots - remaining_slots
     slot_pct = round((slots_filled_count / total_slots * 100), 1) if total_slots else 0
-    collection_pct = round((total_received / total_combined * 100), 1) if total_combined else 0
+    collection_pct = round((total_received / float(total_combined) * 100), 1) if total_combined else 0
 
     # Today's submitted amount (sponsorships + donations submitted today)
     item_amt_map = {row[0]: (row[1], row[2]) for row in sponsorship_items}
@@ -1251,7 +1251,7 @@ def sponsorship_tab(dashboard_only=False):
                         tuple(selected_items_val),
                     )
                     sponsorship_total = sum(row[0] / row[1] if row[1] else 0 for row in cursor.fetchall())
-                contributed_amount = round(sponsorship_total + donation_val, 2)
+                contributed_amount = round(float(sponsorship_total) + donation_val, 2)
                 st.session_state['pending_sponsorship'] = {
                     "name": name_val,
                     "email": email_val,
