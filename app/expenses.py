@@ -230,7 +230,7 @@ def expenses_tab():
             categories = [row[0] for row in cursor.fetchall()]
             if "Miscellaneous" not in categories:
                 categories.append("Miscellaneous")
-            MAX_RECEIPT_SIZE_MB = 10
+            MAX_RECEIPT_SIZE_MB = 1
             MAX_RECEIPT_SIZE_BYTES = MAX_RECEIPT_SIZE_MB * 1024 * 1024
             expense_form = st.form("add_expense_form")
             expense_submit_disabled = st.session_state.get("expense_submission_in_progress", False)
@@ -271,10 +271,10 @@ def expenses_tab():
                     st.session_state["expense_submission_in_progress"] = False
                     expense_status.update(label="Please complete the required fields", state="error", expanded=True)
                     st.error("Spent By is required.")
-                elif uploaded_receipt is not None and (uploaded_receipt.size > 10 * 1024 * 1024 or uploaded_receipt.type not in ["image/jpeg", "image/png"]):
+                elif uploaded_receipt is not None and (uploaded_receipt.size > MAX_RECEIPT_SIZE_BYTES or uploaded_receipt.type not in ["image/jpeg", "image/png"]):
                     st.session_state["expense_submission_in_progress"] = False
                     expense_status.update(label="Please choose a valid receipt", state="error", expanded=True)
-                    st.error("Invalid receipt file. Only JPG/PNG under 10MB allowed.")
+                    st.error(f"Invalid receipt file. Only JPG/PNG under {MAX_RECEIPT_SIZE_MB}MB allowed.")
                 else:
                     if hasattr(cursor, 'execute') and hasattr(cursor.connection, 'account'):  # crude check for Snowflake
                         cursor.execute("INSERT INTO expenses (category, sub_category, amount, date, spent_by, comments, receipt_path, receipt_blob, status) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'active')", (category, sub_category, amount, date, spent_by, comments, receipt_path, receipt_bytes))
@@ -480,8 +480,8 @@ def expenses_tab():
                                 st.rerun()
                         else:
                             st.info("No receipt uploaded yet. You can upload one below.")
-                        # Ensure MAX_RECEIPT_SIZE_MB is defined
-                        MAX_RECEIPT_SIZE_MB = 10
+                        MAX_RECEIPT_SIZE_MB = 1
+                        MAX_RECEIPT_SIZE_BYTES = MAX_RECEIPT_SIZE_MB * 1024 * 1024
                         uploaded_new_receipt = st.file_uploader(f"Upload New Receipt (JPG/PNG, max {MAX_RECEIPT_SIZE_MB}MB)", type=["jpg", "jpeg", "png"], key=f"edit_upload_receipt_{selected_id}")
                         if uploaded_new_receipt is not None:
                             if uploaded_new_receipt.size > MAX_RECEIPT_SIZE_BYTES:

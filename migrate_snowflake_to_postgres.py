@@ -180,23 +180,6 @@ TABLES = {
             )
         """,
     },
-    "user_login_audit": {
-        "columns": ["session_id", "user_role", "username", "ip_address", "user_agent",
-                     "login_at", "last_activity_at", "logout_at"],
-        "ddl": """
-            CREATE TABLE IF NOT EXISTS {schema}.user_login_audit (
-                id SERIAL PRIMARY KEY,
-                session_id TEXT NOT NULL,
-                user_role TEXT NOT NULL,
-                username TEXT NOT NULL,
-                ip_address TEXT,
-                user_agent TEXT,
-                login_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                last_activity_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                logout_at TIMESTAMP
-            )
-        """,
-    },
 }
 
 

@@ -6,7 +6,13 @@ import time
 import base64
 from io import BytesIO
 
-from app.login_audit import end_login_audit, get_today_visit_count, start_login_audit, touch_login_audit
+from app.login_audit import (
+    end_login_audit,
+    get_today_visit_count,
+    is_user_login_tracking_enabled,
+    start_login_audit,
+    touch_login_audit,
+)
 
 
 st.set_page_config(page_title="Terrazzo Ganesh Celebrations 2026", page_icon="🙏", layout="wide")
@@ -1061,11 +1067,12 @@ else:
             if 'admin_full_name' not in st.session_state:
                 st.session_state.admin_full_name = ''
             from app.admin import admin_tab
-            try:
-                admin_visits, user_visits, total_visits = get_today_visit_count()
-                today_label = datetime.datetime.now().strftime("%A, %d %B %Y")
-                st.markdown(
-                    f"""
+            if is_user_login_tracking_enabled():
+                try:
+                    admin_visits, user_visits, total_visits = get_today_visit_count()
+                    today_label = datetime.datetime.now().strftime("%A, %d %B %Y")
+                    st.markdown(
+                        f"""
                     <div style="
                         margin: 1.2rem 0 1.5rem;
                         padding: 1.1rem 1.4rem;
@@ -1081,20 +1088,24 @@ else:
                         <div style="color:#546e7a; font-size:0.9rem; margin-top:0.55rem;">Admin: <strong>{admin_visits}</strong> &nbsp;&nbsp;|&nbsp;&nbsp; Users: <strong>{user_visits}</strong></div>
                     </div>
                     """,
-                    unsafe_allow_html=True,
-                )
-            except Exception:
-                st.warning("Today's visit count is currently unavailable.")
+                        unsafe_allow_html=True,
+                    )
+                except Exception:
+                    st.warning("Today's visit count is currently unavailable.")
+            admin_sections = [
+                "Sponsorship Record",
+                "Sponsorship Items",
+                "Committee Members",
+                "Manage Notification Emails",
+            ]
+            admin_icons = ["pencil-square", "card-checklist", "people-fill", "envelope-paper-fill"]
+            if is_user_login_tracking_enabled():
+                admin_sections.insert(0, "User Login Activity")
+                admin_icons.insert(0, "bar-chart-fill")
             admin_menu = option_menu(
                 "Admin Sections",
-                [
-                    "User Login Activity",
-                    "Sponsorship Record",
-                    "Sponsorship Items",
-                    "Committee Members",
-                    "Manage Notification Emails"
-                ],
-                icons=["bar-chart-fill", "pencil-square", "card-checklist", "people-fill", "envelope-paper-fill"],
+                admin_sections,
+                icons=admin_icons,
                 menu_icon="shield-lock-fill",
                 default_index=0,
                 orientation="horizontal",

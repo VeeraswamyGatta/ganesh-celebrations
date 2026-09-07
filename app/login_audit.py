@@ -5,7 +5,13 @@ import streamlit as st
 from .db import get_connection
 
 
+def is_user_login_tracking_enabled():
+    return st.secrets.get("track_user_login", False) is True
+
+
 def ensure_login_audit_table(connection):
+    if not is_user_login_tracking_enabled():
+        return
     cursor = connection.cursor()
     if st.secrets.get("db_type", "postgres").lower() == "snowflake":
         cursor.execute("""
@@ -47,6 +53,8 @@ def _client_details():
 
 
 def start_login_audit(user_role, username):
+    if not is_user_login_tracking_enabled():
+        return None
     connection = get_connection()
     ensure_login_audit_table(connection)
     session_id = str(uuid.uuid4())
@@ -64,7 +72,7 @@ def start_login_audit(user_role, username):
 
 
 def touch_login_audit(session_id):
-    if not session_id:
+    if not session_id or not is_user_login_tracking_enabled():
         return
     connection = get_connection()
     cursor = connection.cursor()
@@ -77,7 +85,7 @@ def touch_login_audit(session_id):
 
 
 def end_login_audit(session_id):
-    if not session_id:
+    if not session_id or not is_user_login_tracking_enabled():
         return
     connection = get_connection()
     cursor = connection.cursor()
@@ -94,6 +102,8 @@ def end_login_audit(session_id):
 
 
 def get_today_visit_count():
+    if not is_user_login_tracking_enabled():
+        return 0, 0, 0
     connection = get_connection()
     cursor = connection.cursor()
     # Count each visitor once per day: distinct IP address, falling back to

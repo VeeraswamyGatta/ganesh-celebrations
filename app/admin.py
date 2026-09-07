@@ -21,7 +21,7 @@ import pandas as pd
 import datetime
 from .db import get_connection
 from .email_utils import send_email
-from .login_audit import ensure_login_audit_table
+from .login_audit import ensure_login_audit_table, is_user_login_tracking_enabled
 
 
 def ensure_sponsorship_item_image_columns(cursor):
@@ -34,6 +34,8 @@ def admin_tab(menu="Sponsorship Items"):
     conn = get_connection()
     cursor = conn.cursor()
     if menu == "User Login Activity":
+        if not is_user_login_tracking_enabled():
+            return
         ensure_login_audit_table(conn)
         st.markdown("<h2 style='color: #6A1B9A;'>User Login Activity</h2>", unsafe_allow_html=True)
 
