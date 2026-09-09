@@ -3,6 +3,7 @@ import pandas as pd
 import datetime
 from streamlit_option_menu import option_menu
 from .db import get_connection
+from html import escape
 import io
 
 
@@ -48,7 +49,7 @@ def expenses_tab():
         return lines
     df["Comments"] = df["Comments"].apply(format_comments)
 
-    # Tabs for Expenses List, Receipts, and Expense Summary
+    # Tabs for expense management and summaries
     # Determine tabs to show based on user role
     is_admin = st.session_state.get("admin_logged_in", False)
     if is_admin:
@@ -329,66 +330,128 @@ def expenses_tab():
         if selected_spent_by != "All":
             filtered_df = filtered_df[filtered_df["Spent By"] == selected_spent_by]
 
-        drop_cols = ["Receipt Blob", "Receipt"]
-        if not is_admin and "Spent By" in filtered_df.columns:
-            drop_cols.append("Spent By")
-        show_df = filtered_df.drop(drop_cols, axis=1)
-        if "ID" in show_df.columns:
-            show_df = show_df.sort_values(by="ID").reset_index(drop=True)
-            show_df = show_df[["ID"] + [c for c in show_df.columns if c != "ID"]]
-        show_df["Comments"] = show_df["Comments"].apply(lambda x: "  \n".join([str(line) for line in x if str(line).strip()]) if isinstance(x, list) else str(x))
-        show_df.index = show_df.index + 1
-        st.dataframe(show_df, use_container_width=True)
-        st.markdown(f"<div style='font-size:1.1em; font-weight:bold; margin-top:10px; text-align:right;'>Total Expenses: <span style='color:#6D4C41'>{filtered_df['Amount'].sum():.2f}</span></div>", unsafe_allow_html=True)
-        if not len(filtered_df):
-                st.info("No expenses recorded yet.")
-        # Show category summary (category and total amount) below the table
-        if not filtered_df.empty:
-                cat_summary = filtered_df.groupby("Category")['Amount'].sum().reset_index()
-                cat_summary = cat_summary.sort_values(by="Amount", ascending=False)
-                # Modern card design for summary
-                table_rows = "".join([
-                        f"<tr>"
-                        f"<td style='padding:8px 18px;font-weight:500;color:#4E342E;font-size:1.08em;'>🗂️ {row['Category']}</td>"
-                        f"<td style='padding:8px 18px;text-align:right;font-weight:bold;color:#388E3C;background:#FFFDE7;border-radius:8px;font-size:1.08em;'>{row['Amount']:.2f}</td>"
-                        f"</tr>"
-                        for _, row in cat_summary.iterrows()
-                ])
-                with open("app/html/expense/category_summary_card.html", "r") as f:
-                    card_template = f.read()
-                card_html = card_template.format(
-                    wallet_amount=wallet_amount,
-                    total_payments=total_payments,
-                    total_expenses=total_expenses,
-                    table_rows=table_rows
-                )
-                st.markdown(card_html, unsafe_allow_html=True)
+        filtered_total = float(filtered_df["Amount"].sum()) if not filtered_df.empty else 0.0
+        cat_summary = filtered_df.groupby("Category")["Amount"].sum().reset_index().sort_values(by="Amount", ascending=False) if not filtered_df.empty else pd.DataFrame(columns=["Category", "Amount"])
+        table_rows = "".join(
+            f"<div class='expense-category-row'><span>🗂️ {escape(str(row['Category']))}</span><strong>${float(row['Amount']):,.2f}</strong></div>"
+            for _, row in cat_summary.iterrows()
+        )
+        with open("app/html/expense/category_summary_card.html", "r") as f:
+            card_template = f.read()
+        st.markdown(
+            card_template.format(
+                wallet_amount=float(wallet_amount),
+                total_payments=float(total_payments),
+                total_expenses=float(total_expenses),
+                wallet_percent=min(max(float(wallet_amount) / float(total_payments) * 100, 0), 100) if total_payments else 0,
+                table_rows=table_rows,
+            ),
+            unsafe_allow_html=True,
+        )
+        if filtered_df.empty:
+            st.info("No expenses recorded yet.")
+        else:
+            st.markdown(
+                "<div style='height:1.25rem; clear:both;'></div>"
+                "<div style='padding:0.7rem 0 0.55rem; border-top:1px solid #e4ddd7; color:#6a1b1b; font-size:1.05rem; font-weight:800;'>🧾 Detailed Expense Report</div>",
+                unsafe_allow_html=True,
+            )
+            table_df = filtered_df.copy()
+            table_df["Comments"] = table_df["Comments"].apply(
+                lambda value: " | ".join(str(line).strip() for line in value if str(line).strip())
+                if isinstance(value, list) else str(value or "")
+            )
+            table_df["Receipt"] = table_df["Receipt"].apply(
+                lambda value: "Available" if isinstance(value, str) and value.strip() else "Not attached"
+            )
+            table_df["Expense"] = table_df.apply(
+                lambda row: f"{row['Category']} - {row['Sub Category']}" if row["Sub Category"] else str(row["Category"]),
+                axis=1,
+            )
+            table_df = table_df[["Expense", "Amount", "Date", "Receipt"]].sort_values(
+                by="Date", ascending=False
+            ).reset_index(drop=True)
+            expense_table_rows = "".join(
+                f"<tr>"
+                f"<td class='expense-table-name'>{escape(str(row['Expense']))}</td>"
+                f"<td class='expense-table-amount'>${float(row['Amount']):,.2f}</td>"
+                f"<td>{escape(str(row['Date']))}</td>"
+                f"<td><span class='expense-table-receipt {'has-receipt' if row['Receipt'] == 'Available' else 'no-receipt'}'>{escape(str(row['Receipt']))}</span></td>"
+                f"</tr>"
+                for _, row in table_df.iterrows()
+            )
+            st.markdown(
+                f"""
+<style>
+    .expense-table-wrap {{ margin-top:0.7rem; overflow-x:auto; border:1px solid #e4ddd7; border-radius:12px; box-shadow:0 3px 10px rgba(106,27,27,0.08); }}
+    .expense-table {{ width:100%; min-width:0; table-layout:fixed; border-collapse:collapse; color:#3e2723; font-size:0.82rem; }}
+    .expense-table th {{ padding:0.65rem 0.55rem; background:#6a1b1b; color:#fffaf0; font-size:0.72rem; font-weight:800; letter-spacing:0.04em; text-align:left; text-transform:uppercase; }}
+    .expense-table th:nth-child(1) {{ width:52%; }}
+    .expense-table th:nth-child(2) {{ width:17%; text-align:right; }}
+    .expense-table th:nth-child(3) {{ width:18%; }}
+    .expense-table th:nth-child(4) {{ width:13%; }}
+    .expense-table td {{ padding:0.62rem 0.55rem; border-top:1px solid #eee4dc; vertical-align:top; overflow-wrap:anywhere; }}
+    .expense-table tr:nth-child(even) td {{ background:#fffaf5; }}
+    .expense-table-name {{ color:#3e2723; font-weight:700; line-height:1.35; }}
+    .expense-table-amount {{ color:#8b1737; font-weight:800; text-align:right; white-space:nowrap; }}
+    .expense-table-receipt {{ font-size:0.72rem; font-weight:700; }}
+    .expense-table-receipt.has-receipt {{ color:#2e7d32; }}
+    .expense-table-receipt.no-receipt {{ color:#8d6e63; }}
+    @media (max-width:640px) {{
+        .expense-table {{ font-size:0.75rem; }}
+        .expense-table th, .expense-table td {{ padding:0.55rem 0.38rem; }}
+        .expense-table th {{ font-size:0.64rem; }}
+        .expense-table th:nth-child(1) {{ width:47%; }}
+        .expense-table th:nth-child(2) {{ width:19%; }}
+        .expense-table th:nth-child(3) {{ width:21%; }}
+        .expense-table th:nth-child(4) {{ width:13%; }}
+    }}
+</style>
+<div class='expense-table-wrap'>
+<table class='expense-table'>
+<thead><tr><th>Expense</th><th>Amount</th><th>Date</th><th>Receipt</th></tr></thead>
+<tbody>{expense_table_rows}</tbody>
+</table>
+</div>
+""",
+                unsafe_allow_html=True,
+            )
+
     # Receipts Section
     if selected_section == "Receipts":
-        receipts_df = df.sort_values(by="ID")
-        for idx, row in receipts_df.iterrows():
+        receipts_df = df[
+            df["Receipt Blob"].notna()
+            & df["Receipt"].apply(lambda value: isinstance(value, str) and bool(value.strip()))
+        ].sort_values(by="Date", ascending=False)
+        attached_count = len(receipts_df)
+        st.markdown(
+            f"<div style='margin:0.4rem 0 0.9rem; padding:0.85rem 1rem; border-left:4px solid #2e7d32; border-radius:10px; background:linear-gradient(100deg,#e8f5e9,#fbfffb); color:#1b5e20; font-weight:800;'>🧾 Receipts <span style='float:right; color:#607d6b; font-size:0.82rem;'>{attached_count} attached</span></div>",
+            unsafe_allow_html=True,
+        )
+        if receipts_df.empty:
+            st.info("No receipts available.")
+        for row_index, (_, row) in enumerate(receipts_df.iterrows()):
             receipt_name = row["Receipt"]
             receipt_blob = row["Receipt Blob"]
-            is_admin = st.session_state.get("admin_logged_in", False)
-            if isinstance(receipt_name, str) and receipt_name.strip() and receipt_blob:
-                data = receipt_blob
-                if isinstance(data, memoryview):
-                    data = data.tobytes()
-                elif isinstance(data, bytearray):
-                    data = bytes(data)
-                label_text = f"View Receipt: ID {row['ID']} | Amount {row['Amount']} | Date {row['Date']}"
-                if is_admin and "Spent By" in row:
-                    label_text += f" | Spent By {row['Spent By']}"
-                if st.button(label_text, key=f"view_receipt_{row['ID']}"):
-                    import base64
-                    img_type = "jpeg" if receipt_name.lower().endswith((".jpg", ".jpeg")) else "png"
-                    img_base64 = base64.b64encode(data).decode("utf-8")
-                    st.markdown(f"<div style='margin-bottom:18px;'><img src='data:image/{img_type};base64,{img_base64}' style='max-width:320px;max-height:320px;border-radius:12px;border:2px solid #eee;box-shadow:0 2px 8px #ccc;margin-top:8px;'/></div>", unsafe_allow_html=True)
-            else:
-                label_text = f"No Receipt for ID {row['ID']} | Amount {row['Amount']} | Date {row['Date']}"
-                if is_admin and "Spent By" in row:
-                    label_text += f" | Spent By {row['Spent By']}"
-                st.markdown(f"<span style='color:#888;'>{label_text}</span>", unsafe_allow_html=True)
+            has_receipt = isinstance(receipt_name, str) and receipt_name.strip() and receipt_blob
+            with st.container(border=True):
+                amount_col, details_col = st.columns([0.22, 0.78], gap="small")
+                with amount_col:
+                    st.markdown(f"<div style='color:#b71c1c; font-size:1.05rem; font-weight:800; text-align:center;'>${float(row['Amount']):,.2f}</div>", unsafe_allow_html=True)
+                with details_col:
+                    st.markdown(
+                        f"<div style='color:#263238; font-weight:800;'>{escape(str(row['Category']))}</div>"
+                        f"<div style='color:#607d6b; font-size:0.82rem;'>{escape(str(row['Sub Category']))} &bull; 📅 {escape(str(row['Date']))}</div>",
+                        unsafe_allow_html=True,
+                    )
+                    if is_admin and row["Spent By"]:
+                        st.caption(f"Spent by: {row['Spent By']}")
+                    if has_receipt:
+                        with st.expander("View receipt preview", expanded=False):
+                            data = receipt_blob.tobytes() if isinstance(receipt_blob, memoryview) else bytes(receipt_blob) if isinstance(receipt_blob, bytearray) else receipt_blob
+                            st.image(data, use_container_width=True)
+                    else:
+                        st.caption("No receipt attached")
     # Expense Summary by Person Section (admin only)
     if is_admin and selected_section == "Expense Summary by Person":
             cursor.execute("SELECT spent_by, SUM(amount) FROM expenses WHERE status='active' GROUP BY spent_by ORDER BY SUM(amount) DESC")

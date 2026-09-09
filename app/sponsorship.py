@@ -458,53 +458,43 @@ def sponsorship_tab(dashboard_only=False):
 
     total_received = float(combined_total)
     total_pending = float(total_combined) - total_received
-    available_wallet = total_received - float(get_total_expense_amount(conn))
+    approved_expenses = float(get_total_expense_amount(conn))
+    available_wallet = total_received - approved_expenses
     slots_filled_count = total_slots - remaining_slots
     slot_pct = round((slots_filled_count / total_slots * 100), 1) if total_slots else 0
     collection_pct = round((total_received / float(total_combined) * 100), 1) if total_combined else 0
 
     # Today's submitted amount (sponsorships + donations submitted today)
-    item_amt_map = {row[0]: (row[1], row[2]) for row in sponsorship_items}
     today_sponsored_amount = 0.0
     today_donated_amount = 0.0
-    try:
-        cursor.execute("SELECT sponsorship, donation, submitted_at FROM sponsors WHERE submitted_at IS NOT NULL")
-        today_rows = cursor.fetchall()
-        import pytz
-        cst_tz = pytz.timezone('US/Central')
-        utc_tz = pytz.utc
-        today_date = datetime.datetime.now(cst_tz).date()
-        for sponsorship_name, donation_amount, submitted_at in today_rows:
-            try:
-                if isinstance(submitted_at, str):
-                    submitted_dt = pd.to_datetime(submitted_at, errors='coerce')
-                    if pd.isna(submitted_dt):
-                        continue
-                    submitted_dt = submitted_dt.to_pydatetime()
-                else:
-                    submitted_dt = submitted_at
-                # DB timestamps are stored in UTC; compare in US/Central "today"
-                if submitted_dt.tzinfo is None:
-                    submitted_dt = utc_tz.localize(submitted_dt)
-                if submitted_dt.astimezone(cst_tz).date() != today_date:
-                    continue
-            except Exception:
-                continue
-            if sponsorship_name:
-                amount, limit = item_amt_map.get(sponsorship_name, (0, 1))
-                today_sponsored_amount += (amount / limit) if limit else amount
-            if donation_amount:
-                today_donated_amount += float(donation_amount)
-    except Exception:
-        pass
+    cursor.execute("""
+        SELECT s.donation, s.submitted_at, si.amount, si.sponsor_limit
+        FROM sponsors s
+        LEFT JOIN sponsorship_items si ON si.item = s.sponsorship
+        WHERE s.submitted_at IS NOT NULL
+    """)
+    today_rows = cursor.fetchall()
+    import pytz
+    cst_tz = pytz.timezone('US/Central')
+    today_date = datetime.datetime.now(cst_tz).date()
+    for donation_amount, submitted_at, item_amount, sponsor_limit in today_rows:
+        submitted_dt = pd.to_datetime(submitted_at, errors='coerce', utc=True)
+        if pd.isna(submitted_dt) or submitted_dt.tz_convert(cst_tz).date() != today_date:
+            continue
+        if item_amount is not None:
+            item_amount = float(item_amount)
+            sponsor_limit = int(sponsor_limit) if sponsor_limit else 0
+            today_sponsored_amount += item_amount / sponsor_limit if sponsor_limit else item_amount
+        if donation_amount:
+            today_donated_amount += float(donation_amount)
     today_total = round(today_sponsored_amount + today_donated_amount, 2)
     today_card_html = ""
     if today_total > 0:
         today_card_html = (
-            "<div style='padding:1.1em; border-radius:14px; background:#ede7f6; border-top:4px solid #7e57c2; box-shadow:0 3px 10px rgba(126,87,194,0.12);'>"
-            "<div style='color:#5e35b1; font-size:0.86em; font-weight:700;'>📅 TODAY SUBMITTED</div>"
-            f"<div style='margin-top:0.35em; font-size:1.4em; color:#4527a0; font-weight:800;'>${today_total:,.2f}</div>"
-            "<div style='color:#6a5a8a; font-size:0.82em;'>Today's submissions</div>"
+            "<div class='summary-section summary-today'>"
+            "<div class='summary-label'>📅 TODAY SUBMITTED</div>"
+            f"<div class='today-total'>${today_total:,.2f}</div>"
+            f"<div class='summary-detail'>Sponsorships ${today_sponsored_amount:,.2f} &nbsp;•&nbsp; Donations ${today_donated_amount:,.2f}</div>"
             "</div>"
         )
 
@@ -560,46 +550,70 @@ def sponsorship_tab(dashboard_only=False):
 
         st.markdown(f"""
 {style_html}
-<div class='sponsorship-summary' style='max-width:1080px; margin:1.2em auto 1.5em; padding:1.2em; border:1px solid #d7ccc8; border-radius:20px; background:linear-gradient(135deg,#fffdf7 0%,#f1f8e9 100%); box-shadow:0 8px 24px rgba(93,64,55,0.12);'>
-    <div style='display:flex; align-items:center; justify-content:space-between; gap:1em; margin:0 0 1em; padding:0 0.35em;'>
-        <div class='sponsorship-summary-title' style='font-size:1.45em; color:#3e2723; font-weight:800;'>Sponsorship &amp; Donation Summary</div>
+<style>
+    .summary-panel {{ max-width:1080px; margin:1.2em auto 1.5em; padding:1.15em; border:1px solid #d7ccc8; border-radius:18px; background:linear-gradient(135deg,#fffdf7 0%,#f1f8e9 100%); box-shadow:0 8px 24px rgba(93,64,55,0.12); color:#3e2723; }}
+    .summary-heading {{ display:flex; justify-content:space-between; align-items:center; gap:0.75em; padding:0 0.25em 0.85em; border-bottom:1px solid #d7ccc8; font-size:1.35em; font-weight:800; }}
+    .summary-section {{ padding:0.9em 0.25em; border-bottom:1px solid rgba(93,64,55,0.14); }}
+    .summary-label {{ color:#5d4037; font-size:0.78em; font-weight:800; letter-spacing:0.03em; }}
+    .summary-value {{ margin-top:0.22em; font-size:1.55em; font-weight:800; }}
+    .summary-detail {{ margin-top:0.25em; color:#6d4c41; font-size:0.84em; line-height:1.45; }}
+    .summary-meta {{ color:#6d4c41; font-size:0.82em; }}
+    .summary-bar {{ height:7px; margin-top:0.55em; overflow:hidden; border-radius:99px; background:#e2d8ca; }}
+    .summary-bar-fill {{ height:100%; border-radius:99px; }}
+    .summary-finance-grid {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.8em; }}
+    .summary-finance-item {{ min-width:0; padding:0.65em 0.75em; border-left:4px solid #43a047; background:rgba(255,255,255,0.55); }}
+    .summary-finance-item.received {{ border-left-color:#1e88e5; }}
+    .summary-finance-item.wallet {{ border-left-color:#d81b60; }}
+    .summary-finance-item.today {{ border-left-color:#7e57c2; }}
+    .summary-finance-item .summary-value {{ font-size:1.28em; }}
+    .wallet-table {{ margin-top:0.5em; border-top:1px solid rgba(173,20,87,0.18); }}
+    .wallet-row {{ display:flex; justify-content:space-between; gap:0.75em; padding:0.34em 0; border-bottom:1px solid rgba(173,20,87,0.12); color:#6d4c41; font-size:0.82em; }}
+    .wallet-row strong {{ color:#880e4f; white-space:nowrap; }}
+    .today-total {{ margin-top:0.2em; color:#4527a0; font-size:1.35em; font-weight:800; }}
+    @media (max-width:640px) {{
+        .summary-panel {{ margin-top:0.8em; padding:0.8em; border-radius:14px; }}
+        .summary-heading {{ font-size:1.1em; }}
+        .summary-finance-grid {{ grid-template-columns:1fr; gap:0.25em; }}
+        .summary-section {{ padding:0.75em 0.15em; }}
+    }}
+</style>
+<div class='summary-panel'>
+    <div class='summary-heading'><span>Sponsorship &amp; Donation Summary</span></div>
+    <div class='summary-section'>
+        <div style='display:flex; justify-content:space-between; gap:0.75em; align-items:baseline;'>
+            <span class='summary-label'>🪔 SLOTS</span><span class='summary-meta'>{slot_pct}% filled</span>
+        </div>
+        <div class='summary-value'>{slots_html} <span style='color:#8d6e63; font-size:0.65em;'>/ {total_slots}</span></div>
+        <div class='summary-meta'>{slots_filled_count} filled &bull; {remaining_slots} open</div>
+        <div class='summary-bar'><div class='summary-bar-fill' style='width:{min(slot_pct, 100.0)}%; background:#f57c00;'></div></div>
     </div>
-    <div class='sponsorship-summary-grid' style='display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:0.8em;'>
-        <div class='sponsorship-summary-card' style='padding:1.1em; border-radius:14px; background:#fff8e1; border-top:4px solid #ffb300; box-shadow:0 3px 10px rgba(255,179,0,0.12);'>
-            <div style='display:flex; justify-content:space-between; align-items:center;'>
-                <span style='color:#8d6e63; font-size:0.86em; font-weight:700;'>🪔 SLOTS</span>
-                <span style='background:#ffe082; color:#5d4037; font-size:0.75rem; font-weight:800; padding:2px 7px; border-radius:8px;'>{slot_pct}% filled</span>
+    <div class='summary-section'>
+        <div class='summary-label'>💰 SUBMITTED</div>
+        <div class='summary-value' style='color:#1b5e20;'>${total_combined:,.2f}</div>
+        <div class='summary-detail'>${total_sponsored:,.2f} sponsored &nbsp;•&nbsp; ${total_donated:,.2f} donated</div>
+    </div>
+    <div class='summary-section'>
+        <div class='summary-finance-grid'>
+            <div class='summary-finance-item received'>
+                <div class='summary-label' style='color:#1565c0;'>📥 AMOUNT RECEIVED <span style='float:right;'>{collection_pct}%</span></div>
+                <div class='summary-value' style='color:#0d47a1;'>${total_received:,.2f}</div>
+                <div class='summary-meta'>Pending: <strong>${total_pending:,.2f}</strong></div>
+                <div class='summary-bar'><div class='summary-bar-fill' style='width:{min(collection_pct, 100.0)}%; background:#1976d2;'></div></div>
             </div>
-            <div style='margin-top:0.35em; font-size:1.55em; color:#3e2723; font-weight:800;'>{slots_html} <span style='color:#8d6e63; font-size:0.7em;'>/ {total_slots}</span></div>
-            <div style='color:#795548; font-size:0.82em; margin-top:0.2em;'>{slots_filled_count} filled &bull; {remaining_slots} open</div>
-            <div style='width:100%; background:#ffe082; height:6px; border-radius:99px; margin-top:0.5em; overflow:hidden;'>
-                <div style='width:{min(slot_pct, 100.0)}%; background:#f57c00; height:100%; border-radius:99px;'></div>
-            </div>
-        </div>
-        <div class='sponsorship-summary-card' style='padding:1.1em; border-radius:14px; background:#e8f5e9; border-top:4px solid #43a047; box-shadow:0 3px 10px rgba(67,160,71,0.12);'>
-            <div style='color:#2e7d32; font-size:0.86em; font-weight:700;'>💰 SUBMITTED</div>
-            <div style='margin-top:0.35em; font-size:1.4em; color:#1b5e20; font-weight:800;'>${total_combined:,.2f}</div>
-            <div style='color:#558b2f; font-size:0.82em; margin-top:0.2em;'>${total_sponsored:,.2f} sponsored + ${total_donated:,.2f} donated</div>
-            <div style='color:#7cb342; font-size:0.75em; margin-top:0.45em;'>Pledged by community</div>
-        </div>
-        <div class='sponsorship-summary-card' style='padding:1.1em; border-radius:14px; background:#e3f2fd; border-top:4px solid #1e88e5; box-shadow:0 3px 10px rgba(30,136,229,0.12);'>
-            <div style='display:flex; justify-content:space-between; align-items:center;'>
-                <span style='color:#1565c0; font-size:0.86em; font-weight:700;'>📥 AMOUNT RECEIVED</span>
-                <span style='background:#bbdefb; color:#0d47a1; font-size:0.75rem; font-weight:800; padding:2px 7px; border-radius:8px;'>{collection_pct}%</span>
-            </div>
-            <div style='margin-top:0.35em; font-size:1.4em; color:#0d47a1; font-weight:800;'>${total_received:,.2f}</div>
-            <div style='color:#546e7a; font-size:0.82em; margin-top:0.2em;'>Pending: <strong>${total_pending:,.2f}</strong></div>
-            <div style='width:100%; background:#bbdefb; height:6px; border-radius:99px; margin-top:0.5em; overflow:hidden;'>
-                <div style='width:{min(collection_pct, 100.0)}%; background:#1976d2; height:100%; border-radius:99px;'></div>
+            <div class='summary-finance-item wallet'>
+                <div class='summary-label' style='color:#ad1457;'>👛 AVAILABLE WALLET</div>
+                <div class='summary-value' style='color:#880e4f;'>${available_wallet:,.2f}</div>
+                <div class='wallet-table'>
+                    <div class='wallet-row'><span>Submitted</span><strong>${total_combined:,.2f}</strong></div>
+                    <div class='wallet-row'><span>Amount received</span><strong>${total_received:,.2f}</strong></div>
+                    <div class='wallet-row'><span>Approved expenses</span><strong>&minus; ${approved_expenses:,.2f}</strong></div>
+                    <div class='wallet-row wallet-total'><span>Available wallet</span><strong>${available_wallet:,.2f}</strong></div>
+                </div>
+                <div class='summary-bar'><div class='summary-bar-fill' style='width:{min(max(available_wallet / total_received * 100, 0), 100) if total_received else 0}%; background:#d81b60;'></div></div>
             </div>
         </div>
-        <div class='sponsorship-summary-card' style='padding:1.1em; border-radius:14px; background:#fce4ec; border-top:4px solid #d81b60; box-shadow:0 3px 10px rgba(216,27,96,0.12);'>
-            <div style='color:#ad1457; font-size:0.86em; font-weight:700;'>👛 AVAILABLE WALLET</div>
-            <div style='margin-top:0.35em; font-size:1.4em; color:#880e4f; font-weight:800;'>${available_wallet:,.2f}</div>
-            <div style='color:#6d4c41; font-size:0.82em; margin-top:0.2em;'>Total received &minus; approved expenses</div>
-            <div style='color:#ad1457; font-size:0.75em; margin-top:0.45em;'>Net funds ready for use</div>
-        </div>
-        {today_card_html}
+    </div>
+    {today_card_html}
 </div>
 """, unsafe_allow_html=True)
         sponsored_tab, donations_tab = st.tabs(["Sponsored Items", "Donations"])
@@ -752,27 +766,31 @@ def sponsorship_tab(dashboard_only=False):
         if sponsorship_limit and sponsorship_limit < total_combined:
             st.markdown("""
 <div style='
-    max-width: 520px;
-    margin: 2em auto 1.5em auto;
-    background: linear-gradient(90deg, #ffe0e0 0%, #fff3f3 100%);
-    border-radius: 16px;
-    box-shadow: 0 2px 12px rgba(211,47,47,0.08);
-    padding: 1.7em 1.5em 1.2em 1.5em;
-    border: 2px solid #d32f2f;
+    max-width: 640px;
+    margin: 1.4em auto 1.5em;
+    background: linear-gradient(145deg, #fffdf4 0%, #fff3d6 100%);
+    border-radius: 20px;
+    box-shadow: 0 10px 28px rgba(239, 143, 32, 0.16);
+    padding: 1.8em 1.5em 1.5em;
+    border: 1px solid #e6c66a;
+    border-top: 6px solid #e6a92f;
     text-align: center;
 '>
-    <div style='font-size:2em; color:#d32f2f; font-weight:bold; margin-bottom:0.3em;'>🎉 Sponsorship Goal Reached!</div>
-    <div style='font-size:1.15em; color:#333; margin-bottom:0.7em;'>
-        Thanks for reaching the sponsorship goal for the Ganesh Chaturthi celebration.<br>
-        <span style='color:#d32f2f; font-weight:bold;'>We are sorry, direct submissions are now closed.</span>
+    <div style='font-size:0.82em; color:#8b5e00; font-weight:800; letter-spacing:0.08em; text-transform:uppercase;'>🪔 2026 Celebration Update</div>
+    <div style='font-size:1.9em; line-height:1.2; color:#1b5e20; font-weight:800; margin:0.3em 0 0.55em;'>🏆 Sponsorship Goal Reached!</div>
+    <div style='font-size:1.03em; color:#4e342e; line-height:1.6; margin-bottom:0.75em;'>
+        Thank you for helping us reach our Ganesh Chaturthi 2026 sponsorship goal.
     </div>
-    <div style='font-size:1.08em; color:#1565c0; margin-bottom:0.5em;'>
-        Please reach out in the <b>Ganesh Chaturthi celebrations 2025 WhatsApp group</b> to participate.<br>
-        The team will collect your information and submit it for you.
+    <div style='padding:0.75em 0.9em; border-radius:12px; background:#e8f5e9; border:1px solid #a5d6a7; color:#1b5e20; font-size:0.98em; font-weight:800; line-height:1.5;'>
+        ✅ Direct online submissions are now closed.
+    </div>
+    <div style='font-size:0.98em; color:#1565c0; line-height:1.6; margin-top:0.9em;'>
+        💬 To participate, please contact the team through the <b>Ganesh Chaturthi Celebrations 2026 WhatsApp group</b>.<br>
+        We will collect your information and submit it for you.
     </div>
 </div>
 """, unsafe_allow_html=True)
-            show_submission_inputs = False
+            return
 
     # Only show the info message if not on the submission thank you page and submission is allowed
 

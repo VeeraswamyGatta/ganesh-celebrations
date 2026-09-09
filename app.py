@@ -781,10 +781,14 @@ if "user_logged_in" not in st.session_state:
 enforce_idle_timeout()
 
 show_login_form = False
+requested_view = str(
+    st.query_params.get("page", st.query_params.get("view", ""))
+).strip().lower()
+open_prasad_seva = requested_view in {"prasad", "prasad-seva", "prasad_seva"}
 # Only show the initial menu if not logged in
 if not st.session_state.user_logged_in and not st.session_state.admin_logged_in:
     if "landing_navigation" not in st.session_state:
-        st.session_state.landing_navigation = "Login"
+        st.session_state.landing_navigation = "Prasad Seva" if open_prasad_seva else "Login"
     selected_landing_navigation = st.session_state.landing_navigation
 
     with st.container(key="landing_top"):
@@ -929,6 +933,9 @@ else:
         menu_items = []
         menu_icons = []
     if menu_items:
+        if open_prasad_seva and st.session_state.get("last_requested_view") != requested_view:
+            st.session_state.main_navigation = "Prasad"
+            st.session_state.last_requested_view = requested_view
         if st.session_state.get("main_navigation") not in menu_items:
             st.session_state.main_navigation = "Dashboard"
 

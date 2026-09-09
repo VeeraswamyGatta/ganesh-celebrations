@@ -14,12 +14,40 @@ st.markdown('''
         background-color: #1976d2 !important;
         color: #fff !important;
     }
+    div[data-testid="stTabs"] [data-baseweb="tab-list"] {
+        gap: 0.35rem;
+        margin-top: 0.75rem;
+        padding: 0.3rem 0.35rem 0;
+        border-bottom: 1px solid #c8e6c9;
+    }
+    div[data-testid="stTabs"] [data-baseweb="tab"] {
+        min-height: 2.4rem;
+        padding: 0.55rem 0.9rem;
+        border-radius: 8px 8px 0 0;
+        color: #546e7a;
+        font-weight: 700;
+    }
+    div[data-testid="stTabs"] [data-baseweb="tab"][aria-selected="true"] {
+        color: #1b5e20;
+        background: #e8f5e9;
+    }
+    div[data-testid="stTabs"] [data-baseweb="tab-highlight"] {
+        background-color: #2e7d32;
+        height: 3px;
+    }
+    @media (max-width: 640px) {
+        div[data-testid="stTabs"] [data-baseweb="tab"] {
+            padding: 0.5rem 0.7rem;
+            font-size: 0.86rem;
+        }
+    }
     </style>
 ''', unsafe_allow_html=True)
 import pandas as pd
 import datetime
 import pytz
 import altair as alt
+from html import escape
 from .db import get_connection
 from .email_utils import send_email
 import smtplib
@@ -89,44 +117,76 @@ def statistics_tab():
     daily_df = pd.DataFrame(daily_records)
     daily_export = daily_df.reindex(columns=['Date', 'Amount'])
     daily_export['Date'] = daily_export['Date'].astype(str)
-    daily_title_col, daily_download_col = st.columns([8, 1])
-    with daily_title_col:
-        st.markdown(
-            "<div style='padding:0.8rem 1rem; border-left:5px solid #1565C0; border-radius:10px; background:linear-gradient(100deg,#e3f2fd,#f8fbff); color:#0d47a1; font-size:1.15rem; font-weight:800;'>📈 Daily Submitted Sponsorship Amount</div>",
-            unsafe_allow_html=True,
-        )
-    with daily_download_col:
+    cursor.execute("SELECT item, amount, sponsor_limit FROM sponsorship_items ORDER BY id")
+    available_items = cursor.fetchall()
+    cursor.execute("SELECT sponsorship, COUNT(*) FROM sponsors GROUP BY sponsorship")
+    sponsorship_counts = dict(cursor.fetchall())
+    df_available = pd.DataFrame([
+        {
+            "Item": item,
+            "Amount": amount,
+            "Total Slot": limit,
+            "Remaining Slot Available": limit - sponsorship_counts.get(item, 0),
+        }
+        for item, amount, limit in available_items
+    ])
+
+    daily_tab, sponsored_records_tab, available_items_tab = st.tabs([
+        "📈 Daily Submitted",
+        "📋 Sponsored Records",
+        "🧾 Available Items",
+    ])
+    with daily_tab:
         st.download_button(
-            "⬇️",
+            "⬇️ Download daily amounts",
             data=daily_export.to_csv(index=False),
             file_name="daily_submitted_sponsorship_amount.csv",
             mime="text/csv",
             key="stats_daily_amount_download",
             help="Download daily submitted amounts",
         )
-    if daily_df.empty:
-        st.info("No dated sponsorship submissions available to chart.")
-    else:
-        daily_df = daily_df.groupby('Date', as_index=False)['Amount'].sum()
-        daily_df['Amount'] = daily_df['Amount'].astype(float).round(2)
-        daily_chart = alt.Chart(daily_df).mark_bar(color='#1565C0').encode(
-            x=alt.X('Date:T', title='Submission Date', axis=alt.Axis(format='%d %b', labelAngle=0)),
-            y=alt.Y('Amount:Q', title='Submitted Amount ($)'),
-            tooltip=[alt.Tooltip('Date:T', title='Date', format='%d %b %Y'), alt.Tooltip('Amount:Q', title='Amount', format='$,.2f')],
-        )
-        daily_labels = alt.Chart(daily_df).mark_text(dy=-8, color='#263238').encode(
-            x='Date:T',
-            y='Amount:Q',
-            text=alt.Text('Amount:Q', format='$,.2f'),
-        )
-        st.caption(f"Total submitted: ${daily_df['Amount'].sum():,.2f}")
-        st.altair_chart((daily_chart + daily_labels).properties(height=350), use_container_width=True)
+        if daily_df.empty:
+            st.info("No dated sponsorship submissions available to chart.")
+        else:
+            daily_df = daily_df.groupby('Date', as_index=False)['Amount'].sum()
+            daily_df['Amount'] = daily_df['Amount'].astype(float).round(2)
+            daily_chart = alt.Chart(daily_df).mark_bar(color='#8b1737', size=22).encode(
+                x=alt.X('Amount:Q', title='Submitted Amount ($)', axis=alt.Axis(format='$,.0f')),
+                y=alt.Y('Date:T', title='Submission Date', sort='ascending', axis=alt.Axis(format='%d %b')),
+                tooltip=[alt.Tooltip('Date:T', title='Date', format='%d %b %Y'), alt.Tooltip('Amount:Q', title='Amount', format='$,.2f')],
+            )
+            daily_labels = alt.Chart(daily_df).mark_text(dx=8, align='left', color='#3e2723', fontSize=12).encode(
+                x='Amount:Q',
+                y=alt.Y('Date:T', sort='ascending'),
+                text=alt.Text('Amount:Q', format='$,.2f'),
+            )
+            st.markdown(
+                f"<div style='display:inline-flex; align-items:center; gap:0.45rem; margin:0.7rem 0 0.35rem; padding:0.5rem 0.8rem; border:1px solid #e6c66a; border-radius:9px; background:#fff8e1; color:#6a1b1b; font-size:0.9rem; font-weight:800;'>💰 <span>Total submitted</span><strong style='color:#8b1737;'>${daily_df['Amount'].sum():,.2f}</strong></div>",
+                unsafe_allow_html=True,
+            )
+            st.altair_chart(
+                (daily_chart + daily_labels).properties(height=max(300, len(daily_df) * 30)).configure(
+                    font='Trebuchet MS',
+                    axis=alt.Axis(labelFont='Trebuchet MS', titleFont='Trebuchet MS'),
+                    legend=alt.Legend(labelFont='Trebuchet MS', titleFont='Trebuchet MS'),
+                ),
+                use_container_width=True,
+            )
 
-    st.markdown(
-        "<div style='margin-top:1.1rem; padding:0.8rem 1rem; border-left:5px solid #2E7D32; border-radius:10px; background:linear-gradient(100deg,#e8f5e9,#fbfffb); color:#1b5e20; font-size:1.15rem; font-weight:800;'>📋 Sponsored Records</div>",
-        unsafe_allow_html=True,
-    )
-    records_tab, chart_tab = st.tabs(["Records", "Chart"])
+    with available_items_tab:
+        avail_filtered = df_available.copy()
+        st.dataframe(avail_filtered.reset_index(drop=True), use_container_width=True, hide_index=True)
+        st.download_button(
+            "⬇️",
+            data=avail_filtered.to_csv(index=False),
+            file_name="available_sponsorship_items.csv",
+            mime="text/csv",
+            key="stats_available_download",
+            help="Download available sponsorship items",
+        )
+
+    with sponsored_records_tab:
+        records_tab, chart_tab = st.tabs(["Records", "Chart"])
     with records_tab:
         display_columns = ['Name', 'Apartment', 'Gothram', 'Amount'] if is_admin else ['Name', 'Amount']
         table_df = df_display[display_columns].copy()
@@ -151,8 +211,45 @@ def statistics_tab():
 
         filtered_table = filtered_table.reset_index(drop=True)
         filtered_table.index = range(1, len(filtered_table) + 1)
-
-        st.dataframe(filtered_table, use_container_width=True)
+        if filtered_table.empty:
+            st.info("No sponsored records match the selected filters.")
+        else:
+            stats_headers = filtered_table.columns.tolist()
+            stats_header_html = "".join(f"<th>{escape(str(column))}</th>" for column in stats_headers)
+            stats_rows_html = "".join(
+                "<tr>"
+                + "".join(
+                    f"<td class='stats-name-cell'>{escape(str(value))}</td>"
+                    if column == "Name"
+                    else f"<td class='stats-amount-cell'>${float(value):,.2f}</td>"
+                    if column == "Amount"
+                    else f"<td>{escape(str(value))}</td>"
+                    for column, value in row.items()
+                )
+                + "</tr>"
+                for _, row in filtered_table.iterrows()
+            )
+            st.markdown(
+                f"""
+<style>
+    .stats-table-wrap {{ margin-top:0.7rem; overflow-x:auto; border:1px solid #e4ddd7; border-radius:12px; box-shadow:0 3px 10px rgba(106,27,27,0.08); }}
+    .stats-table {{ width:100%; table-layout:fixed; border-collapse:collapse; color:#3e2723; font-size:0.82rem; }}
+    .stats-table th {{ padding:0.65rem 0.55rem; background:#6a1b1b; color:#fffaf0; font-size:0.72rem; font-weight:800; letter-spacing:0.04em; text-align:left; text-transform:uppercase; }}
+    .stats-table th:last-child, .stats-table td:last-child {{ text-align:right; }}
+    .stats-table td {{ padding:0.62rem 0.55rem; border-top:1px solid #eee4dc; vertical-align:top; overflow-wrap:anywhere; }}
+    .stats-table tr:nth-child(even) td {{ background:#fffaf5; }}
+    .stats-name-cell {{ color:#3e2723; font-weight:700; }}
+    .stats-amount-cell {{ color:#8b1737; font-weight:800; white-space:nowrap; }}
+    @media (max-width:640px) {{
+        .stats-table {{ font-size:0.75rem; }}
+        .stats-table th, .stats-table td {{ padding:0.55rem 0.38rem; }}
+        .stats-table th {{ font-size:0.64rem; }}
+    }}
+</style>
+<div class='stats-table-wrap'><table class='stats-table'><thead><tr>{stats_header_html}</tr></thead><tbody>{stats_rows_html}</tbody></table></div>
+""",
+                unsafe_allow_html=True,
+            )
 
     with chart_tab:
         if df_display.empty:
@@ -166,12 +263,6 @@ def statistics_tab():
                 tooltip=[alt.Tooltip('Name:N', title='Name'), alt.Tooltip('Amount:Q', format='$,.2f')],
             ).properties(height=max(300, len(chart_data) * 35))
             st.altair_chart(chart, use_container_width=True)
-    if not df.empty:
-        df_amt = df.copy()
-        df_amt['Amount'] = df_amt['Amount'].apply(lambda x: float(x))
-        total_amt = df_amt['Amount'].sum()
-        st.markdown(f"<div style='font-size:1.1em; color:#1565C0; font-weight:bold; margin-top:0.5em;'>Total Amount (All Records): <span style='color:#2E7D32;'>{total_amt:,.2f}</span></div>", unsafe_allow_html=True)
-
     def send_csv_email(subject, body, df_csv, filename):
         import io
         cursor.execute("SELECT email FROM notification_emails WHERE email IS NOT NULL AND email != ''")
@@ -228,58 +319,6 @@ def statistics_tab():
                 f"sponsored_records_{datetime.date.today()}.csv"
             )
             st.success("Sponsored records report sent!")
-
-    # Available items report
-    cursor.execute("SELECT item, amount, sponsor_limit FROM sponsorship_items ORDER BY id")
-    items = cursor.fetchall()
-    cursor.execute("SELECT sponsorship, COUNT(*) FROM sponsors GROUP BY sponsorship")
-    counts = dict(cursor.fetchall())
-    available_data = []
-    for item, amount, limit in items:
-        count = counts.get(item, 0)
-        remaining = limit - count
-        available_data.append({
-            "Item": item,
-            "Amount": amount,
-            "Total Slot": limit,
-            "Remaining Slot Available": remaining
-        })
-    df_available = pd.DataFrame(available_data)
-
-    st.markdown("### 📋 Available Sponsorship Items")
-    avail_filter_cols = st.columns([1.2, 1])
-    avail_name_filter = avail_filter_cols[0].text_input("Filter available items by name", value="", key="stats_available_item_filter")
-    avail_filtered = df_available.copy()
-    if avail_name_filter:
-        avail_filtered = avail_filtered[avail_filtered['Item'].astype(str).str.contains(avail_name_filter, case=False, na=False)]
-    avail_filtered = avail_filtered.reset_index(drop=True)
-    st.dataframe(avail_filtered, use_container_width=True)
-    st.download_button(
-        label="⬇️",
-        data=avail_filtered.to_csv(index=False),
-        file_name="available_sponsorship_items.csv",
-        mime="text/csv",
-        key="stats_available_download",
-        help="Download available sponsorship items",
-    )
-
-    # Move the CSV export button here
-    if is_admin:
-        if st.button("Send Available Items Report (CSV)", key="available_items_csv_btn"):
-            audit_name = st.session_state.get('admin_full_name', '')
-            body = f"""
-    <b>Available Sponsorship Items Report (CSV attached)</b><br><br>
-    Date: {datetime.date.today()}<br>
-    Triggered Report by: <b>{audit_name}</b><br>
-    """
-            send_csv_email(
-                "Ganesh Chaturthi Sponsorship - Available Items CSV Report",
-                body,
-                df_available,
-                f"available_items_{datetime.date.today()}.csv"
-            )
-            st.success("Available items report sent!")
-
 
     # Removed Bar Chart of Sponsorships as requested
     # Removed Bar Chart of Sponsorships as requested
