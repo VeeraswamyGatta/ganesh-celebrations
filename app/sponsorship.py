@@ -3,6 +3,7 @@ import pandas as pd
 import datetime
 import re
 import base64
+import pytz
 from html import escape
 from .db import get_connection
 from .email_utils import send_email
@@ -460,11 +461,11 @@ def sponsorship_tab(dashboard_only=False):
     total_pending = float(total_combined) - total_received
     approved_expenses = float(get_total_expense_amount(conn))
     available_wallet = total_received - approved_expenses
-    slots_filled_count = total_slots - remaining_slots
-    slot_pct = round((slots_filled_count / total_slots * 100), 1) if total_slots else 0
-    collection_pct = round((total_received / float(total_combined) * 100), 1) if total_combined else 0
+    sponsored_share = (float(total_sponsored) / float(total_combined) * 100) if total_combined else 0
+    donated_share = (float(total_donated) / float(total_combined) * 100) if total_combined else 0
+    available_share = min(max(available_wallet / total_received * 100, 0), 100) if total_received else 0
 
-    # Today's submitted amount (sponsorships + donations submitted today)
+    # Today's submissions are shown as one line inside the contribution summary.
     today_sponsored_amount = 0.0
     today_donated_amount = 0.0
     cursor.execute("""
@@ -473,12 +474,10 @@ def sponsorship_tab(dashboard_only=False):
         LEFT JOIN sponsorship_items si ON si.item = s.sponsorship
         WHERE s.submitted_at IS NOT NULL
     """)
-    today_rows = cursor.fetchall()
-    import pytz
-    cst_tz = pytz.timezone('US/Central')
+    cst_tz = pytz.timezone("America/Chicago")
     today_date = datetime.datetime.now(cst_tz).date()
-    for donation_amount, submitted_at, item_amount, sponsor_limit in today_rows:
-        submitted_dt = pd.to_datetime(submitted_at, errors='coerce', utc=True)
+    for donation_amount, submitted_at, item_amount, sponsor_limit in cursor.fetchall():
+        submitted_dt = pd.to_datetime(submitted_at, errors="coerce", utc=True)
         if pd.isna(submitted_dt) or submitted_dt.tz_convert(cst_tz).date() != today_date:
             continue
         if item_amount is not None:
@@ -488,15 +487,9 @@ def sponsorship_tab(dashboard_only=False):
         if donation_amount:
             today_donated_amount += float(donation_amount)
     today_total = round(today_sponsored_amount + today_donated_amount, 2)
-    today_card_html = ""
-    if today_total > 0:
-        today_card_html = (
-            "<div class='summary-section summary-today'>"
-            "<div class='summary-label'>📅 TODAY SUBMITTED</div>"
-            f"<div class='today-total'>${today_total:,.2f}</div>"
-            f"<div class='summary-detail'>Sponsorships ${today_sponsored_amount:,.2f} &nbsp;•&nbsp; Donations ${today_donated_amount:,.2f}</div>"
-            "</div>"
-        )
+    slots_filled_count = total_slots - remaining_slots
+    slot_pct = round((slots_filled_count / total_slots * 100), 1) if total_slots else 0
+    collection_pct = round((total_received / float(total_combined) * 100), 1) if total_combined else 0
 
     if dashboard_only:
         st.markdown("""
@@ -560,6 +553,19 @@ def sponsorship_tab(dashboard_only=False):
     .summary-meta {{ color:#6d4c41; font-size:0.82em; }}
     .summary-bar {{ height:7px; margin-top:0.55em; overflow:hidden; border-radius:99px; background:#e2d8ca; }}
     .summary-bar-fill {{ height:100%; border-radius:99px; }}
+    .balance-summary-row {{ display:flex; justify-content:space-between; align-items:baseline; gap:0.75rem; margin-top:0.75rem; }}
+    .balance-summary-label {{ color:#ad1457; font-size:0.78em; font-weight:800; letter-spacing:0.03em; }}
+    .balance-summary-value {{ color:#880e4f; font-size:1.2em; font-weight:850; white-space:nowrap; }}
+    .balance-track {{ height:10px; margin-top:0.45rem; overflow:hidden; border-radius:99px; background:#f3c3d2; }}
+    .balance-track-fill {{ height:100%; border-radius:99px; background:linear-gradient(90deg,#d81b60,#8b1737); }}
+    .contribution-bar {{ display:flex; height:12px; margin-top:0.7em; overflow:hidden; border-radius:99px; background:#eee4dc; }}
+    .contribution-sponsored {{ background:#8b1737; }}
+    .contribution-donated {{ background:#e6a92f; }}
+    .contribution-legend {{ display:flex; flex-wrap:wrap; gap:0.55rem 1rem; margin-top:0.55em; color:#6d4c41; font-size:0.78em; }}
+    .contribution-legend span {{ display:inline-flex; align-items:center; gap:0.28rem; }}
+    .legend-dot {{ width:8px; height:8px; display:inline-block; border-radius:50%; }}
+    .sponsored-dot {{ background:#8b1737; }}
+    .donated-dot {{ background:#e6a92f; }}
     .summary-finance-grid {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.8em; }}
     .summary-finance-item {{ min-width:0; padding:0.65em 0.75em; border-left:4px solid #43a047; background:rgba(255,255,255,0.55); }}
     .summary-finance-item.received {{ border-left-color:#1e88e5; }}
@@ -569,7 +575,6 @@ def sponsorship_tab(dashboard_only=False):
     .wallet-table {{ margin-top:0.5em; border-top:1px solid rgba(173,20,87,0.18); }}
     .wallet-row {{ display:flex; justify-content:space-between; gap:0.75em; padding:0.34em 0; border-bottom:1px solid rgba(173,20,87,0.12); color:#6d4c41; font-size:0.82em; }}
     .wallet-row strong {{ color:#880e4f; white-space:nowrap; }}
-    .today-total {{ margin-top:0.2em; color:#4527a0; font-size:1.35em; font-weight:800; }}
     @media (max-width:640px) {{
         .summary-panel {{ margin-top:0.8em; padding:0.8em; border-radius:14px; }}
         .summary-heading {{ font-size:1.1em; }}
@@ -588,32 +593,29 @@ def sponsorship_tab(dashboard_only=False):
         <div class='summary-bar'><div class='summary-bar-fill' style='width:{min(slot_pct, 100.0)}%; background:#f57c00;'></div></div>
     </div>
     <div class='summary-section'>
-        <div class='summary-label'>💰 SUBMITTED</div>
+        <div class='summary-label'>💰 CONTRIBUTION SUMMARY</div>
         <div class='summary-value' style='color:#1b5e20;'>${total_combined:,.2f}</div>
-        <div class='summary-detail'>${total_sponsored:,.2f} sponsored &nbsp;•&nbsp; ${total_donated:,.2f} donated</div>
-    </div>
-    <div class='summary-section'>
-        <div class='summary-finance-grid'>
-            <div class='summary-finance-item received'>
-                <div class='summary-label' style='color:#1565c0;'>📥 AMOUNT RECEIVED <span style='float:right;'>{collection_pct}%</span></div>
-                <div class='summary-value' style='color:#0d47a1;'>${total_received:,.2f}</div>
-                <div class='summary-meta'>Pending: <strong>${total_pending:,.2f}</strong></div>
-                <div class='summary-bar'><div class='summary-bar-fill' style='width:{min(collection_pct, 100.0)}%; background:#1976d2;'></div></div>
+        <div class='summary-detail'>Total submitted by the community</div>
+        <div class='contribution-bar'>
+            <div class='contribution-sponsored' style='width:{sponsored_share:.2f}%;'></div>
+            <div class='contribution-donated' style='width:{donated_share:.2f}%;'></div>
+        </div>
+        <div class='contribution-legend'>
+            <span><i class='legend-dot sponsored-dot'></i>Sponsored <strong>${total_sponsored:,.2f}</strong> ({sponsored_share:.1f}%)</span>
+            <span><i class='legend-dot donated-dot'></i>Donated <strong>${total_donated:,.2f}</strong> ({donated_share:.1f}%)</span>
+        </div>
+        <div class='summary-finance-item wallet' style='margin-top:0.8rem;'>
+            <div class='balance-summary-row'><span class='balance-summary-label'>💳 BALANCE AFTER EXPENSES</span><span class='balance-summary-value'>${available_wallet:,.2f}</span></div>
+            <div class='wallet-table'>
+                <div class='wallet-row'><span>Amount received</span><strong>${total_received:,.2f}</strong></div>
+                <div class='wallet-row'><span>Approved expenses</span><strong>&minus; ${approved_expenses:,.2f}</strong></div>
+                <div class='wallet-row wallet-total'><span>Balance available</span><strong>${available_wallet:,.2f}</strong></div>
+                <div class='wallet-row'><span>Today's submissions</span><strong>${today_total:,.2f}</strong></div>
             </div>
-            <div class='summary-finance-item wallet'>
-                <div class='summary-label' style='color:#ad1457;'>👛 AVAILABLE WALLET</div>
-                <div class='summary-value' style='color:#880e4f;'>${available_wallet:,.2f}</div>
-                <div class='wallet-table'>
-                    <div class='wallet-row'><span>Submitted</span><strong>${total_combined:,.2f}</strong></div>
-                    <div class='wallet-row'><span>Amount received</span><strong>${total_received:,.2f}</strong></div>
-                    <div class='wallet-row'><span>Approved expenses</span><strong>&minus; ${approved_expenses:,.2f}</strong></div>
-                    <div class='wallet-row wallet-total'><span>Available wallet</span><strong>${available_wallet:,.2f}</strong></div>
-                </div>
-                <div class='summary-bar'><div class='summary-bar-fill' style='width:{min(max(available_wallet / total_received * 100, 0), 100) if total_received else 0}%; background:#d81b60;'></div></div>
-            </div>
+            <div class='balance-track'><div class='balance-track-fill' style='width:{available_share:.1f}%;'></div></div>
+            <div class='summary-meta'>{available_share:.1f}% of received funds remain after expenses</div>
         </div>
     </div>
-    {today_card_html}
 </div>
 """, unsafe_allow_html=True)
         sponsored_tab, donations_tab = st.tabs(["Sponsored Items", "Donations"])
