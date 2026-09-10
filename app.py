@@ -931,11 +931,11 @@ if show_login_form:
 else:
     # Show menu based on role after successful login
     if st.session_state.admin_logged_in:
-        menu_items = ["Dashboard", "Donate", "Statistics", "Prasad", "Expenses", "Payments", "Admin"]
-        menu_icons = ["bar-chart", "gift", "chart-line", "award", "cash-coin", "credit-card", "lock"]
+        menu_items = ["Dashboard", "Donate", "Statistics", "Prasad", "Events", "Expenses", "Payments", "Admin", "Ganesh Pooja Seating"]
+        menu_icons = ["bar-chart", "gift", "chart-line", "award", "calendar-event", "cash-coin", "credit-card", "lock", "calendar3"]
     elif st.session_state.user_logged_in:
-        menu_items = ["Dashboard", "Donate", "Statistics", "Prasad", "Expenses"]
-        menu_icons = ["bar-chart", "gift", "chart-line", "award", "cash-coin"]
+        menu_items = ["Dashboard", "Donate", "Statistics", "Prasad", "Events", "Expenses"]
+        menu_icons = ["bar-chart", "gift", "chart-line", "award", "calendar-event", "cash-coin"]
     else:
         menu_items = []
         menu_icons = []
@@ -951,6 +951,8 @@ else:
             "Donate": ":material/volunteer_activism: Donate",
             "Statistics": ":material/trending_up: Stats",
             "Prasad": ":material/restaurant: Prasad",
+            "Events": ":material/event: Events",
+            "Ganesh Pooja Seating": ":material/chair_alt: Pooja",
             "Expenses": ":material/receipt_long: Expenses",
             "Payments": ":material/credit_card: Pay",
             "Admin": ":material/admin_panel_settings: Admin",
@@ -973,6 +975,8 @@ else:
                             "Donate": "Loading sponsorship details",
                             "Statistics": "Loading statistics",
                             "Prasad": "Loading prasad seva details",
+                            "Events": "Loading events",
+                            "Ganesh Pooja Seating": "Loading ganesh pooja seating",
                             "Expenses": "Loading expense details",
                             "Payments": "Loading payment details",
                             "Admin": "Loading admin tools",
@@ -1071,6 +1075,12 @@ else:
         elif main_menu == "Prasad":
             from app.prasad_seva import prasad_seva_tab
             prasad_seva_tab()
+        elif main_menu == "Events":
+            from app.events import events_tab
+            events_tab()
+        elif main_menu == "Ganesh Pooja Seating":
+            from app.events import _ganesh_pooja_seating_tab
+            _ganesh_pooja_seating_tab()
         elif main_menu == "Expenses":
             from app.expenses import expenses_tab
             expenses_tab()
