@@ -785,10 +785,17 @@ requested_view = str(
     st.query_params.get("page", st.query_params.get("view", ""))
 ).strip().lower()
 open_prasad_seva = requested_view in {"prasad", "prasad-seva", "prasad_seva"}
+open_events = requested_view in {"events", "event"}
 # Only show the initial menu if not logged in
 if not st.session_state.user_logged_in and not st.session_state.admin_logged_in:
     if "landing_navigation" not in st.session_state:
-        st.session_state.landing_navigation = "Prasad Seva" if open_prasad_seva else "Login"
+        st.session_state.landing_navigation = (
+            "Prasad Seva"
+            if open_prasad_seva
+            else "Events"
+            if open_events
+            else "Login"
+        )
     selected_landing_navigation = st.session_state.landing_navigation
 
     with st.container(key="landing_top"):
