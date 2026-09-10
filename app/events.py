@@ -41,6 +41,33 @@ SEATING_CSS = '''
         font-size: 0.97rem;
         line-height: 1.5;
     }
+    .seating-hero-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        margin-top: 0.5rem;
+    }
+    .seating-legend-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        padding: 0.35rem 0.55rem;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.55);
+        border: 1px solid rgba(128, 102, 80, 0.18);
+        color: #56473d;
+        font-size: 0.8rem;
+        font-weight: 800;
+    }
+    .seating-legend-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.2rem;
+        height: 1.2rem;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.6);
+    }
     .seating-day-card {
         background: linear-gradient(180deg, #fffefc 0%, #f7f1eb 100%);
         border: 1px solid rgba(167, 141, 123, 0.35);
@@ -497,8 +524,11 @@ def _get_seating_dates():
 
 def _get_seating_pooja_options_for_date(seating_date):
     start_date = datetime.date(2026, 9, 14)
+    end_date = datetime.date(2026, 9, 20)
     if seating_date == start_date:
         return ["Evening Pooja"]
+    if seating_date == end_date:
+        return ["Morning Pooja"]
     return ["Morning Pooja", "Evening Pooja"]
 
 
@@ -511,6 +541,10 @@ def _ganesh_pooja_seating_tab():
             <div class="seating-hero-text">
                 <div class="seating-hero-title">Ganesh Pooja Seating</div>
                 <div class="seating-hero-subtitle">Choose a day and reserve a pooja slot.</div>
+                <div class="seating-hero-legend">
+                    <span class="seating-legend-item"><span class="seating-legend-icon">🌅</span> Morning</span>
+                    <span class="seating-legend-item"><span class="seating-legend-icon">🌙</span> Evening</span>
+                </div>
             </div>
         </div>
         """,
