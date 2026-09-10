@@ -477,8 +477,12 @@ def sponsorship_tab(dashboard_only=False):
     cst_tz = pytz.timezone("America/Chicago")
     today_date = datetime.datetime.now(cst_tz).date()
     for donation_amount, submitted_at, item_amount, sponsor_limit in cursor.fetchall():
-        submitted_dt = pd.to_datetime(submitted_at, errors="coerce", utc=True)
-        if pd.isna(submitted_dt) or submitted_dt.tz_convert(cst_tz).date() != today_date:
+        submitted_dt = pd.to_datetime(submitted_at, errors="coerce")
+        if pd.isna(submitted_dt):
+            continue
+        if submitted_dt.tzinfo is not None:
+            submitted_dt = submitted_dt.tz_localize(None)
+        if submitted_dt.date() != today_date:
             continue
         if item_amount is not None:
             item_amount = float(item_amount)
@@ -609,7 +613,6 @@ def sponsorship_tab(dashboard_only=False):
             <div class='wallet-table'>
                 <div class='wallet-row'><span>Amount received</span><strong>${total_received:,.2f}</strong></div>
                 <div class='wallet-row'><span>Approved expenses</span><strong>&minus; ${approved_expenses:,.2f}</strong></div>
-                <div class='wallet-row wallet-total'><span>Balance available</span><strong>${available_wallet:,.2f}</strong></div>
                 <div class='wallet-row'><span>Today's submissions</span><strong>${today_total:,.2f}</strong></div>
             </div>
             <div class='balance-track'><div class='balance-track-fill' style='width:{available_share:.1f}%;'></div></div>

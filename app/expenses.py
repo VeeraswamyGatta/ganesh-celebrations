@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import datetime
+import base64
 from streamlit_option_menu import option_menu
 from .db import get_connection
 from html import escape
@@ -53,9 +54,9 @@ def expenses_tab():
     # Determine tabs to show based on user role
     is_admin = st.session_state.get("admin_logged_in", False)
     if is_admin:
-        section_names = ["Add Expense", "Expenses List", "Receipts", "Expense Summary by Person", "Edit/Delete Expense", "Settlements"]
+        section_names = ["Add Expense", "Expenses List", "Expense Summary by Person", "Edit/Delete Expense", "Settlements"]
     else:
-        section_names = ["Expenses List", "Receipts"]
+        section_names = ["Expenses List"]
     if "expenses_section" not in st.session_state or st.session_state["expenses_section"] not in section_names:
         st.session_state["expenses_section"] = section_names[0]
     selected_section = option_menu(
@@ -361,6 +362,9 @@ def expenses_tab():
                 lambda value: " | ".join(str(line).strip() for line in value if str(line).strip())
                 if isinstance(value, list) else str(value or "")
             )
+            table_df["ReceiptPath"] = table_df["Receipt"].apply(
+                lambda value: value if isinstance(value, str) and value.strip() else ""
+            )
             table_df["Receipt"] = table_df["Receipt"].apply(
                 lambda value: "Available" if isinstance(value, str) and value.strip() else "Not attached"
             )
@@ -368,7 +372,25 @@ def expenses_tab():
                 lambda row: f"{row['Category']} - {row['Sub Category']}" if row["Sub Category"] else str(row["Category"]),
                 axis=1,
             )
-            table_df = table_df[["Expense", "Amount", "Date", "Receipt"]].sort_values(
+            def build_receipt_html(row):
+                receipt_name = str(row.get("ReceiptPath") or "")
+                receipt_blob = row.get("Receipt Blob")
+                if not receipt_name or not receipt_blob:
+                    return "<span class='expense-table-receipt no-receipt'>Not attached</span>"
+                if isinstance(receipt_blob, memoryview):
+                    receipt_bytes = receipt_blob.tobytes()
+                elif isinstance(receipt_blob, (bytearray, bytes)):
+                    receipt_bytes = bytes(receipt_blob)
+                else:
+                    receipt_bytes = receipt_blob
+                ext = receipt_name.rsplit(".", 1)[-1].lower() if "." in receipt_name else "png"
+                mime_type = "image/jpeg" if ext in ["jpg", "jpeg"] else "image/png"
+                data_uri = f"data:{mime_type};base64,{base64.b64encode(receipt_bytes).decode('ascii')}"
+                return (
+                    f"<div class='receipt-preview-inline'><img src='{data_uri}' class='receipt-preview-image' alt='Receipt preview' /></div>"
+                )
+            table_df["ReceiptHtml"] = table_df.apply(build_receipt_html, axis=1)
+            table_df = table_df[["Expense", "Amount", "Date", "ReceiptHtml", "Comments"]].sort_values(
                 by="Date", ascending=False
             ).reset_index(drop=True)
             expense_table_rows = "".join(
@@ -376,7 +398,8 @@ def expenses_tab():
                 f"<td class='expense-table-name'>{escape(str(row['Expense']))}</td>"
                 f"<td class='expense-table-amount'>${float(row['Amount']):,.2f}</td>"
                 f"<td>{escape(str(row['Date']))}</td>"
-                f"<td><span class='expense-table-receipt {'has-receipt' if row['Receipt'] == 'Available' else 'no-receipt'}'>{escape(str(row['Receipt']))}</span></td>"
+                f"<td>{row['ReceiptHtml']}</td>"
+                f"<td>{escape(str(row['Comments']))}</td>"
                 f"</tr>"
                 for _, row in table_df.iterrows()
             )
@@ -386,10 +409,11 @@ def expenses_tab():
     .expense-table-wrap {{ margin-top:0.7rem; overflow-x:auto; border:1px solid #e4ddd7; border-radius:12px; box-shadow:0 3px 10px rgba(106,27,27,0.08); }}
     .expense-table {{ width:100%; min-width:0; table-layout:fixed; border-collapse:collapse; color:#3e2723; font-size:0.82rem; }}
     .expense-table th {{ padding:0.65rem 0.55rem; background:#6a1b1b; color:#fffaf0; font-size:0.72rem; font-weight:800; letter-spacing:0.04em; text-align:left; text-transform:uppercase; }}
-    .expense-table th:nth-child(1) {{ width:52%; }}
-    .expense-table th:nth-child(2) {{ width:17%; text-align:right; }}
-    .expense-table th:nth-child(3) {{ width:18%; }}
-    .expense-table th:nth-child(4) {{ width:13%; }}
+    .expense-table th:nth-child(1) {{ width:40%; }}
+    .expense-table th:nth-child(2) {{ width:14%; text-align:right; }}
+    .expense-table th:nth-child(3) {{ width:16%; }}
+    .expense-table th:nth-child(4) {{ width:12%; }}
+    .expense-table th:nth-child(5) {{ width:18%; }}
     .expense-table td {{ padding:0.62rem 0.55rem; border-top:1px solid #eee4dc; vertical-align:top; overflow-wrap:anywhere; }}
     .expense-table tr:nth-child(even) td {{ background:#fffaf5; }}
     .expense-table-name {{ color:#3e2723; font-weight:700; line-height:1.35; }}
@@ -397,19 +421,22 @@ def expenses_tab():
     .expense-table-receipt {{ font-size:0.72rem; font-weight:700; }}
     .expense-table-receipt.has-receipt {{ color:#2e7d32; }}
     .expense-table-receipt.no-receipt {{ color:#8d6e63; }}
+    .receipt-preview-inline {{ display:flex; align-items:center; justify-content:center; }}
+    .receipt-preview-image {{ max-width:100%; max-height:90px; border-radius:8px; border:1px solid #e0d7cf; background:#fff; display:block; }}
     @media (max-width:640px) {{
         .expense-table {{ font-size:0.75rem; }}
         .expense-table th, .expense-table td {{ padding:0.55rem 0.38rem; }}
         .expense-table th {{ font-size:0.64rem; }}
-        .expense-table th:nth-child(1) {{ width:47%; }}
-        .expense-table th:nth-child(2) {{ width:19%; }}
-        .expense-table th:nth-child(3) {{ width:21%; }}
-        .expense-table th:nth-child(4) {{ width:13%; }}
+        .expense-table th:nth-child(1) {{ width:36%; }}
+        .expense-table th:nth-child(2) {{ width:15%; }}
+        .expense-table th:nth-child(3) {{ width:16%; }}
+        .expense-table th:nth-child(4) {{ width:12%; }}
+        .expense-table th:nth-child(5) {{ width:21%; }}
     }}
 </style>
 <div class='expense-table-wrap'>
 <table class='expense-table'>
-<thead><tr><th>Expense</th><th>Amount</th><th>Date</th><th>Receipt</th></tr></thead>
+<thead><tr><th>Expense</th><th>Amount</th><th>Date</th><th>Receipt</th><th>Comments</th></tr></thead>
 <tbody>{expense_table_rows}</tbody>
 </table>
 </div>
@@ -417,41 +444,6 @@ def expenses_tab():
                 unsafe_allow_html=True,
             )
 
-    # Receipts Section
-    if selected_section == "Receipts":
-        receipts_df = df[
-            df["Receipt Blob"].notna()
-            & df["Receipt"].apply(lambda value: isinstance(value, str) and bool(value.strip()))
-        ].sort_values(by="Date", ascending=False)
-        attached_count = len(receipts_df)
-        st.markdown(
-            f"<div style='margin:0.4rem 0 0.9rem; padding:0.85rem 1rem; border-left:4px solid #2e7d32; border-radius:10px; background:linear-gradient(100deg,#e8f5e9,#fbfffb); color:#1b5e20; font-weight:800;'>🧾 Receipts <span style='float:right; color:#607d6b; font-size:0.82rem;'>{attached_count} attached</span></div>",
-            unsafe_allow_html=True,
-        )
-        if receipts_df.empty:
-            st.info("No receipts available.")
-        for row_index, (_, row) in enumerate(receipts_df.iterrows()):
-            receipt_name = row["Receipt"]
-            receipt_blob = row["Receipt Blob"]
-            has_receipt = isinstance(receipt_name, str) and receipt_name.strip() and receipt_blob
-            with st.container(border=True):
-                amount_col, details_col = st.columns([0.22, 0.78], gap="small")
-                with amount_col:
-                    st.markdown(f"<div style='color:#b71c1c; font-size:1.05rem; font-weight:800; text-align:center;'>${float(row['Amount']):,.2f}</div>", unsafe_allow_html=True)
-                with details_col:
-                    st.markdown(
-                        f"<div style='color:#263238; font-weight:800;'>{escape(str(row['Category']))}</div>"
-                        f"<div style='color:#607d6b; font-size:0.82rem;'>{escape(str(row['Sub Category']))} &bull; 📅 {escape(str(row['Date']))}</div>",
-                        unsafe_allow_html=True,
-                    )
-                    if is_admin and row["Spent By"]:
-                        st.caption(f"Spent by: {row['Spent By']}")
-                    if has_receipt:
-                        with st.expander("View receipt preview", expanded=False):
-                            data = receipt_blob.tobytes() if isinstance(receipt_blob, memoryview) else bytes(receipt_blob) if isinstance(receipt_blob, bytearray) else receipt_blob
-                            st.image(data, use_container_width=True)
-                    else:
-                        st.caption("No receipt attached")
     # Expense Summary by Person Section (admin only)
     if is_admin and selected_section == "Expense Summary by Person":
             cursor.execute("SELECT spent_by, SUM(amount) FROM expenses WHERE status='active' GROUP BY spent_by ORDER BY SUM(amount) DESC")

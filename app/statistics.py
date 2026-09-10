@@ -80,9 +80,11 @@ def statistics_tab():
         has_sponsorship = pd.notna(row['sponsorship']) and bool(str(row['sponsorship']).strip())
         submission_date = None
         if pd.notna(row['submitted_at']):
-            submitted_dt = pd.to_datetime(row['submitted_at'], errors='coerce', utc=True)
+            submitted_dt = pd.to_datetime(row['submitted_at'], errors='coerce')
             if pd.notna(submitted_dt):
-                submission_date = submitted_dt.tz_convert(cst_tz).date()
+                if submitted_dt.tzinfo is not None:
+                    submitted_dt = submitted_dt.tz_localize(None)
+                submission_date = submitted_dt.date()
         if has_sponsorship:
             amt, limit = item_amt_map.get(row['sponsorship'], (0, 1))
             per_item_amt = float(round(amt / limit, 2) if limit else amt)

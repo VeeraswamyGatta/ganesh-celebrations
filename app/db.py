@@ -17,6 +17,7 @@ def _create_connection():
         schema = st.secrets.get("postgres_schema", "ganesh_schema")
         with conn.cursor() as cur:
             cur.execute(f"SET search_path TO {schema}, public")
+            cur.execute("SET TIME ZONE 'America/Chicago'")
         conn.commit()
         return conn
     elif db_type == "snowflake":
