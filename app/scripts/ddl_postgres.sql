@@ -94,6 +94,15 @@ CREATE TABLE IF NOT EXISTS prasad_seva (
     status VARCHAR(10) DEFAULT 'active'
 );
 
+CREATE TABLE IF NOT EXISTS ganesh_pooja_seating (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    pooja_date DATE NOT NULL,
+    pooja_time TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    status TEXT DEFAULT 'active'
+);
+
 -- Create table for Laddu Auction Winners in PostgreSQL
 CREATE TABLE laddu_winners (
     id SERIAL PRIMARY KEY,

@@ -7,13 +7,19 @@ import snowflake.connector
 def _create_connection():
     db_type = st.secrets.get("db_type", "postgres").lower()
     if db_type == "postgres":
-        return psycopg2.connect(
+        conn = psycopg2.connect(
             host=st.secrets["postgres_host"],
             port=st.secrets["postgres_port"],
             dbname=st.secrets["postgres_dbname"],
             user=st.secrets["postgres_user"],
             password=st.secrets["postgres_password"]
         )
+        schema = st.secrets.get("postgres_schema", "ganesh_schema")
+        with conn.cursor() as cur:
+            cur.execute(f"SET search_path TO {schema}, public")
+            cur.execute("SET TIME ZONE 'America/Chicago'")
+        conn.commit()
+        return conn
     elif db_type == "snowflake":
         return snowflake.connector.connect(
             user=st.secrets["sf_user"],

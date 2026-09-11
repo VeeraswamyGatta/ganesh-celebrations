@@ -1,11 +1,99 @@
 import streamlit as st
 import pandas as pd
 import datetime
+import textwrap
 import pytz
 from streamlit_option_menu import option_menu
 from datetime import datetime as dt, time as dttime
 from .db import get_connection
 from .email_utils import send_email
+
+SPONSOR_TABLE_CSS = """
+<style>
+.sponsor-table-wrap {
+    overflow-x: auto;
+    border: 1px solid #dce7df;
+    border-radius: 8px;
+    background: #ffffff;
+    box-shadow: 0 4px 14px rgba(44, 92, 62, 0.08);
+}
+.sponsor-table {
+    width: 100%;
+    min-width: 620px;
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 0;
+    color: #22372b;
+    font-size: 0.9rem;
+}
+.sponsor-table th {
+    background: #eff7f1;
+    color: #1f5135;
+    font-weight: 700;
+    padding: 0.55rem 0.45rem;
+    border: 0;
+    border-bottom: 2px solid #b8d5c0;
+    white-space: normal;
+    text-align: left;
+}
+.sponsor-table td {
+    padding: 0.55rem 0.45rem;
+    border: 0;
+    border-bottom: 1px solid #e6eee8;
+    vertical-align: middle;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+    text-align: left;
+}
+.sponsor-table tbody tr:nth-child(even) td { background: #fbfdfb; }
+.sponsor-table tbody tr:hover td { background: #fff8e7; }
+.sponsor-table tbody tr:last-child td { border-bottom: 0; }
+.sponsor-table th:first-child,
+.sponsor-table td:first-child {
+    width: 5%;
+    text-align: center;
+    color: #a35715;
+    font-weight: 700;
+}
+.sponsor-table th:nth-child(2),
+.sponsor-table td:nth-child(2) { width: 22%; }
+.sponsor-table th:nth-child(3),
+.sponsor-table td:nth-child(3) { width: 18%; }
+.sponsor-table th:nth-child(4),
+.sponsor-table td:nth-child(4) { width: 11%; }
+.sponsor-table th:nth-child(5),
+.sponsor-table td:nth-child(5) { width: 8%; }
+.sponsor-table th:nth-child(6),
+.sponsor-table td:nth-child(6) {
+    width: 17%;
+    white-space: nowrap;
+}
+.sponsor-table th:nth-child(7),
+.sponsor-table td:nth-child(7) {
+    width: 19%;
+    white-space: nowrap;
+}
+.sponsor-table th:nth-child(7),
+.sponsor-table td:nth-child(7) { width: 13%; }
+.sponsor-table td:nth-child(2) b { font-weight: 600; }
+.sponsor-table td span {
+    max-width: 100%;
+}
+@media (max-width: 640px) {
+    .sponsor-table-wrap { border-radius: 6px; }
+    .sponsor-table { font-size: 0.82rem; min-width: 580px; }
+    .sponsor-table th, .sponsor-table td { padding: 0.42rem 0.32rem; }
+}
+</style>
+"""
+
+
+def get_pooja_options_for_date(seva_date):
+    start_date = datetime.date(2026, 9, 14)
+    if seva_date is None:
+        seva_date = start_date
+    return ["Evening Pooja"] if seva_date == start_date else ["Morning Pooja", "Evening Pooja"]
+
 
 def prasad_seva_tab():
     laddu_winners_option = "Laddu Auction Winners"
@@ -16,26 +104,15 @@ def prasad_seva_tab():
         {"laddu": row[0], "name": row[1], "amount": row[2]} for row in cursor.fetchall()
     ]
     is_admin = st.session_state.get("admin_logged_in", False)
-    # Define tab_names for admin/non-admin
-    if is_admin:
-        tab_names = [
-            "Add Prasad Seva",
-            laddu_winners_option,
-            "Edit/Delete Prasad Seva Entry",
-            "Prasad Seva Summary",
-            "Prasad Seva Sponsors List",
-            "Total Served by Name/Group"
-        ]
-    else:
-        tab_names = [
-            "Add Prasad Seva",
-            laddu_winners_option,
-            "Prasad Seva Summary",
-            "Prasad Seva Sponsors List",
-            "Total Served by Name/Group"
-        ]
+    # Define tab_names for all users by default
+    tab_names = [
+        "Prasad Seva",
+        "Prasad Seva Summary",
+        "Total Served by Name/Group",
+        laddu_winners_option,
+    ]
     if "prasad_tab" not in st.session_state or st.session_state["prasad_tab"] not in tab_names:
-        st.session_state["prasad_tab"] = "Add Prasad Seva"
+        st.session_state["prasad_tab"] = "Prasad Seva"
     selected_tab = option_menu(
         "Prasad Seva Management",
         tab_names,
@@ -130,14 +207,204 @@ def prasad_seva_tab():
         st.session_state["prasad_filter_date"] = None
         st.session_state["prasad_filter_name"] = ""
         st.session_state["clear_prasad_form"] = False
+        st.session_state["prasad_inline_action"] = "view"
         st.rerun()
-    # ...existing code...
 
-    if selected_tab == "Add Prasad Seva":
-        st.markdown("### ➕ Add Prasad Seva")
+    st.markdown(
+        """
+        <style>
+        .st-key-prasad_action_row [data-testid="stHorizontalBlock"] {
+            display: flex !important;
+            flex-wrap: nowrap !important;
+            gap: 0.45rem;
+        }
+        .st-key-prasad_action_row [data-testid="stHorizontalBlock"] > div {
+            flex: 1 1 0 !important;
+            min-width: 0 !important;
+        }
+        div[data-testid="stButton"] > button {
+            width: 100%;
+            border-radius: 14px;
+            border: 1px solid #d7a95a;
+            background: linear-gradient(135deg, #fffaf0 0%, #f5d7a2 100%);
+            color: #4a2d1b;
+            font-weight: 700;
+            font-size: 0.96rem;
+            padding: 0.72rem 0.9rem;
+            box-shadow: 0 8px 18px rgba(120, 76, 31, 0.18);
+            transition: all 0.2s ease;
+        }
+        div[data-testid="stButton"] > button:hover {
+            border-color: #b87d36;
+            background: linear-gradient(135deg, #fffdf9 0%, #f7e0b4 100%);
+            box-shadow: 0 10px 22px rgba(120, 76, 31, 0.22);
+        }
+        div[data-testid="stButton"] > button:focus {
+            box-shadow: 0 0 0 0.2rem rgba(184, 122, 56, 0.25);
+        }
+        @media (max-width: 640px) {
+            .st-key-prasad_action_row [data-testid="stHorizontalBlock"] {
+                flex-wrap: nowrap !important;
+            }
+            .st-key-prasad_action_row [data-testid="stHorizontalBlock"] > div {
+                flex: 1 1 33.33% !important;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        """
+        <div style='background: linear-gradient(135deg, #fff9f0 0%, #fce7cc 100%); border: 1px solid #d7a35a; border-radius: 14px; padding: 0.9rem 1rem; margin-bottom: 1rem; box-shadow: 0 4px 14px rgba(154, 96, 22, 0.12);'>
+            <div style='font-size:1rem; font-weight:800; color:#7a3d12; margin-bottom:0.35rem;'>🙏 Prasad Preparation Note</div>
+            <div style='font-size:0.95rem; color:#4d2c18; line-height:1.5;'>Kindly prepare the Prasad without garlic and onion.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    with st.container(key="prasad_action_row"):
+        if selected_tab == "Prasad Seva":
+            action_columns = st.columns(3)
+            with action_columns[0]:
+                if st.button("Add", key="prasad_inline_add_button", use_container_width=True):
+                    st.session_state["prasad_inline_action"] = "view" if st.session_state.get("prasad_inline_action") == "add" else "add"
+                    st.rerun()
+            with action_columns[1]:
+                if st.button("Edit", key="prasad_inline_edit_button", use_container_width=True):
+                    st.session_state["prasad_inline_action"] = "view" if st.session_state.get("prasad_inline_action") == "edit" else "edit"
+                    st.rerun()
+            with action_columns[2]:
+                if st.button("Delete", key="prasad_inline_delete_button", use_container_width=True):
+                    st.session_state["prasad_inline_action"] = "view" if st.session_state.get("prasad_inline_action") == "delete" else "delete"
+                    st.rerun()
+
+    if selected_tab == "Prasad Seva" and st.session_state.get("prasad_inline_action") == "add":
+        st.markdown(
+            """
+            <style>
+            div[data-testid="stForm"] > div {
+                background: linear-gradient(135deg, #f8f5f7 0%, #f1edf2 100%);
+                border: 1px solid #d8c8d5;
+                border-radius: 22px;
+                padding: 1.25rem 1.1rem 1rem 1.1rem;
+                box-shadow: 0 10px 24px rgba(60, 41, 61, 0.06);
+            }
+            div[data-testid="stForm"] .stBaseButton button {
+                border-radius: 12px;
+            }
+            div[data-testid="stRadio"] > div {
+                gap: 0.6rem;
+            }
+            div[data-testid="stRadio"] label {
+                background: #ffffff;
+                border: 1px solid #d9c6d7;
+                border-radius: 12px;
+                padding: 0.55rem 0.85rem;
+                margin: 0.1rem 0;
+                color: #3f2d3d;
+            }
+            div[data-testid="stRadio"] > div[role="radiogroup"] {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.45rem;
+            }
+            button[kind="primary"] {
+                background: linear-gradient(135deg, #2a5c7a 0%, #3d7e9b 100%);
+                border: none;
+                border-radius: 12px;
+                font-weight: 700;
+                box-shadow: 0 8px 18px rgba(42, 92, 122, 0.18);
+            }
+            .stDateInput > div > div,
+            .stTextInput > div > div,
+            .stTextArea > div > div,
+            .stNumberInput > div > div {
+                background: #fffdfd;
+                border-radius: 12px;
+                border: 1px solid #d6c5d2;
+            }
+            .stDateInput [data-testid="stWidgetLabel"],
+            .stTextInput [data-testid="stWidgetLabel"],
+            .stTextArea [data-testid="stWidgetLabel"],
+            .stNumberInput [data-testid="stWidgetLabel"],
+            .stRadio [data-testid="stWidgetLabel"] {
+                font-size: 1rem;
+                font-weight: 700;
+                color: #3e2b3d;
+            }
+            .stRadio > div:nth-child(2) {
+                background: #f4eef3;
+                border: 1px solid #dbc9d8;
+                border-radius: 14px;
+                padding: 0.35rem 0.4rem;
+            }
+            .stRadio > div:nth-child(2) > div {
+                display: flex !important;
+                flex-direction: row !important;
+                align-items: center;
+                gap: 0.7rem;
+            }
+            .stRadio > div:nth-child(2) label {
+                min-width: 150px;
+            }
+            .pooja-time-card {
+                background: #fff9f5;
+                border: 1px solid #e3ced5;
+                border-radius: 14px;
+                padding: 0.7rem 0.8rem 0.55rem 0.8rem;
+                margin-top: 0.1rem;
+                margin-bottom: 0.75rem;
+            }
+            .pooja-time-label {
+                font-size: 1rem;
+                font-weight: 700;
+                color: #3e2b3d;
+                margin-bottom: 0.45rem;
+                display: block;
+            }
+            .pooja-time-card .stCheckbox {
+                margin-top: 0.15rem;
+                margin-bottom: 0.15rem;
+            }
+            [data-testid="stHorizontalBlock"] {
+                gap: 0.75rem;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+        min_date = datetime.date(2026, 9, 14)
+        selected_date = st.session_state.get("prasad_seva_date", min_date)
+        if selected_date < min_date:
+            selected_date = min_date
+            st.session_state["prasad_seva_date"] = selected_date
+
+        seva_date = st.date_input("Date", value=selected_date, min_value=min_date, key="prasad_seva_date")
+
         prasad_form = st.form("add_prasad_seva_form")
         prasad_submit_disabled = st.session_state.get("prasad_submission_in_progress", False)
         seva_type = prasad_form.radio("Type", ["Group", "Individual"], horizontal=True, key="prasad_seva_type_tab0")
+
+        pooja_container = prasad_form.container()
+        with pooja_container:
+            pooja_container.markdown("<div class='pooja-time-label'>Pooja Time</div>", unsafe_allow_html=True)
+            pooja_options = get_pooja_options_for_date(seva_date)
+            selected_poojas = []
+            pooja_checkbox_columns = pooja_container.columns(len(pooja_options) if pooja_options else 1)
+            for index, option in enumerate(pooja_options):
+                default_value = option == "Evening Pooja" and seva_date == datetime.date(2026, 9, 14)
+                if option in st.session_state.get("prasad_pooja_times", []):
+                    default_value = True
+                with pooja_checkbox_columns[index]:
+                    is_checked = st.checkbox(option, value=default_value, key=f"prasad_pooja_checkbox_{option}")
+                if is_checked:
+                    selected_poojas.append(option)
+            st.session_state["prasad_pooja_times"] = selected_poojas
+            pooja_time = ", ".join(selected_poojas)
+
         names = []
         item_names = []
         if seva_type == "Group":
@@ -153,50 +420,35 @@ def prasad_seva_tab():
             item_names = [item_name.strip()] if item_name.strip() else []
             apartment = prasad_form.text_input("Apartment Number", key="prasad_individual_apartment", placeholder="e.g. 1203")
 
-        num_people = prasad_form.number_input("How many people are you bringing item for?", min_value=1, value=st.session_state.get('prasad_num_people', 1), key="prasad_num_people")
-        min_date = datetime.date(2026, 9, 14)
-        selected_date = st.session_state.get("prasad_seva_date", min_date)
-        if selected_date < min_date:
-            selected_date = min_date
-            st.session_state["prasad_seva_date"] = selected_date
-        seva_date = prasad_form.date_input(
-            "Date",
-            value=selected_date,
-            min_value=min_date,
-            key="prasad_seva_date"
-        )
-        pooja_options = ["Morning Pooja", "Evening Pooja"]
-        if seva_date == datetime.date(2026, 9, 14):
-            pooja_options = ["Evening Pooja"]
-        pooja_time = prasad_form.radio("Pooja Time", pooja_options, horizontal=True, key="prasad_pooja_time")
+        num_people = prasad_form.number_input("Serving count", min_value=1, value=st.session_state.get('prasad_num_people', 1), key="prasad_num_people")
 
         if prasad_form.form_submit_button("✅ Add Prasad Seva", disabled=prasad_submit_disabled, type="primary"):
             st.session_state["prasad_submission_in_progress"] = True
             prasad_status = st.status("Adding Prasad Seva...", expanded=False)
             if not names:
                 st.session_state["prasad_submission_in_progress"] = False
-                prasad_status.update(label="Please complete the required fields", state="error", expanded=True)
-                st.error("Please enter at least one name.")
+                prasad_status.update(label="Please enter at least one name.", state="error", expanded=True)
+                prasad_form.error("Please enter at least one name.")
             elif not item_names:
                 st.session_state["prasad_submission_in_progress"] = False
-                prasad_status.update(label="Please complete the required fields", state="error", expanded=True)
-                st.error("Please enter at least one item name.")
+                prasad_status.update(label="Please enter at least one item name.", state="error", expanded=True)
+                prasad_form.error("Please enter at least one item name.")
             elif not apartment.strip():
                 st.session_state["prasad_submission_in_progress"] = False
-                prasad_status.update(label="Please complete the required fields", state="error", expanded=True)
-                st.error("Apartment Number is required.")
+                prasad_status.update(label="Apartment Number is required.", state="error", expanded=True)
+                prasad_form.error("Apartment Number is required.")
             elif not num_people:
                 st.session_state["prasad_submission_in_progress"] = False
-                prasad_status.update(label="Please complete the required fields", state="error", expanded=True)
-                st.error("Number of people is required.")
+                prasad_status.update(label="Number of people is required.", state="error", expanded=True)
+                prasad_form.error("Number of people is required.")
             elif not seva_date:
                 st.session_state["prasad_submission_in_progress"] = False
-                prasad_status.update(label="Please complete the required fields", state="error", expanded=True)
-                st.error("Date is required.")
+                prasad_status.update(label="Date is required.", state="error", expanded=True)
+                prasad_form.error("Date is required.")
             elif not pooja_time:
                 st.session_state["prasad_submission_in_progress"] = False
-                prasad_status.update(label="Please complete the required fields", state="error", expanded=True)
-                st.error("Pooja Time is required.")
+                prasad_status.update(label="Please select at least one Pooja Time.", state="error", expanded=True)
+                prasad_form.error("Please select at least one Pooja Time.")
             else:
                 st.info("Add Prasad Seva is in progress...")
                 for item in item_names:
@@ -233,13 +485,14 @@ def prasad_seva_tab():
         min_date = datetime.date(2026, 9, 14)
         max_date = datetime.date(2026, 9, 20)
         all_dates = pd.date_range(min_date, max_date).date
-        pooja_times = ["Morning Pooja", "Evening Pooja"]
-        grid = pd.DataFrame([(d, p) for d in all_dates for p in pooja_times], columns=["Date", "Pooja Time"])
+        grid = pd.DataFrame(
+            [(d, p) for d in all_dates for p in get_pooja_options_for_date(d)],
+            columns=["Date", "Pooja Time"],
+        )
         metrics_df = pd.DataFrame(metrics_rows, columns=["Date", "Pooja Time", "Total People Served"])
         metrics_df["Date"] = pd.to_datetime(metrics_df["Date"]).dt.date
         merged_df = grid.merge(metrics_df, on=["Date", "Pooja Time"], how="left").fillna({"Total People Served": 0})
         merged_df["Total People Served"] = merged_df["Total People Served"].astype(int)
-        merged_df = merged_df[~((merged_df["Date"] == datetime.date(2026, 9, 14)) & (merged_df["Pooja Time"] == "Morning Pooja"))]
         merged_df["Date"] = merged_df["Date"].apply(lambda d: f"<span style='font-size:16px;'>&#128197;</span> <b>{pd.to_datetime(d).strftime('%d-%b-%Y')}</b>")
         merged_df["Pooja Time"] = merged_df["Pooja Time"].apply(lambda t: f"<span style='font-size:18px;'>{'🌅' if t=='Morning Pooja' else '🌇'}</span> <b>{t.replace('Pooja','')}</b>")
         merged_df["Total People Served"] = merged_df["Total People Served"].apply(lambda x: f"<span style='background-color:#FFECB3;color:#6D4C41;padding:4px 12px;border-radius:16px;font-weight:bold;display:inline-block;text-align:center;'>{x}</span>")
@@ -251,35 +504,16 @@ def prasad_seva_tab():
         raw_metrics_df["Date"] = pd.to_datetime(raw_metrics_df["Date"].str.extract(r'<b>(.*?)</b>')[0], format='%d-%b-%Y')
         raw_metrics_df["Pooja Time"] = raw_metrics_df["Pooja Time"].str.extract(r'<b>(.*?)</b>')[0]
         raw_metrics_df["Total People Served"] = raw_metrics_df["Total People Served"].str.extract(r'>(\d+)<')[0].fillna(0).astype(int)
-        csv_summary = raw_metrics_df.to_csv(index=False)
-        st.download_button(label="📥", data=csv_summary, file_name="prasad_seva_summary.csv", mime="text/csv", key="download_summary_tab1")
+        raw_metrics_df.to_csv(index=False)
 
-    elif selected_tab == "Prasad Seva Sponsors List":
+    elif selected_tab == "Prasad Seva" and st.session_state.get("prasad_inline_action") not in ("edit", "delete"):
         min_date = datetime.date(2026, 9, 14)
-        filter_col1, filter_col2, filter_col3 = st.columns(3)
-        filter_date = filter_col1.date_input("Filter by Date", value=None, min_value=min_date, key="prasad_filter_date_tab2")
-        filter_name = filter_col2.text_input("Filter by Name", value="", key="prasad_filter_name_tab2")
-        pooja_time_options = ["All", "Morning Pooja", "Evening Pooja"]
-        filter_pooja_time = filter_col3.selectbox("Filter by Pooja Time", pooja_time_options, key="prasad_filter_pooja_time_tab2")
         query = "SELECT id, seva_type, names, item_name, num_people, apartment, seva_date, pooja_time, created_by, status FROM prasad_seva WHERE status='active'"
-        filters = []
-        params = []
-        if filter_date:
-            filters.append("seva_date = %s")
-            params.append(filter_date)
-        if filter_name:
-            filters.append("names ILIKE %s")
-            params.append(f"%{filter_name}%")
-        if filter_pooja_time != "All":
-            filters.append("pooja_time = %s")
-            params.append(filter_pooja_time)
-        if filters:
-            query += " AND " + " AND ".join(filters)
         query += " ORDER BY seva_date, CASE WHEN pooja_time='Morning Pooja' THEN 0 ELSE 1 END, names, id"
-        cursor.execute(query, tuple(params))
+        cursor.execute(query)
         rows = cursor.fetchall()
         if rows and len(rows) > 0:
-            df = pd.DataFrame(rows, columns=["ID", "Type", "Names", "Item Name", "How many people are you bringing item for", "Apartemnt Number", "Date", "Pooja Time", "Created By", "Status"])
+            df = pd.DataFrame(rows, columns=["ID", "Type", "Names", "Item Name", "Serving count", "Apartemnt Number", "Date", "Pooja Time", "Created By", "Status"])
             if "Status" in df.columns:
                 df = df.drop(columns=["Status"])
             # Split into active and past based on CST date
@@ -291,34 +525,79 @@ def prasad_seva_tab():
             tab1, tab2 = st.tabs(["Active", "Past"])
             for tab, df_tab, label in [(tab1, df_active, "Active"), (tab2, df_past, "Past")]:
                 with tab:
-                    if len(df_tab) > 0:
-                        df_display = df_tab.drop(columns=["ID", "Created By"])
+                    toolbar_key = f"prasad-sponsor-toolbar-{label.lower()}"
+                    st.markdown(
+                        textwrap.dedent(f"""
+                        <style>
+                        @media (max-width: 640px) {{
+                            .st-key-{toolbar_key} [data-testid="stHorizontalBlock"] {{ flex-wrap: nowrap !important; }}
+                            .st-key-{toolbar_key} [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(-n+2) {{
+                                flex: 0 0 52px !important;
+                                min-width: 52px !important;
+                            }}
+                        }}
+                        </style>
+                        """),
+                        unsafe_allow_html=True,
+                    )
+                    with st.container(key=toolbar_key):
+                        search_column, _ = st.columns([1, 9])
+                        with search_column:
+                            with st.popover("🔍", help="Search sponsors", use_container_width=True):
+                                filter_name = st.text_input(
+                                    "Name", value="", key=f"prasad_filter_name_{label.lower()}"
+                                )
+                                filter_date = st.date_input(
+                                    "Date", value=None, min_value=min_date, key=f"prasad_filter_date_{label.lower()}"
+                                )
+                                filter_pooja_time = st.selectbox(
+                                    "Pooja Time",
+                                    ["All", "Morning Pooja", "Evening Pooja", "Evening Pooja for Kids"],
+                                    key=f"prasad_filter_pooja_time_{label.lower()}",
+                                )
+                    filtered_df_tab = df_tab
+                    if filter_name:
+                        filtered_df_tab = filtered_df_tab[
+                            filtered_df_tab["Names"].str.contains(filter_name, case=False, na=False)
+                        ]
+                    if filter_date:
+                        filtered_df_tab = filtered_df_tab[
+                            pd.to_datetime(filtered_df_tab["Date"]).dt.date == filter_date
+                        ]
+                    if filter_pooja_time != "All":
+                        filtered_df_tab = filtered_df_tab[filtered_df_tab["Pooja Time"] == filter_pooja_time]
+                    if len(filtered_df_tab) > 0:
+                        df_display = filtered_df_tab.drop(columns=["ID", "Created By"])
+                        df_display = df_display.drop(columns=["Apartemnt Number"], errors="ignore")
                         df_display["Date"] = df_display["Date"].apply(lambda d: f"<span style='font-size:16px;'>&#128197;</span> <b>{pd.to_datetime(d).strftime('%d-%b-%Y')}</b>")
                         def pooja_time_display(row):
-                            if row["Date"].startswith("<span") and "14-Sep-2026" in row["Date"] and row["Pooja Time"].find("Morning") != -1:
-                                return ""
-                            return f"<span style='font-size:18px;'>{'🌅' if row['Pooja Time']=='Morning Pooja' else '🌇'}</span> <b>{row['Pooja Time'].replace('Pooja','')}</b>"
+                            return f"<b>{row['Pooja Time'].replace('Pooja', '')}</b>"
                         df_display["Pooja Time"] = df_display.apply(pooja_time_display, axis=1)
-                        df_display["Type"] = df_display["Type"].apply(lambda t: f"<span style='background-color:{'#B2DFDB' if t=='Group' else '#FFCCBC'};color:#4E342E;padding:4px 10px;border-radius:12px;font-weight:bold;'>{'👥 Group' if t=='Group' else '🧑 Individual'}</span>")
-                        df_display["Apartemnt Number"] = df_display["Apartemnt Number"].apply(lambda apt: f"<span style='font-size:16px;'>&#127968;</span> <b>{apt}</b>" if apt else "")
-                        df_display["Names"] = df_display["Names"].apply(lambda n: f"<span style='font-size:16px;'>&#128100;</span> <b>{n}</b>" if n else "")
-                        df_display["Item Name"] = df_display["Item Name"].apply(lambda item: f"<span style='font-size:16px;'>&#127858;</span> <b>{item}</b>" if item else "")
-                        df_display["How many people are you bringing item for"] = df_display["How many people are you bringing item for"].apply(lambda x: f"<span style='background-color:#FFECB3;color:#6D4C41;padding:4px 12px;border-radius:16px;font-weight:bold;display:inline-block;text-align:center;'>{x}</span>")
+                        df_display["Names"] = df_display.apply(
+                            lambda r: f"<b>{r['Names']}</b>" if r["Names"] else "",
+                            axis=1,
+                        )
+                        df_display = df_display.drop(columns=["Type"])
+                        df_display["Item Name"] = df_display["Item Name"].apply(lambda item: f"<b>{item}</b>" if item else "")
+                        df_display["Serving count"] = df_display["Serving count"].apply(lambda x: f"<span style='background-color:#FFECB3;color:#6D4C41;padding:4px 12px;border-radius:16px;font-weight:bold;display:inline-block;text-align:center;'>{x}</span>")
                         # Sort by Date, Pooja Time (morning before evening), then Name
-                        df_display["_date_sort"] = pd.to_datetime(df_tab["Date"])
-                        df_display["_pooja_sort"] = df_tab["Pooja Time"].apply(lambda x: 0 if str(x).lower().find("morning") != -1 else 1)
+                        df_display["_date_sort"] = pd.to_datetime(filtered_df_tab["Date"])
+                        df_display["_pooja_sort"] = filtered_df_tab["Pooja Time"].apply(lambda x: 0 if str(x).lower().find("morning") != -1 else 1)
                         df_display = df_display.sort_values(by=["_date_sort", "_pooja_sort", "Names"])
                         df_display = df_display.drop(columns=["_date_sort", "_pooja_sort"])
                         df_display.index = range(1, len(df_display) + 1)
-                        st.markdown(df_display.to_html(escape=False, index=True, justify='center'), unsafe_allow_html=True)
-                        raw_sponsors_df = df_tab.drop(columns=["ID", "Created By"])
-                        csv_sponsors = raw_sponsors_df.to_csv(index=False)
-                        st.download_button(label="📥", data=csv_sponsors, file_name=f"prasad_seva_sponsors_list_{label.lower()}.csv", mime="text/csv", key=f"download_sponsors_tab_{label.lower()}")
+                        table_html = df_display.to_html(
+                            escape=False, index=True, justify='center', classes="sponsor-table"
+                        )
+                        st.markdown(
+                            f"{SPONSOR_TABLE_CSS}<div class='sponsor-table-wrap'>{table_html}</div>",
+                            unsafe_allow_html=True,
+                        )
                         if st.session_state.get('admin_logged_in', False):
                             if st.button(f"Send Prasad Seva Details to Email ({label})"):
                                 cursor.execute("SELECT email FROM notification_emails")
                                 notification_emails = [row[0] for row in cursor.fetchall() if row[0]]
-                                html_table = df_tab.drop(columns=["ID", "Created By"]).to_html(index=False, border=1, justify='center')
+                                html_table = filtered_df_tab.drop(columns=["ID", "Created By"]).to_html(index=False, border=1, justify='center')
                                 send_email(
                                     f"Prasad Seva Sponsors List ({label})",
                                     f"<b>Current Prasad Seva List ({label})</b><br><br>{html_table}",
@@ -326,7 +605,7 @@ def prasad_seva_tab():
                                 )
                                 st.success("✅ Email sent!")
                     else:
-                        st.info(f"No {label} Prasad Seva entries yet.")
+                        st.info(f"No {label} Prasad Seva entries match these filters.")
         else:
             st.info("No Prasad Seva entries yet.")
 
@@ -339,17 +618,15 @@ def prasad_seva_tab():
             name_df["Name/Group"] = name_df["Name/Group"].apply(lambda n: f"<span style='font-size:16px;'>&#128100;</span> <b>{n}</b>" if n else "")
             name_df["Total Served"] = name_df["Total Served"].apply(lambda x: f"<span style='background-color:#FFECB3;color:#6D4C41;padding:4px 12px;border-radius:16px;font-weight:bold;display:inline-block;text-align:center;'>{x}</span>")
             st.markdown(name_df.to_html(escape=False, index=False, justify='center'), unsafe_allow_html=True)
-            csv_name = name_df[['Name/Group', 'Total Served']].to_csv(index=False)
-            st.download_button(label="📥", data=csv_name, file_name="prasad_seva_total_served_by_name.csv", mime="text/csv", key="download_total_served_tab2")
         else:
             st.info("No Prasad Seva entries yet.")
 
-    elif selected_tab == "Edit/Delete Prasad Seva Entry":
+    if selected_tab == "Prasad Seva" and st.session_state.get("prasad_inline_action") in ("edit", "delete"):
         query = "SELECT id, seva_type, names, item_name, num_people, apartment, seva_date, pooja_time, created_by, status FROM prasad_seva WHERE status='active' ORDER BY seva_date, pooja_time, id"
         cursor.execute(query)
         rows = cursor.fetchall()
         if rows and len(rows) > 0:
-            df = pd.DataFrame(rows, columns=["ID", "Type", "Names", "Item Name", "How many people are you bringing item for", "Apartemnt Number", "Date", "Pooja Time", "Created By", "Status"])
+            df = pd.DataFrame(rows, columns=["ID", "Type", "Names", "Item Name", "Serving count", "Apartemnt Number", "Date", "Pooja Time", "Created By", "Status"])
             if "Status" in df.columns:
                 df = df.drop(columns=["Status"])
             def is_editable(row):
@@ -383,19 +660,16 @@ def prasad_seva_tab():
                 selected_id = df["ID"].tolist()[selected_idx-1]
                 entry = df[df["ID"]==selected_id].iloc[0]
             if entry is not None:
-                action = st.radio("Action", ["Edit", "Delete"], key=f"edit_delete_action_{selected_id}")
-                if action == "Edit":
+                if st.session_state.get("prasad_inline_action") == "edit":
                     st.markdown(f"<b>Type:</b> " + (f"<span style='background-color:#B2DFDB;color:#4E342E;padding:4px 10px;border-radius:12px;font-weight:bold;'>👥 Group</span>" if entry['Type']=='Group' else f"<span style='background-color:#FFCCBC;color:#4E342E;padding:4px 10px;border-radius:12px;font-weight:bold;'>🧑 Individual</span>"), unsafe_allow_html=True)
-                    st.markdown(f"<b>Names:</b> <span style='font-size:16px;'>&#128100;</span> <b>{entry['Names']}</b>", unsafe_allow_html=True)
+                    new_names = st.text_input("Names", value=str(entry["Names"]), key=f"edit_names_{selected_id}")
                     new_item = st.text_input("Item Name", value=entry["Item Name"], key=f"edit_item_{selected_id}")
-                    new_num = st.number_input("How many people are you bringing item for?", min_value=1, value=int(entry["How many people are you bringing item for"]), key=f"edit_num_{selected_id}")
+                    new_num = st.number_input("Serving count", min_value=1, value=int(entry["Serving count"]), key=f"edit_num_{selected_id}")
                     st.markdown(f"<b>Apartment Number:</b> <span style='font-size:16px;'>&#127968;</span> <b>{entry['Apartemnt Number']}</b>", unsafe_allow_html=True)
                     min_date = datetime.date(2026, 9, 14)
                     current_date = pd.to_datetime(entry["Date"]).date() if pd.notna(entry["Date"]) else min_date
                     new_date = st.date_input("Date", value=current_date, min_value=min_date, key=f"edit_prasad_date_{selected_id}")
-                    pooja_options = ["Morning Pooja", "Evening Pooja"]
-                    if new_date == datetime.date(2026, 9, 14):
-                        pooja_options = ["Evening Pooja"]
+                    pooja_options = get_pooja_options_for_date(new_date)
                     if entry["Pooja Time"] in pooja_options:
                         pooja_index = pooja_options.index(entry["Pooja Time"])
                     else:
@@ -404,12 +678,13 @@ def prasad_seva_tab():
                     if st.button("Update Prasad Seva", key=f"update_prasad_{selected_id}"):
                         cursor.execute(
                             "UPDATE prasad_seva SET seva_type=%s, names=%s, item_name=%s, num_people=%s, apartment=%s, seva_date=%s, pooja_time=%s, status=%s WHERE id=%s",
-                            (entry["Type"], entry["Names"], new_item, new_num, entry["Apartemnt Number"], new_date, new_pooja_time, 'active', selected_id)
+                            (entry["Type"], new_names.strip(), new_item, new_num, entry["Apartemnt Number"], new_date, new_pooja_time, 'active', selected_id)
                         )
                         conn.commit()
+                        st.session_state["prasad_inline_action"] = "view"
                         st.success("✅ Updated!")
                         st.rerun()
-                elif action == "Delete":
+                elif st.session_state.get("prasad_inline_action") == "delete":
                     entered_name = st.text_input(f"Type the name to confirm deletion ({entry['Names']})", key=f"delete_name_{selected_id}")
                     confirm_message = f"Type <b>{entry['Names']}</b> above and click Delete to confirm."
                     st.markdown(confirm_message, unsafe_allow_html=True)
@@ -417,6 +692,8 @@ def prasad_seva_tab():
                         if entered_name.strip() == entry['Names']:
                             cursor.execute("UPDATE prasad_seva SET status='inactive' WHERE id=%s", (selected_id,))
                             conn.commit()
+                            st.session_state.pop("edit_delete_selectbox", None)
+                            st.session_state["prasad_inline_action"] = "view"
                             st.success("🗑️ Deleted!")
                             st.rerun()
                         else:

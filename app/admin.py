@@ -21,7 +21,7 @@ import pandas as pd
 import datetime
 from .db import get_connection
 from .email_utils import send_email
-from .login_audit import ensure_login_audit_table
+from .login_audit import ensure_login_audit_table, is_user_login_tracking_enabled
 
 
 def ensure_sponsorship_item_image_columns(cursor):
@@ -34,6 +34,8 @@ def admin_tab(menu="Sponsorship Items"):
     conn = get_connection()
     cursor = conn.cursor()
     if menu == "User Login Activity":
+        if not is_user_login_tracking_enabled():
+            return
         ensure_login_audit_table(conn)
         st.markdown("<h2 style='color: #6A1B9A;'>User Login Activity</h2>", unsafe_allow_html=True)
 
@@ -75,6 +77,7 @@ def admin_tab(menu="Sponsorship Items"):
         login_counts["login_date"] = pd.to_datetime(login_counts["login_date"])
         login_counts = all_dates.merge(login_counts, on="login_date", how="left").fillna({"login_count": 0})
         login_counts["login_count"] = login_counts["login_count"].astype(int)
+        st.caption(f"Total logins: {login_counts['login_count'].sum():,}")
         st.bar_chart(login_counts.set_index("login_date"), y="login_count")
 
         audit_df = pd.read_sql(
@@ -103,7 +106,19 @@ def admin_tab(menu="Sponsorship Items"):
         
         # Redesigned horizontal menu bar using option_menu
         def get_sponsor_df():
-            df = pd.read_sql("SELECT name, SUM(COALESCE(donation,0)) AS donation_sum FROM sponsors GROUP BY name", conn)
+            df = pd.read_sql(
+                """
+                SELECT
+                    name,
+                    MAX(apartment) AS apartment,
+                    MAX(mobile) AS mobile,
+                    MAX(email) AS email,
+                    SUM(COALESCE(donation, 0)) AS donation_sum
+                FROM sponsors
+                GROUP BY name
+                """,
+                conn,
+            )
             df.columns = [c.lower() for c in df.columns]
             cursor2 = conn.cursor()
             cursor2.execute("""
@@ -151,7 +166,7 @@ def admin_tab(menu="Sponsorship Items"):
                     "font-size": "1rem"
                 },
                 "nav-link": {
-                    "font-size": "0.82rem",
+                    "font-size": "0.85rem",
                     "font-weight": "600",
                     "text-align": "center",
                     "margin": "0 4px",
@@ -277,10 +292,29 @@ def admin_tab(menu="Sponsorship Items"):
                     "comments": "Comments"
                 })
                 display_df.index = display_df.index + 1
-                with download_col:
-                    st.download_button("⬇️", data=display_df.to_csv(index=False), file_name="received_payments.csv", mime="text/csv", key="download_received_payments", help="Download received payments")
-                st.dataframe(display_df, use_container_width=True)
-                st.markdown(f"<div style='text-align:right; font-size:1.1em; margin-top:0.5em;'><b>Total Amount:</b> <span style='color:#6A1B9A;'>${total_amount:,.2f}</span></div>", unsafe_allow_html=True)
+                table_tab, chart_tab = st.tabs(["Payments Table", "Received By"])
+                with table_tab:
+                    with download_col:
+                        st.download_button("⬇️", data=display_df.to_csv(index=False), file_name="received_payments.csv", mime="text/csv", key="download_received_payments", help="Download received payments")
+                    st.dataframe(display_df, use_container_width=True)
+                    st.markdown(f"<div style='text-align:right; font-size:1.1em; margin-top:0.5em;'><b>Total Amount:</b> <span style='color:#6A1B9A;'>${total_amount:,.2f}</span></div>", unsafe_allow_html=True)
+                with chart_tab:
+                    if "recieved_zelle_acc_name" in filtered_df.columns:
+                        chart_df = filtered_df.copy()
+                        chart_df["recieved_zelle_acc_name"] = (
+                            chart_df["recieved_zelle_acc_name"]
+                            .fillna("Not specified")
+                            .astype(str)
+                            .str.strip()
+                            .replace("", "Not specified")
+                        )
+                        chart_data = chart_df.groupby("recieved_zelle_acc_name")["amount"].sum().sort_values(ascending=False)
+                        st.caption(f"Total received: ${chart_data.sum():,.2f}")
+                        st.bar_chart(chart_data.rename("Total Amount"))
+                        receiver_summary = chart_data.rename_axis("Received By").rename("Total Amount").reset_index()
+                        st.dataframe(receiver_summary, hide_index=True, use_container_width=True)
+                    else:
+                        st.info("Receiver details are not available in the payment table.")
             else:
                 st.info("No payment details found.")
 
@@ -288,8 +322,16 @@ def admin_tab(menu="Sponsorship Items"):
             df_pay = pd.read_sql("SELECT name FROM payment_details", conn)
             df_pay.columns = [c.lower() for c in df_pay.columns]
             paid_names = set(df_pay["name"].tolist())
-            not_received_df = sponsor_df[~sponsor_df["name"].isin(paid_names)][["name", "total_amount"]]
-            not_received_df = not_received_df.rename(columns={"name": "Name", "total_amount": "Amount"})
+            not_received_df = sponsor_df[~sponsor_df["name"].isin(paid_names)][
+                ["name", "total_amount", "apartment", "mobile", "email"]
+            ]
+            not_received_df = not_received_df.rename(columns={
+                "name": "Name",
+                "total_amount": "Amount",
+                "apartment": "Apartment Number",
+                "mobile": "Mobile",
+                "email": "Email",
+            })
             not_received_df = not_received_df.sort_values(by=["Name"]).reset_index(drop=True)
             not_received_df.index = not_received_df.index + 1
             if 'id' in not_received_df.columns:
