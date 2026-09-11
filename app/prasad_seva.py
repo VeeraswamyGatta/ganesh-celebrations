@@ -34,6 +34,7 @@ SPONSOR_TABLE_CSS = """
     border: 0;
     border-bottom: 2px solid #b8d5c0;
     white-space: normal;
+    text-align: left;
 }
 .sponsor-table td {
     padding: 0.55rem 0.45rem;
@@ -42,6 +43,7 @@ SPONSOR_TABLE_CSS = """
     vertical-align: middle;
     line-height: 1.25;
     overflow-wrap: anywhere;
+    text-align: left;
 }
 .sponsor-table tbody tr:nth-child(even) td { background: #fbfdfb; }
 .sponsor-table tbody tr:hover td { background: #fff8e7; }
@@ -253,6 +255,16 @@ def prasad_seva_tab():
         unsafe_allow_html=True,
     )
 
+    st.markdown(
+        """
+        <div style='background: linear-gradient(135deg, #fff9f0 0%, #fce7cc 100%); border: 1px solid #d7a35a; border-radius: 14px; padding: 0.9rem 1rem; margin-bottom: 1rem; box-shadow: 0 4px 14px rgba(154, 96, 22, 0.12);'>
+            <div style='font-size:1rem; font-weight:800; color:#7a3d12; margin-bottom:0.35rem;'>🙏 Prasad Preparation Note</div>
+            <div style='font-size:0.95rem; color:#4d2c18; line-height:1.5;'>Kindly prepare the Prasad without garlic and onion.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
     with st.container(key="prasad_action_row"):
         if selected_tab == "Prasad Seva":
             action_columns = st.columns(3)
@@ -408,7 +420,7 @@ def prasad_seva_tab():
             item_names = [item_name.strip()] if item_name.strip() else []
             apartment = prasad_form.text_input("Apartment Number", key="prasad_individual_apartment", placeholder="e.g. 1203")
 
-        num_people = prasad_form.number_input("How many people are you bringing item for?", min_value=1, value=st.session_state.get('prasad_num_people', 1), key="prasad_num_people")
+        num_people = prasad_form.number_input("Serving count", min_value=1, value=st.session_state.get('prasad_num_people', 1), key="prasad_num_people")
 
         if prasad_form.form_submit_button("✅ Add Prasad Seva", disabled=prasad_submit_disabled, type="primary"):
             st.session_state["prasad_submission_in_progress"] = True
@@ -473,13 +485,14 @@ def prasad_seva_tab():
         min_date = datetime.date(2026, 9, 14)
         max_date = datetime.date(2026, 9, 20)
         all_dates = pd.date_range(min_date, max_date).date
-        pooja_times = ["Morning Pooja", "Evening Pooja"]
-        grid = pd.DataFrame([(d, p) for d in all_dates for p in pooja_times], columns=["Date", "Pooja Time"])
+        grid = pd.DataFrame(
+            [(d, p) for d in all_dates for p in get_pooja_options_for_date(d)],
+            columns=["Date", "Pooja Time"],
+        )
         metrics_df = pd.DataFrame(metrics_rows, columns=["Date", "Pooja Time", "Total People Served"])
         metrics_df["Date"] = pd.to_datetime(metrics_df["Date"]).dt.date
         merged_df = grid.merge(metrics_df, on=["Date", "Pooja Time"], how="left").fillna({"Total People Served": 0})
         merged_df["Total People Served"] = merged_df["Total People Served"].astype(int)
-        merged_df = merged_df[~((merged_df["Date"] == datetime.date(2026, 9, 14)) & (merged_df["Pooja Time"] == "Morning Pooja"))]
         merged_df["Date"] = merged_df["Date"].apply(lambda d: f"<span style='font-size:16px;'>&#128197;</span> <b>{pd.to_datetime(d).strftime('%d-%b-%Y')}</b>")
         merged_df["Pooja Time"] = merged_df["Pooja Time"].apply(lambda t: f"<span style='font-size:18px;'>{'🌅' if t=='Morning Pooja' else '🌇'}</span> <b>{t.replace('Pooja','')}</b>")
         merged_df["Total People Served"] = merged_df["Total People Served"].apply(lambda x: f"<span style='background-color:#FFECB3;color:#6D4C41;padding:4px 12px;border-radius:16px;font-weight:bold;display:inline-block;text-align:center;'>{x}</span>")
@@ -491,8 +504,7 @@ def prasad_seva_tab():
         raw_metrics_df["Date"] = pd.to_datetime(raw_metrics_df["Date"].str.extract(r'<b>(.*?)</b>')[0], format='%d-%b-%Y')
         raw_metrics_df["Pooja Time"] = raw_metrics_df["Pooja Time"].str.extract(r'<b>(.*?)</b>')[0]
         raw_metrics_df["Total People Served"] = raw_metrics_df["Total People Served"].str.extract(r'>(\d+)<')[0].fillna(0).astype(int)
-        csv_summary = raw_metrics_df.to_csv(index=False)
-        st.download_button(label="📥", data=csv_summary, file_name="prasad_seva_summary.csv", mime="text/csv", key="download_summary_tab1")
+        raw_metrics_df.to_csv(index=False)
 
     elif selected_tab == "Prasad Seva" and st.session_state.get("prasad_inline_action") not in ("edit", "delete"):
         min_date = datetime.date(2026, 9, 14)
@@ -501,7 +513,7 @@ def prasad_seva_tab():
         cursor.execute(query)
         rows = cursor.fetchall()
         if rows and len(rows) > 0:
-            df = pd.DataFrame(rows, columns=["ID", "Type", "Names", "Item Name", "How many people are you bringing item for", "Apartemnt Number", "Date", "Pooja Time", "Created By", "Status"])
+            df = pd.DataFrame(rows, columns=["ID", "Type", "Names", "Item Name", "Serving count", "Apartemnt Number", "Date", "Pooja Time", "Created By", "Status"])
             if "Status" in df.columns:
                 df = df.drop(columns=["Status"])
             # Split into active and past based on CST date
@@ -529,7 +541,7 @@ def prasad_seva_tab():
                         unsafe_allow_html=True,
                     )
                     with st.container(key=toolbar_key):
-                        search_column, download_column, _ = st.columns([1, 1, 8])
+                        search_column, _ = st.columns([1, 9])
                         with search_column:
                             with st.popover("🔍", help="Search sponsors", use_container_width=True):
                                 filter_name = st.text_input(
@@ -539,7 +551,9 @@ def prasad_seva_tab():
                                     "Date", value=None, min_value=min_date, key=f"prasad_filter_date_{label.lower()}"
                                 )
                                 filter_pooja_time = st.selectbox(
-                                    "Pooja Time", ["All", "Morning Pooja", "Evening Pooja"], key=f"prasad_filter_pooja_time_{label.lower()}"
+                                    "Pooja Time",
+                                    ["All", "Morning Pooja", "Evening Pooja", "Evening Pooja for Kids"],
+                                    key=f"prasad_filter_pooja_time_{label.lower()}",
                                 )
                     filtered_df_tab = df_tab
                     if filter_name:
@@ -553,9 +567,6 @@ def prasad_seva_tab():
                     if filter_pooja_time != "All":
                         filtered_df_tab = filtered_df_tab[filtered_df_tab["Pooja Time"] == filter_pooja_time]
                     if len(filtered_df_tab) > 0:
-                        raw_sponsors_df = filtered_df_tab.drop(columns=["ID", "Created By"])
-                        csv_sponsors = raw_sponsors_df.to_csv(index=False)
-                        download_column.download_button(label="📥", data=csv_sponsors, file_name=f"prasad_seva_sponsors_list_{label.lower()}.csv", mime="text/csv", key=f"download_sponsors_tab_{label.lower()}", help="Download sponsors list", use_container_width=True)
                         df_display = filtered_df_tab.drop(columns=["ID", "Created By"])
                         df_display = df_display.drop(columns=["Apartemnt Number"], errors="ignore")
                         df_display["Date"] = df_display["Date"].apply(lambda d: f"<span style='font-size:16px;'>&#128197;</span> <b>{pd.to_datetime(d).strftime('%d-%b-%Y')}</b>")
@@ -568,7 +579,7 @@ def prasad_seva_tab():
                         )
                         df_display = df_display.drop(columns=["Type"])
                         df_display["Item Name"] = df_display["Item Name"].apply(lambda item: f"<b>{item}</b>" if item else "")
-                        df_display["How many people are you bringing item for"] = df_display["How many people are you bringing item for"].apply(lambda x: f"<span style='background-color:#FFECB3;color:#6D4C41;padding:4px 12px;border-radius:16px;font-weight:bold;display:inline-block;text-align:center;'>{x}</span>")
+                        df_display["Serving count"] = df_display["Serving count"].apply(lambda x: f"<span style='background-color:#FFECB3;color:#6D4C41;padding:4px 12px;border-radius:16px;font-weight:bold;display:inline-block;text-align:center;'>{x}</span>")
                         # Sort by Date, Pooja Time (morning before evening), then Name
                         df_display["_date_sort"] = pd.to_datetime(filtered_df_tab["Date"])
                         df_display["_pooja_sort"] = filtered_df_tab["Pooja Time"].apply(lambda x: 0 if str(x).lower().find("morning") != -1 else 1)
@@ -607,8 +618,6 @@ def prasad_seva_tab():
             name_df["Name/Group"] = name_df["Name/Group"].apply(lambda n: f"<span style='font-size:16px;'>&#128100;</span> <b>{n}</b>" if n else "")
             name_df["Total Served"] = name_df["Total Served"].apply(lambda x: f"<span style='background-color:#FFECB3;color:#6D4C41;padding:4px 12px;border-radius:16px;font-weight:bold;display:inline-block;text-align:center;'>{x}</span>")
             st.markdown(name_df.to_html(escape=False, index=False, justify='center'), unsafe_allow_html=True)
-            csv_name = name_df[['Name/Group', 'Total Served']].to_csv(index=False)
-            st.download_button(label="📥", data=csv_name, file_name="prasad_seva_total_served_by_name.csv", mime="text/csv", key="download_total_served_tab2")
         else:
             st.info("No Prasad Seva entries yet.")
 
@@ -617,7 +626,7 @@ def prasad_seva_tab():
         cursor.execute(query)
         rows = cursor.fetchall()
         if rows and len(rows) > 0:
-            df = pd.DataFrame(rows, columns=["ID", "Type", "Names", "Item Name", "How many people are you bringing item for", "Apartemnt Number", "Date", "Pooja Time", "Created By", "Status"])
+            df = pd.DataFrame(rows, columns=["ID", "Type", "Names", "Item Name", "Serving count", "Apartemnt Number", "Date", "Pooja Time", "Created By", "Status"])
             if "Status" in df.columns:
                 df = df.drop(columns=["Status"])
             def is_editable(row):
@@ -655,7 +664,7 @@ def prasad_seva_tab():
                     st.markdown(f"<b>Type:</b> " + (f"<span style='background-color:#B2DFDB;color:#4E342E;padding:4px 10px;border-radius:12px;font-weight:bold;'>👥 Group</span>" if entry['Type']=='Group' else f"<span style='background-color:#FFCCBC;color:#4E342E;padding:4px 10px;border-radius:12px;font-weight:bold;'>🧑 Individual</span>"), unsafe_allow_html=True)
                     new_names = st.text_input("Names", value=str(entry["Names"]), key=f"edit_names_{selected_id}")
                     new_item = st.text_input("Item Name", value=entry["Item Name"], key=f"edit_item_{selected_id}")
-                    new_num = st.number_input("How many people are you bringing item for?", min_value=1, value=int(entry["How many people are you bringing item for"]), key=f"edit_num_{selected_id}")
+                    new_num = st.number_input("Serving count", min_value=1, value=int(entry["Serving count"]), key=f"edit_num_{selected_id}")
                     st.markdown(f"<b>Apartment Number:</b> <span style='font-size:16px;'>&#127968;</span> <b>{entry['Apartemnt Number']}</b>", unsafe_allow_html=True)
                     min_date = datetime.date(2026, 9, 14)
                     current_date = pd.to_datetime(entry["Date"]).date() if pd.notna(entry["Date"]) else min_date

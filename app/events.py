@@ -192,11 +192,29 @@ SEATING_CSS = '''
         min-width: 24px;
         text-align: center;
     }
+    .seating-slot-name {
+        color: #234d3d;
+        font-size: 0.78rem;
+        font-weight: 800;
+        line-height: 1.1;
+        text-align: left;
+    }
     .seating-slot-stat {
         color: #4a5b61;
         font-size: 0.85rem;
         line-height: 1.2;
         font-weight: 800;
+    }
+    .seating-kids-note {
+        margin-top: 0.45rem;
+        padding: 0.6rem 0.8rem;
+        border-radius: 12px;
+        background: linear-gradient(135deg, rgba(255,248,233,0.95) 0%, rgba(245,235,222,0.9) 100%);
+        border: 1px solid rgba(169, 121, 53, 0.32);
+        color: #6c4a1d;
+        font-size: 0.82rem;
+        font-weight: 800;
+        line-height: 1.4;
     }
     .seating-slot-meta {
         color: #6f4d22;
@@ -541,6 +559,7 @@ def _ganesh_pooja_seating_tab():
             <div class="seating-hero-text">
                 <div class="seating-hero-title">Ganesh Pooja Seating</div>
                 <div class="seating-hero-subtitle">Choose a day and reserve a pooja slot.</div>
+                <div class="seating-kids-note">Note: 18th evening pooja is for kids only.</div>
                 <div class="seating-hero-legend">
                     <span class="seating-legend-item"><span class="seating-legend-icon">🌅</span> Morning</span>
                     <span class="seating-legend-item"><span class="seating-legend-icon">🌙</span> Evening</span>
