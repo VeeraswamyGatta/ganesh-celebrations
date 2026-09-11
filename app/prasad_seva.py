@@ -419,7 +419,18 @@ def prasad_seva_tab():
             selected_date = min_date
             st.session_state["prasad_seva_date"] = selected_date
 
-        seva_date = st.date_input("Date", value=selected_date, min_value=min_date, key="prasad_seva_date")
+        def reset_prasad_pooja_selection():
+            st.session_state["prasad_pooja_times"] = []
+            for option in ("Morning Pooja", "Evening Pooja"):
+                st.session_state[f"prasad_pooja_checkbox_{option}"] = False
+
+        seva_date = st.date_input(
+            "Date",
+            value=selected_date,
+            min_value=min_date,
+            key="prasad_seva_date",
+            on_change=reset_prasad_pooja_selection,
+        )
 
         prasad_form = st.form("add_prasad_seva_form")
         prasad_submit_disabled = st.session_state.get("prasad_submission_in_progress", False)
@@ -457,9 +468,9 @@ def prasad_seva_tab():
             elif not item_names:
                 st.session_state["prasad_submission_in_progress"] = False
                 prasad_form.error("Please enter at least one item name.")
-            elif not num_people:
+            elif num_people < 1:
                 st.session_state["prasad_submission_in_progress"] = False
-                prasad_form.error("Number of people is required.")
+                prasad_form.error("Serving count must be at least 1.")
             elif not seva_date:
                 st.session_state["prasad_submission_in_progress"] = False
                 prasad_form.error("Date is required.")
@@ -677,8 +688,9 @@ def prasad_seva_tab():
                 margin: 0;
                 color: #6d4322;
                 font-family: Georgia, serif;
-                font-size: 1.15rem;
+                font-size: 1.55rem;
                 font-weight: 700;
+                line-height: 1.2;
             }
             .prasad-group-subtitle {
                 margin: 0.2rem 0 0.8rem;
@@ -710,6 +722,7 @@ def prasad_seva_tab():
             .prasad-group-table td:last-child { width: 30%; text-align: right; }
             @media (max-width: 640px) {
                 .prasad-group-section { padding: 0.9rem 0.7rem; }
+                .prasad-group-heading { font-size: 1.3rem; }
                 .prasad-group-table { font-size: 0.82rem; }
                 .prasad-group-table th, .prasad-group-table td { padding: 0.55rem 0.35rem; }
             }
@@ -720,14 +733,14 @@ def prasad_seva_tab():
         st.markdown(
             """
             <section class='prasad-group-section'>
-                <h3 class='prasad-group-heading'>Served by Name / Group</h3>
+                <h3 class='prasad-group-heading'>Prasad Seva Contributors</h3>
             """,
             unsafe_allow_html=True,
         )
         if name_rows:
-            name_df = pd.DataFrame(name_rows, columns=["Name / Group", "People Served"])
+            name_df = pd.DataFrame(name_rows, columns=["Name", "People Served"])
             name_df.insert(0, "#", range(1, len(name_df) + 1))
-            name_df["Name / Group"] = name_df["Name / Group"].apply(
+            name_df["Name"] = name_df["Name"].apply(
                 lambda name: f"<b>{name}</b>" if name else ""
             )
             name_df["People Served"] = name_df["People Served"].apply(
@@ -886,7 +899,12 @@ def prasad_seva_tab():
                 if st.session_state.get("prasad_inline_action") == "edit":
                     new_names = st.text_input("Names", value=str(entry["Names"]), key=f"edit_names_{selected_id}")
                     new_item = st.text_input("Item Name", value=entry["Item Name"], key=f"edit_item_{selected_id}")
-                    new_num = st.number_input("Serving count", min_value=1, value=int(entry["Serving count"]), key=f"edit_num_{selected_id}")
+                    new_num = st.number_input(
+                        "Serving count",
+                        min_value=1,
+                        value=max(1, int(entry["Serving count"])),
+                        key=f"edit_num_{selected_id}",
+                    )
                     min_date = datetime.date(2026, 9, 14)
                     current_date = pd.to_datetime(entry["Date"]).date() if pd.notna(entry["Date"]) else min_date
                     new_date = st.date_input("Date", value=current_date, min_value=min_date, key=f"edit_prasad_date_{selected_id}")
@@ -897,14 +915,17 @@ def prasad_seva_tab():
                         pooja_index = 0
                     new_pooja_time = st.radio("Pooja Time", pooja_options, index=pooja_index, key=f"edit_prasad_time_{selected_id}")
                     if st.button("Update Prasad Seva", key=f"update_prasad_{selected_id}"):
-                        cursor.execute(
-                            "UPDATE prasad_seva SET seva_type=%s, names=%s, item_name=%s, num_people=%s, seva_date=%s, pooja_time=%s, status=%s WHERE id=%s",
-                            ("Individual", new_names.strip(), new_item, new_num, new_date, new_pooja_time, 'active', selected_id)
-                        )
-                        conn.commit()
-                        st.session_state["prasad_inline_action"] = "view"
-                        st.success("✅ Updated!")
-                        st.rerun()
+                        if new_num < 1:
+                            st.warning("Serving count must be at least 1.")
+                        else:
+                            cursor.execute(
+                                "UPDATE prasad_seva SET seva_type=%s, names=%s, item_name=%s, num_people=%s, seva_date=%s, pooja_time=%s, status=%s WHERE id=%s",
+                                ("Individual", new_names.strip(), new_item, new_num, new_date, new_pooja_time, 'active', selected_id)
+                            )
+                            conn.commit()
+                            st.session_state["prasad_inline_action"] = "view"
+                            st.success("✅ Updated!")
+                            st.rerun()
                 elif st.session_state.get("prasad_inline_action") == "delete":
                     entered_name = st.text_input(f"Type the name to confirm deletion ({entry['Names']})", key=f"delete_name_{selected_id}")
                     confirm_message = f"Type <b>{entry['Names']}</b> above and click Delete to confirm."
