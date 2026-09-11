@@ -519,6 +519,24 @@ def prasad_seva_tab():
         merged_df = grid.merge(metrics_df, on=["Date", "Pooja Time"], how="left").fillna({"Total People Served": 0})
         merged_df["Total People Served"] = merged_df["Total People Served"].astype(int)
         active_slots = int((merged_df["Total People Served"] > 0).sum())
+        zero_slots = merged_df[merged_df["Total People Served"] == 0]
+        high_demand_slots = merged_df[merged_df["Total People Served"] > 100]
+        busiest_slot = merged_df.loc[merged_df["Total People Served"].idxmax()]
+
+        def format_slot_list(slots):
+            if slots.empty:
+                return "None"
+            return "<br>".join(
+                f"{pd.to_datetime(row['Date']).strftime('%d-%b')} · {row['Pooja Time']}"
+                for _, row in slots.iterrows()
+            )
+
+        zero_slot_text = format_slot_list(zero_slots)
+        high_demand_text = format_slot_list(high_demand_slots)
+        busiest_slot_text = (
+            f"{pd.to_datetime(busiest_slot['Date']).strftime('%d-%b')} · "
+            f"{busiest_slot['Pooja Time']} ({busiest_slot['Total People Served']})"
+        )
         st.markdown(
             """
             <style>
@@ -574,6 +592,38 @@ def prasad_seva_tab():
                 font-size: 1.2rem;
                 font-weight: 800;
             }
+            .prasad-summary-insights {
+                display: grid;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 0.6rem;
+                margin-top: 0.7rem;
+            }
+            .prasad-summary-insight {
+                min-height: 4.5rem;
+                padding: 0.65rem 0.75rem;
+                border-radius: 12px;
+                background: rgba(255, 255, 255, 0.72);
+                border: 1px solid rgba(126, 160, 111, 0.28);
+            }
+            .prasad-summary-insight-label {
+                display: block;
+                margin-bottom: 0.25rem;
+                color: #6e7f6b;
+                font-size: 0.7rem;
+                font-weight: 800;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+            }
+            .prasad-summary-insight-value {
+                color: #405344;
+                font-size: 0.78rem;
+                font-weight: 700;
+                line-height: 1.45;
+            }
+            .prasad-summary-insight.warning { border-color: #f0d59d; background: #fffaf0; }
+            .prasad-summary-insight.warning .prasad-summary-insight-label { color: #a86b1f; }
+            .prasad-summary-insight.demand { border-color: #e9c2b5; background: #fff7f3; }
+            .prasad-summary-insight.demand .prasad-summary-insight-label { color: #b14f32; }
             .prasad-summary-table-wrap {
                 overflow: hidden;
                 border: 1px solid #dfe9df;
@@ -614,6 +664,8 @@ def prasad_seva_tab():
                 .prasad-summary { padding: 1rem 0.85rem; border-radius: 16px; }
                 .prasad-summary-title { font-size: 1.3rem; }
                 .prasad-summary-copy { font-size: 0.82rem; }
+                .prasad-summary-insights { grid-template-columns: 1fr; }
+                .prasad-summary-insight { min-height: auto; }
                 .prasad-summary-table { font-size: 0.82rem; }
                 .prasad-summary-table th, .prasad-summary-table td { padding: 0.62rem 0.45rem; }
             }
@@ -622,7 +674,6 @@ def prasad_seva_tab():
             unsafe_allow_html=True,
         )
         merged_df["Date"] = merged_df["Date"].apply(lambda d: f"<span style='font-size:16px;'>&#128197;</span> <b>{pd.to_datetime(d).strftime('%d-%b-%Y')}</b>")
-        merged_df["Pooja Time"] = merged_df["Pooja Time"].apply(lambda t: f"<span style='font-size:18px;'>{'🌅' if t=='Morning Pooja' else '🌇'}</span> <b>{t.replace('Pooja','')}</b>")
         merged_df["Total People Served"] = merged_df["Total People Served"].apply(lambda x: f"<span style='background-color:#FFECB3;color:#6D4C41;padding:4px 12px;border-radius:16px;font-weight:bold;display:inline-block;text-align:center;'>{x}</span>")
         cursor.execute("SELECT SUM(num_people) FROM prasad_seva WHERE status='active'")
         total_sponsored = cursor.fetchone()[0] or 0
@@ -638,6 +689,20 @@ def prasad_seva_tab():
                     <div class='prasad-summary-metric'>
                         <span class='prasad-summary-metric-label'>Active pooja slots</span>
                         <strong class='prasad-summary-metric-value'>{active_slots}</strong>
+                    </div>
+                </div>
+                <div class='prasad-summary-insights'>
+                    <div class='prasad-summary-insight warning'>
+                        <span class='prasad-summary-insight-label'>No service yet</span>
+                        <div class='prasad-summary-insight-value'>{zero_slot_text}</div>
+                    </div>
+                    <div class='prasad-summary-insight demand'>
+                        <span class='prasad-summary-insight-label'>High demand · 100+</span>
+                        <div class='prasad-summary-insight-value'>{high_demand_text}</div>
+                    </div>
+                    <div class='prasad-summary-insight'>
+                        <span class='prasad-summary-insight-label'>Busiest slot</span>
+                        <div class='prasad-summary-insight-value'>{busiest_slot_text}</div>
                     </div>
                 </div>
             </section>
@@ -678,19 +743,16 @@ def prasad_seva_tab():
             <style>
             .prasad-group-section {
                 margin-top: 1.25rem;
-                padding: 1rem 1.1rem 1.1rem;
-                border: 1px solid #eadcc8;
-                border-radius: 18px;
-                background: linear-gradient(135deg, #fffaf1 0%, #fffdf8 100%);
-                box-shadow: 0 8px 18px rgba(112, 79, 38, 0.08);
+                padding-top: 0.35rem;
             }
             .prasad-group-heading {
-                margin: 0;
+                margin: 0 0 0.65rem;
+                padding-bottom: 0.45rem;
                 color: #6d4322;
                 font-family: Georgia, serif;
-                font-size: 1.55rem;
+                font-size: 1.1rem;
                 font-weight: 700;
-                line-height: 1.2;
+                border-bottom: 2px solid #e8c98f;
             }
             .prasad-group-subtitle {
                 margin: 0.2rem 0 0.8rem;
@@ -721,8 +783,7 @@ def prasad_seva_tab():
             .prasad-group-table th:last-child,
             .prasad-group-table td:last-child { width: 30%; text-align: right; }
             @media (max-width: 640px) {
-                .prasad-group-section { padding: 0.9rem 0.7rem; }
-                .prasad-group-heading { font-size: 1.3rem; }
+                .prasad-group-heading { font-size: 1rem; }
                 .prasad-group-table { font-size: 0.82rem; }
                 .prasad-group-table th, .prasad-group-table td { padding: 0.55rem 0.35rem; }
             }
