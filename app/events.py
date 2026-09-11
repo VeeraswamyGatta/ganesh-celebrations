@@ -527,7 +527,7 @@ def _get_seating_pooja_options_for_date(seating_date):
     end_date = datetime.date(2026, 9, 20)
     if seating_date == start_date:
         return ["Evening Pooja"]
-    if seating_date == end_date:
+    if seating_date in {datetime.date(2026, 9, 18), end_date}:
         return ["Morning Pooja"]
     return ["Morning Pooja", "Evening Pooja"]
 

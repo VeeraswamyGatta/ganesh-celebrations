@@ -104,15 +104,13 @@ def prasad_seva_tab():
     is_admin = st.session_state.get("admin_logged_in", False)
     # Define tab_names for all users by default
     tab_names = [
-        "Add Prasad Seva",
-        "Edit/Delete Prasad Seva Entry",
+        "Prasad Seva",
         "Prasad Seva Summary",
-        "Prasad Seva Sponsors List",
         "Total Served by Name/Group",
         laddu_winners_option,
     ]
     if "prasad_tab" not in st.session_state or st.session_state["prasad_tab"] not in tab_names:
-        st.session_state["prasad_tab"] = "Add Prasad Seva"
+        st.session_state["prasad_tab"] = "Prasad Seva"
     selected_tab = option_menu(
         "Prasad Seva Management",
         tab_names,
@@ -207,10 +205,71 @@ def prasad_seva_tab():
         st.session_state["prasad_filter_date"] = None
         st.session_state["prasad_filter_name"] = ""
         st.session_state["clear_prasad_form"] = False
+        st.session_state["prasad_inline_action"] = "view"
         st.rerun()
-    # ...existing code...
 
-    if selected_tab == "Add Prasad Seva":
+    st.markdown(
+        """
+        <style>
+        .st-key-prasad_action_row [data-testid="stHorizontalBlock"] {
+            display: flex !important;
+            flex-wrap: nowrap !important;
+            gap: 0.45rem;
+        }
+        .st-key-prasad_action_row [data-testid="stHorizontalBlock"] > div {
+            flex: 1 1 0 !important;
+            min-width: 0 !important;
+        }
+        div[data-testid="stButton"] > button {
+            width: 100%;
+            border-radius: 14px;
+            border: 1px solid #d7a95a;
+            background: linear-gradient(135deg, #fffaf0 0%, #f5d7a2 100%);
+            color: #4a2d1b;
+            font-weight: 700;
+            font-size: 0.96rem;
+            padding: 0.72rem 0.9rem;
+            box-shadow: 0 8px 18px rgba(120, 76, 31, 0.18);
+            transition: all 0.2s ease;
+        }
+        div[data-testid="stButton"] > button:hover {
+            border-color: #b87d36;
+            background: linear-gradient(135deg, #fffdf9 0%, #f7e0b4 100%);
+            box-shadow: 0 10px 22px rgba(120, 76, 31, 0.22);
+        }
+        div[data-testid="stButton"] > button:focus {
+            box-shadow: 0 0 0 0.2rem rgba(184, 122, 56, 0.25);
+        }
+        @media (max-width: 640px) {
+            .st-key-prasad_action_row [data-testid="stHorizontalBlock"] {
+                flex-wrap: nowrap !important;
+            }
+            .st-key-prasad_action_row [data-testid="stHorizontalBlock"] > div {
+                flex: 1 1 33.33% !important;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    with st.container(key="prasad_action_row"):
+        if selected_tab == "Prasad Seva":
+            action_columns = st.columns(3)
+            with action_columns[0]:
+                if st.button("Add", key="prasad_inline_add_button", use_container_width=True):
+                    st.session_state["prasad_inline_action"] = "view" if st.session_state.get("prasad_inline_action") == "add" else "add"
+                    st.rerun()
+            with action_columns[1]:
+                if st.button("Edit", key="prasad_inline_edit_button", use_container_width=True):
+                    st.session_state["prasad_inline_action"] = "view" if st.session_state.get("prasad_inline_action") == "edit" else "edit"
+                    st.rerun()
+            with action_columns[2]:
+                if st.button("Delete", key="prasad_inline_delete_button", use_container_width=True):
+                    st.session_state["prasad_inline_action"] = "view" if st.session_state.get("prasad_inline_action") == "delete" else "delete"
+                    st.rerun()
+
+    if selected_tab == "Prasad Seva" and st.session_state.get("prasad_inline_action") == "add":
         st.markdown(
             """
             <style>
@@ -305,8 +364,6 @@ def prasad_seva_tab():
             """,
             unsafe_allow_html=True,
         )
-        st.markdown("### ➕ Add Prasad Seva")
-        st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
         min_date = datetime.date(2026, 9, 14)
         selected_date = st.session_state.get("prasad_seva_date", min_date)
         if selected_date < min_date:
@@ -437,7 +494,7 @@ def prasad_seva_tab():
         csv_summary = raw_metrics_df.to_csv(index=False)
         st.download_button(label="📥", data=csv_summary, file_name="prasad_seva_summary.csv", mime="text/csv", key="download_summary_tab1")
 
-    elif selected_tab == "Prasad Seva Sponsors List":
+    elif selected_tab == "Prasad Seva" and st.session_state.get("prasad_inline_action") not in ("edit", "delete"):
         min_date = datetime.date(2026, 9, 14)
         query = "SELECT id, seva_type, names, item_name, num_people, apartment, seva_date, pooja_time, created_by, status FROM prasad_seva WHERE status='active'"
         query += " ORDER BY seva_date, CASE WHEN pooja_time='Morning Pooja' THEN 0 ELSE 1 END, names, id"
@@ -500,19 +557,17 @@ def prasad_seva_tab():
                         csv_sponsors = raw_sponsors_df.to_csv(index=False)
                         download_column.download_button(label="📥", data=csv_sponsors, file_name=f"prasad_seva_sponsors_list_{label.lower()}.csv", mime="text/csv", key=f"download_sponsors_tab_{label.lower()}", help="Download sponsors list", use_container_width=True)
                         df_display = filtered_df_tab.drop(columns=["ID", "Created By"])
+                        df_display = df_display.drop(columns=["Apartemnt Number"], errors="ignore")
                         df_display["Date"] = df_display["Date"].apply(lambda d: f"<span style='font-size:16px;'>&#128197;</span> <b>{pd.to_datetime(d).strftime('%d-%b-%Y')}</b>")
                         def pooja_time_display(row):
-                            if row["Date"].startswith("<span") and "14-Sep-2026" in row["Date"] and row["Pooja Time"].find("Morning") != -1:
-                                return ""
-                            return f"<span style='font-size:18px;'>{'🌅' if row['Pooja Time']=='Morning Pooja' else '🌇'}</span> <b>{row['Pooja Time'].replace('Pooja','')}</b>"
+                            return f"<b>{row['Pooja Time'].replace('Pooja', '')}</b>"
                         df_display["Pooja Time"] = df_display.apply(pooja_time_display, axis=1)
-                        df_display["Apartemnt Number"] = df_display["Apartemnt Number"].apply(lambda apt: f"<span style='font-size:16px;'>&#127968;</span> <b>{apt}</b>" if apt else "")
                         df_display["Names"] = df_display.apply(
-                            lambda r: f"<span style='font-size:16px;'>{'👥' if r['Type'] == 'Group' else '🧑'}</span> <b>{r['Names']}</b>" if r["Names"] else "",
+                            lambda r: f"<b>{r['Names']}</b>" if r["Names"] else "",
                             axis=1,
                         )
                         df_display = df_display.drop(columns=["Type"])
-                        df_display["Item Name"] = df_display["Item Name"].apply(lambda item: f"<span style='font-size:16px;'>&#127858;</span> <b>{item}</b>" if item else "")
+                        df_display["Item Name"] = df_display["Item Name"].apply(lambda item: f"<b>{item}</b>" if item else "")
                         df_display["How many people are you bringing item for"] = df_display["How many people are you bringing item for"].apply(lambda x: f"<span style='background-color:#FFECB3;color:#6D4C41;padding:4px 12px;border-radius:16px;font-weight:bold;display:inline-block;text-align:center;'>{x}</span>")
                         # Sort by Date, Pooja Time (morning before evening), then Name
                         df_display["_date_sort"] = pd.to_datetime(filtered_df_tab["Date"])
@@ -557,7 +612,7 @@ def prasad_seva_tab():
         else:
             st.info("No Prasad Seva entries yet.")
 
-    elif selected_tab == "Edit/Delete Prasad Seva Entry":
+    if selected_tab == "Prasad Seva" and st.session_state.get("prasad_inline_action") in ("edit", "delete"):
         query = "SELECT id, seva_type, names, item_name, num_people, apartment, seva_date, pooja_time, created_by, status FROM prasad_seva WHERE status='active' ORDER BY seva_date, pooja_time, id"
         cursor.execute(query)
         rows = cursor.fetchall()
@@ -596,8 +651,7 @@ def prasad_seva_tab():
                 selected_id = df["ID"].tolist()[selected_idx-1]
                 entry = df[df["ID"]==selected_id].iloc[0]
             if entry is not None:
-                action = st.radio("Action", ["Edit", "Delete"], key=f"edit_delete_action_{selected_id}")
-                if action == "Edit":
+                if st.session_state.get("prasad_inline_action") == "edit":
                     st.markdown(f"<b>Type:</b> " + (f"<span style='background-color:#B2DFDB;color:#4E342E;padding:4px 10px;border-radius:12px;font-weight:bold;'>👥 Group</span>" if entry['Type']=='Group' else f"<span style='background-color:#FFCCBC;color:#4E342E;padding:4px 10px;border-radius:12px;font-weight:bold;'>🧑 Individual</span>"), unsafe_allow_html=True)
                     new_names = st.text_input("Names", value=str(entry["Names"]), key=f"edit_names_{selected_id}")
                     new_item = st.text_input("Item Name", value=entry["Item Name"], key=f"edit_item_{selected_id}")
@@ -618,9 +672,10 @@ def prasad_seva_tab():
                             (entry["Type"], new_names.strip(), new_item, new_num, entry["Apartemnt Number"], new_date, new_pooja_time, 'active', selected_id)
                         )
                         conn.commit()
+                        st.session_state["prasad_inline_action"] = "view"
                         st.success("✅ Updated!")
                         st.rerun()
-                elif action == "Delete":
+                elif st.session_state.get("prasad_inline_action") == "delete":
                     entered_name = st.text_input(f"Type the name to confirm deletion ({entry['Names']})", key=f"delete_name_{selected_id}")
                     confirm_message = f"Type <b>{entry['Names']}</b> above and click Delete to confirm."
                     st.markdown(confirm_message, unsafe_allow_html=True)
@@ -629,6 +684,7 @@ def prasad_seva_tab():
                             cursor.execute("UPDATE prasad_seva SET status='inactive' WHERE id=%s", (selected_id,))
                             conn.commit()
                             st.session_state.pop("edit_delete_selectbox", None)
+                            st.session_state["prasad_inline_action"] = "view"
                             st.success("🗑️ Deleted!")
                             st.rerun()
                         else:
