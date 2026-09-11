@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import datetime
+import re
 import textwrap
 import pytz
 from streamlit_option_menu import option_menu
@@ -80,9 +81,37 @@ SPONSOR_TABLE_CSS = """
     max-width: 100%;
 }
 @media (max-width: 640px) {
-    .sponsor-table-wrap { border-radius: 6px; }
-    .sponsor-table { font-size: 0.82rem; min-width: 580px; }
-    .sponsor-table th, .sponsor-table td { padding: 0.42rem 0.32rem; }
+    .sponsor-table-wrap { border-radius: 6px; overflow-x: hidden; }
+    .sponsor-table {
+        width: 100%;
+        min-width: 0;
+        table-layout: fixed;
+        font-size: 0.68rem;
+    }
+    .sponsor-table th, .sponsor-table td {
+        padding: 0.38rem 0.2rem;
+        line-height: 1.12;
+        overflow-wrap: anywhere;
+    }
+    .sponsor-table th:first-child,
+    .sponsor-table td:first-child { width: 6%; }
+    .sponsor-table th:nth-child(2),
+    .sponsor-table td:nth-child(2) { width: 30%; }
+    .sponsor-table th:nth-child(3),
+    .sponsor-table td:nth-child(3) { width: 19%; }
+    .sponsor-table th:nth-child(4),
+    .sponsor-table td:nth-child(4) { width: 14%; }
+    .sponsor-table th:nth-child(5),
+    .sponsor-table td:nth-child(5) { width: 16%; }
+    .sponsor-table th:nth-child(6),
+    .sponsor-table td:nth-child(6) { width: 15%; white-space: normal; }
+    .sponsor-table td:nth-child(4) span {
+        padding: 3px 5px !important;
+        border-radius: 10px !important;
+    }
+    .sponsor-table td:nth-child(5) span { font-size: 0.65rem !important; }
+    .sponsor-table td:nth-child(5) span:first-child,
+    .sponsor-table td:nth-child(6) span:first-child { font-size: 0.8rem !important; }
 }
 </style>
 """
@@ -93,6 +122,16 @@ def get_pooja_options_for_date(seva_date):
     if seva_date is None:
         seva_date = start_date
     return ["Evening Pooja"] if seva_date == start_date else ["Morning Pooja", "Evening Pooja"]
+
+
+def normalize_prasad_name_group(name):
+    name = " ".join(str(name or "").split())
+    return re.sub(r"\s*(?:&|,|\band\b)\s*", " and ", name, flags=re.IGNORECASE).casefold()
+
+
+def display_prasad_name_group(name):
+    name = " ".join(str(name or "").split())
+    return re.sub(r"\s*(?:&|,|\band\b)\s*", " & ", name, flags=re.IGNORECASE)
 
 
 def prasad_seva_tab():
@@ -107,10 +146,11 @@ def prasad_seva_tab():
     # Define tab_names for all users by default
     tab_names = [
         "Prasad Seva",
-        "Prasad Seva Summary",
-        "Total Served by Name/Group",
+        "Prasad Seva Stats",
         laddu_winners_option,
     ]
+    if st.session_state.get("prasad_tab") in ("Prasad Seva Summary", "Total Served by Name/Group"):
+        st.session_state["prasad_tab"] = "Prasad Seva Stats"
     if "prasad_tab" not in st.session_state or st.session_state["prasad_tab"] not in tab_names:
         st.session_state["prasad_tab"] = "Prasad Seva"
     selected_tab = option_menu(
@@ -195,11 +235,7 @@ def prasad_seva_tab():
         return
     # --- Clear Add Prasad Seva form fields if needed ---
     if st.session_state.get("clear_prasad_form", False):
-        st.session_state["prasad_group_names"] = ""
-        st.session_state["prasad_group_items"] = ""
-        st.session_state["prasad_group_apartment"] = ""
         st.session_state["prasad_individual_name"] = ""
-        st.session_state["prasad_individual_apartment"] = ""
         st.session_state["prasad_num_people"] = 1
         min_date = datetime.date(2026, 9, 14)
         st.session_state["prasad_seva_date"] = min_date
@@ -255,15 +291,16 @@ def prasad_seva_tab():
         unsafe_allow_html=True,
     )
 
-    st.markdown(
-        """
-        <div style='background: linear-gradient(135deg, #fff9f0 0%, #fce7cc 100%); border: 1px solid #d7a35a; border-radius: 14px; padding: 0.9rem 1rem; margin-bottom: 1rem; box-shadow: 0 4px 14px rgba(154, 96, 22, 0.12);'>
-            <div style='font-size:1rem; font-weight:800; color:#7a3d12; margin-bottom:0.35rem;'>🙏 Prasad Preparation Note</div>
-            <div style='font-size:0.95rem; color:#4d2c18; line-height:1.5;'>Kindly prepare the Prasad without garlic and onion.</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    if selected_tab == "Prasad Seva":
+        st.markdown(
+            """
+            <div style='background: linear-gradient(135deg, #fff9f0 0%, #fce7cc 100%); border: 1px solid #d7a35a; border-radius: 14px; padding: 0.9rem 1rem; margin-bottom: 1rem; box-shadow: 0 4px 14px rgba(154, 96, 22, 0.12);'>
+                <div style='font-size:1rem; font-weight:800; color:#7a3d12; margin-bottom:0.35rem;'>🙏 Prasad Preparation Note</div>
+                <div style='font-size:0.95rem; color:#4d2c18; line-height:1.5;'>Kindly prepare the Prasad without garlic and onion.</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
     with st.container(key="prasad_action_row"):
         if selected_tab == "Prasad Seva":
@@ -386,7 +423,7 @@ def prasad_seva_tab():
 
         prasad_form = st.form("add_prasad_seva_form")
         prasad_submit_disabled = st.session_state.get("prasad_submission_in_progress", False)
-        seva_type = prasad_form.radio("Type", ["Group", "Individual"], horizontal=True, key="prasad_seva_type_tab0")
+        seva_type = "Individual"
 
         pooja_container = prasad_form.container()
         with pooja_container:
@@ -405,49 +442,29 @@ def prasad_seva_tab():
             st.session_state["prasad_pooja_times"] = selected_poojas
             pooja_time = ", ".join(selected_poojas)
 
-        names = []
-        item_names = []
-        if seva_type == "Group":
-            names_str = prasad_form.text_area("Enter Names (comma separated)", key="prasad_group_names", placeholder="e.g. FullName1, FullName2, FullName3")
-            names = [n.strip() for n in names_str.split(',') if n.strip()]
-            items_str = prasad_form.text_area("Enter Item Names (comma separated)", key="prasad_group_items", placeholder="e.g. Pulihora, Kheer/Payasam, Modak, Puran Poli")
-            item_names = [i.strip() for i in items_str.split(',') if i.strip()]
-            apartment = prasad_form.text_input("Apartment Number", key="prasad_group_apartment", placeholder="e.g. 323")
-        else:
-            name = prasad_form.text_input("Name", key="prasad_individual_name", placeholder="e.g. Full Name")
-            names = [name.strip()] if name.strip() else []
-            item_name = prasad_form.text_input("Item Name", placeholder="e.g. Modak")
-            item_names = [item_name.strip()] if item_name.strip() else []
-            apartment = prasad_form.text_input("Apartment Number", key="prasad_individual_apartment", placeholder="e.g. 1203")
+        name = prasad_form.text_input("Name", key="prasad_individual_name", placeholder="e.g. Full Name")
+        names = [name.strip()] if name.strip() else []
+        item_name = prasad_form.text_input("Item Name", placeholder="e.g. Modak")
+        item_names = [item_name.strip()] if item_name.strip() else []
 
         num_people = prasad_form.number_input("Serving count", min_value=1, value=st.session_state.get('prasad_num_people', 1), key="prasad_num_people")
 
         if prasad_form.form_submit_button("✅ Add Prasad Seva", disabled=prasad_submit_disabled, type="primary"):
             st.session_state["prasad_submission_in_progress"] = True
-            prasad_status = st.status("Adding Prasad Seva...", expanded=False)
             if not names:
                 st.session_state["prasad_submission_in_progress"] = False
-                prasad_status.update(label="Please enter at least one name.", state="error", expanded=True)
                 prasad_form.error("Please enter at least one name.")
             elif not item_names:
                 st.session_state["prasad_submission_in_progress"] = False
-                prasad_status.update(label="Please enter at least one item name.", state="error", expanded=True)
                 prasad_form.error("Please enter at least one item name.")
-            elif not apartment.strip():
-                st.session_state["prasad_submission_in_progress"] = False
-                prasad_status.update(label="Apartment Number is required.", state="error", expanded=True)
-                prasad_form.error("Apartment Number is required.")
             elif not num_people:
                 st.session_state["prasad_submission_in_progress"] = False
-                prasad_status.update(label="Number of people is required.", state="error", expanded=True)
                 prasad_form.error("Number of people is required.")
             elif not seva_date:
                 st.session_state["prasad_submission_in_progress"] = False
-                prasad_status.update(label="Date is required.", state="error", expanded=True)
                 prasad_form.error("Date is required.")
             elif not pooja_time:
                 st.session_state["prasad_submission_in_progress"] = False
-                prasad_status.update(label="Please select at least one Pooja Time.", state="error", expanded=True)
                 prasad_form.error("Please select at least one Pooja Time.")
             else:
                 st.info("Add Prasad Seva is in progress...")
@@ -455,31 +472,28 @@ def prasad_seva_tab():
                     if hasattr(cursor, 'execute') and hasattr(cursor.connection, 'account'):
                         cursor.execute(
                             "INSERT INTO prasad_seva (seva_type, names, item_name, num_people, apartment, seva_date, pooja_time, created_by, status) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                            (seva_type, ', '.join(names), item, num_people, apartment, seva_date, pooja_time, st.session_state.get('admin_full_name', 'User'), 'active')
+                            (seva_type, ', '.join(names), item, num_people, None, seva_date, pooja_time, st.session_state.get('admin_full_name', 'User'), 'active')
                         )
                     else:
                         cursor.execute(
                             "INSERT INTO prasad_seva (seva_type, names, item_name, num_people, apartment, seva_date, pooja_time, created_by, status) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                            (seva_type, ', '.join(names), item, num_people, apartment, seva_date, pooja_time, st.session_state.get('admin_full_name', 'User'), 'active')
+                            (seva_type, ', '.join(names), item, num_people, None, seva_date, pooja_time, st.session_state.get('admin_full_name', 'User'), 'active')
                         )
                 conn.commit()
                 submitted_info = {
-                    "Type": seva_type,
                     "Names": ', '.join(names),
                     "Item Name(s)": ', '.join(item_names),
-                    "Apartment": apartment,
                     "Number of People": num_people,
                     "Date": seva_date.strftime('%d-%b-%Y'),
                     "Pooja Time": pooja_time
                 }
                 st.session_state["prasad_last_submission"] = submitted_info
                 st.session_state["prasad_submission_in_progress"] = False
-                prasad_status.update(label="Prasad Seva added", state="complete", expanded=False)
                 st.success("✅ Added seva successfully")
                 st.session_state["clear_prasad_form"] = True
                 st.rerun()
 
-    elif selected_tab == "Prasad Seva Summary":
+    elif selected_tab == "Prasad Seva Stats":
         cursor.execute("SELECT seva_date, pooja_time, SUM(num_people) FROM prasad_seva WHERE status='active' GROUP BY seva_date, pooja_time")
         metrics_rows = cursor.fetchall()
         min_date = datetime.date(2026, 9, 14)
@@ -493,18 +507,239 @@ def prasad_seva_tab():
         metrics_df["Date"] = pd.to_datetime(metrics_df["Date"]).dt.date
         merged_df = grid.merge(metrics_df, on=["Date", "Pooja Time"], how="left").fillna({"Total People Served": 0})
         merged_df["Total People Served"] = merged_df["Total People Served"].astype(int)
+        active_slots = int((merged_df["Total People Served"] > 0).sum())
+        st.markdown(
+            """
+            <style>
+            .prasad-summary {
+                margin: 0.25rem auto 1rem;
+                padding: 1.15rem 1.25rem 1.25rem;
+                border: 1px solid #d7e5d2;
+                border-radius: 20px;
+                background: linear-gradient(135deg, #f4fbf0 0%, #fffaf0 100%);
+                box-shadow: 0 10px 24px rgba(71, 96, 55, 0.1);
+            }
+            .prasad-summary-kicker {
+                color: #7a4b22;
+                font-size: 0.75rem;
+                font-weight: 800;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+            }
+            .prasad-summary-title {
+                margin: 0.2rem 0 0.35rem;
+                color: #254d35;
+                font-family: Georgia, serif;
+                font-size: 1.55rem;
+                font-weight: 700;
+            }
+            .prasad-summary-copy {
+                margin: 0;
+                color: #5d6e5b;
+                font-size: 0.9rem;
+            }
+            .prasad-summary-metrics {
+                display: flex;
+                gap: 0.6rem;
+                margin-top: 1rem;
+            }
+            .prasad-summary-metric {
+                flex: 1;
+                min-width: 0;
+                padding: 0.65rem 0.8rem;
+                border: 1px solid rgba(126, 160, 111, 0.28);
+                border-radius: 12px;
+                background: rgba(255, 255, 255, 0.72);
+            }
+            .prasad-summary-metric-label {
+                color: #6e7f6b;
+                font-size: 0.72rem;
+                font-weight: 700;
+            }
+            .prasad-summary-metric-value {
+                display: block;
+                margin-top: 0.15rem;
+                color: #2e7d32;
+                font-size: 1.2rem;
+                font-weight: 800;
+            }
+            .prasad-summary-table-wrap {
+                overflow: hidden;
+                border: 1px solid #dfe9df;
+                border-radius: 16px;
+                background: #ffffff;
+                box-shadow: 0 8px 20px rgba(62, 84, 59, 0.08);
+            }
+            .prasad-summary-table {
+                width: 100%;
+                border-collapse: collapse;
+                color: #26382a;
+                font-size: 0.92rem;
+            }
+            .prasad-summary-table th {
+                padding: 0.72rem 0.65rem;
+                background: #315c3c;
+                color: #ffffff;
+                font-size: 0.78rem;
+                font-weight: 800;
+                letter-spacing: 0.02em;
+                text-align: left;
+            }
+            .prasad-summary-table td {
+                padding: 0.72rem 0.65rem;
+                border-bottom: 1px solid #e7eee5;
+                vertical-align: middle;
+            }
+            .prasad-summary-table tbody tr:nth-child(even) td { background: #f8fbf7; }
+            .prasad-summary-table tbody tr:hover td { background: #fff8e6; }
+            .prasad-summary-table tbody tr:last-child td { border-bottom: 0; }
+            .prasad-summary-table th:first-child,
+            .prasad-summary-table td:first-child { width: 38%; }
+            .prasad-summary-table th:nth-child(2),
+            .prasad-summary-table td:nth-child(2) { width: 37%; }
+            .prasad-summary-table th:last-child,
+            .prasad-summary-table td:last-child { width: 25%; }
+            @media (max-width: 640px) {
+                .prasad-summary { padding: 1rem 0.85rem; border-radius: 16px; }
+                .prasad-summary-title { font-size: 1.3rem; }
+                .prasad-summary-copy { font-size: 0.82rem; }
+                .prasad-summary-table { font-size: 0.82rem; }
+                .prasad-summary-table th, .prasad-summary-table td { padding: 0.62rem 0.45rem; }
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
         merged_df["Date"] = merged_df["Date"].apply(lambda d: f"<span style='font-size:16px;'>&#128197;</span> <b>{pd.to_datetime(d).strftime('%d-%b-%Y')}</b>")
         merged_df["Pooja Time"] = merged_df["Pooja Time"].apply(lambda t: f"<span style='font-size:18px;'>{'🌅' if t=='Morning Pooja' else '🌇'}</span> <b>{t.replace('Pooja','')}</b>")
         merged_df["Total People Served"] = merged_df["Total People Served"].apply(lambda x: f"<span style='background-color:#FFECB3;color:#6D4C41;padding:4px 12px;border-radius:16px;font-weight:bold;display:inline-block;text-align:center;'>{x}</span>")
         cursor.execute("SELECT SUM(num_people) FROM prasad_seva WHERE status='active'")
         total_sponsored = cursor.fetchone()[0] or 0
-        st.markdown(f"<h4 style='text-align:center;color:#388E3C;background:#C8E6C9;padding:7px;border-radius:10px;margin-bottom:0.5em;font-size:1.1em;'>🎉 Total People Served Count (All Days): <span style='color:#1B5E20;'>{total_sponsored}</span></h4>", unsafe_allow_html=True)
-        st.markdown(merged_df.to_html(escape=False, index=False, justify='center'), unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <section class='prasad-summary'>
+                <div class='prasad-summary-kicker'>Prasad Seva · Community Service</div>
+                <div class='prasad-summary-metrics'>
+                    <div class='prasad-summary-metric'>
+                        <span class='prasad-summary-metric-label'>People served</span>
+                        <strong class='prasad-summary-metric-value'>{total_sponsored}</strong>
+                    </div>
+                    <div class='prasad-summary-metric'>
+                        <span class='prasad-summary-metric-label'>Active pooja slots</span>
+                        <strong class='prasad-summary-metric-value'>{active_slots}</strong>
+                    </div>
+                </div>
+            </section>
+            """,
+            unsafe_allow_html=True,
+        )
+        table_html = merged_df.to_html(
+            escape=False, index=False, justify="left", classes="prasad-summary-table"
+        )
+        st.markdown(
+            f"<div class='prasad-summary-table-wrap'>{table_html}</div>",
+            unsafe_allow_html=True,
+        )
         raw_metrics_df = merged_df.copy()
         raw_metrics_df["Date"] = pd.to_datetime(raw_metrics_df["Date"].str.extract(r'<b>(.*?)</b>')[0], format='%d-%b-%Y')
         raw_metrics_df["Pooja Time"] = raw_metrics_df["Pooja Time"].str.extract(r'<b>(.*?)</b>')[0]
         raw_metrics_df["Total People Served"] = raw_metrics_df["Total People Served"].str.extract(r'>(\d+)<')[0].fillna(0).astype(int)
         raw_metrics_df.to_csv(index=False)
+
+        cursor.execute("SELECT names, SUM(num_people) as total_served FROM prasad_seva WHERE status='active' GROUP BY names ORDER BY total_served DESC")
+        name_rows = cursor.fetchall()
+        grouped_name_totals = {}
+        grouped_name_labels = {}
+        for name, total_served in name_rows:
+            normalized_name = normalize_prasad_name_group(name)
+            grouped_name_totals[normalized_name] = grouped_name_totals.get(normalized_name, 0) + total_served
+            grouped_name_labels.setdefault(normalized_name, display_prasad_name_group(name))
+        name_rows = sorted(
+            [
+                (grouped_name_labels[normalized_name], total_served)
+                for normalized_name, total_served in grouped_name_totals.items()
+            ],
+            key=lambda row: row[1],
+            reverse=True,
+        )
+        st.markdown(
+            """
+            <style>
+            .prasad-group-section {
+                margin-top: 1.25rem;
+                padding: 1rem 1.1rem 1.1rem;
+                border: 1px solid #eadcc8;
+                border-radius: 18px;
+                background: linear-gradient(135deg, #fffaf1 0%, #fffdf8 100%);
+                box-shadow: 0 8px 18px rgba(112, 79, 38, 0.08);
+            }
+            .prasad-group-heading {
+                margin: 0;
+                color: #6d4322;
+                font-family: Georgia, serif;
+                font-size: 1.15rem;
+                font-weight: 700;
+            }
+            .prasad-group-subtitle {
+                margin: 0.2rem 0 0.8rem;
+                color: #806f5e;
+                font-size: 0.84rem;
+            }
+            .prasad-group-table {
+                width: 100%;
+                border-collapse: collapse;
+                color: #493b30;
+                font-size: 0.9rem;
+            }
+            .prasad-group-table th {
+                padding: 0.58rem 0.65rem;
+                color: #8a5a2b;
+                font-size: 0.75rem;
+                text-align: left;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+            }
+            .prasad-group-table td {
+                padding: 0.62rem 0.65rem;
+                border-top: 1px solid #f0e5d7;
+            }
+            .prasad-group-table tbody tr:hover td { background: #fff4dd; }
+            .prasad-group-table th:first-child,
+            .prasad-group-table td:first-child { width: 10%; text-align: center; color: #b06b2b; font-weight: 800; }
+            .prasad-group-table th:last-child,
+            .prasad-group-table td:last-child { width: 30%; text-align: right; }
+            @media (max-width: 640px) {
+                .prasad-group-section { padding: 0.9rem 0.7rem; }
+                .prasad-group-table { font-size: 0.82rem; }
+                .prasad-group-table th, .prasad-group-table td { padding: 0.55rem 0.35rem; }
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            """
+            <section class='prasad-group-section'>
+                <h3 class='prasad-group-heading'>Served by Name / Group</h3>
+            """,
+            unsafe_allow_html=True,
+        )
+        if name_rows:
+            name_df = pd.DataFrame(name_rows, columns=["Name / Group", "People Served"])
+            name_df.insert(0, "#", range(1, len(name_df) + 1))
+            name_df["Name / Group"] = name_df["Name / Group"].apply(
+                lambda name: f"<b>{name}</b>" if name else ""
+            )
+            name_df["People Served"] = name_df["People Served"].apply(
+                lambda count: f"<span style='background:#ffe7ad;color:#76501e;padding:4px 11px;border-radius:12px;font-weight:800;display:inline-block;'>{count}</span>"
+            )
+            group_table_html = name_df.to_html(
+                escape=False, index=False, justify="left", classes="prasad-group-table"
+            )
+            st.markdown(group_table_html, unsafe_allow_html=True)
+        else:
+            st.info("No Prasad Seva entries yet.")
+        st.markdown("</section>", unsafe_allow_html=True)
 
     elif selected_tab == "Prasad Seva" and st.session_state.get("prasad_inline_action") not in ("edit", "delete"):
         min_date = datetime.date(2026, 9, 14)
@@ -609,18 +844,6 @@ def prasad_seva_tab():
         else:
             st.info("No Prasad Seva entries yet.")
 
-    elif selected_tab == "Total Served by Name/Group":
-        st.markdown("<h5 style='margin-bottom:0.2em;'>🧑👥 Total Served by Name/Group</h5>", unsafe_allow_html=True)
-        cursor.execute("SELECT names, SUM(num_people) as total_served FROM prasad_seva WHERE status='active' GROUP BY names ORDER BY total_served DESC")
-        name_rows = cursor.fetchall()
-        if name_rows and len(name_rows) > 0:
-            name_df = pd.DataFrame(name_rows, columns=["Name/Group", "Total Served"])
-            name_df["Name/Group"] = name_df["Name/Group"].apply(lambda n: f"<span style='font-size:16px;'>&#128100;</span> <b>{n}</b>" if n else "")
-            name_df["Total Served"] = name_df["Total Served"].apply(lambda x: f"<span style='background-color:#FFECB3;color:#6D4C41;padding:4px 12px;border-radius:16px;font-weight:bold;display:inline-block;text-align:center;'>{x}</span>")
-            st.markdown(name_df.to_html(escape=False, index=False, justify='center'), unsafe_allow_html=True)
-        else:
-            st.info("No Prasad Seva entries yet.")
-
     if selected_tab == "Prasad Seva" and st.session_state.get("prasad_inline_action") in ("edit", "delete"):
         query = "SELECT id, seva_type, names, item_name, num_people, apartment, seva_date, pooja_time, created_by, status FROM prasad_seva WHERE status='active' ORDER BY seva_date, pooja_time, id"
         cursor.execute(query)
@@ -661,11 +884,9 @@ def prasad_seva_tab():
                 entry = df[df["ID"]==selected_id].iloc[0]
             if entry is not None:
                 if st.session_state.get("prasad_inline_action") == "edit":
-                    st.markdown(f"<b>Type:</b> " + (f"<span style='background-color:#B2DFDB;color:#4E342E;padding:4px 10px;border-radius:12px;font-weight:bold;'>👥 Group</span>" if entry['Type']=='Group' else f"<span style='background-color:#FFCCBC;color:#4E342E;padding:4px 10px;border-radius:12px;font-weight:bold;'>🧑 Individual</span>"), unsafe_allow_html=True)
                     new_names = st.text_input("Names", value=str(entry["Names"]), key=f"edit_names_{selected_id}")
                     new_item = st.text_input("Item Name", value=entry["Item Name"], key=f"edit_item_{selected_id}")
                     new_num = st.number_input("Serving count", min_value=1, value=int(entry["Serving count"]), key=f"edit_num_{selected_id}")
-                    st.markdown(f"<b>Apartment Number:</b> <span style='font-size:16px;'>&#127968;</span> <b>{entry['Apartemnt Number']}</b>", unsafe_allow_html=True)
                     min_date = datetime.date(2026, 9, 14)
                     current_date = pd.to_datetime(entry["Date"]).date() if pd.notna(entry["Date"]) else min_date
                     new_date = st.date_input("Date", value=current_date, min_value=min_date, key=f"edit_prasad_date_{selected_id}")
@@ -677,8 +898,8 @@ def prasad_seva_tab():
                     new_pooja_time = st.radio("Pooja Time", pooja_options, index=pooja_index, key=f"edit_prasad_time_{selected_id}")
                     if st.button("Update Prasad Seva", key=f"update_prasad_{selected_id}"):
                         cursor.execute(
-                            "UPDATE prasad_seva SET seva_type=%s, names=%s, item_name=%s, num_people=%s, apartment=%s, seva_date=%s, pooja_time=%s, status=%s WHERE id=%s",
-                            (entry["Type"], new_names.strip(), new_item, new_num, entry["Apartemnt Number"], new_date, new_pooja_time, 'active', selected_id)
+                            "UPDATE prasad_seva SET seva_type=%s, names=%s, item_name=%s, num_people=%s, seva_date=%s, pooja_time=%s, status=%s WHERE id=%s",
+                            ("Individual", new_names.strip(), new_item, new_num, new_date, new_pooja_time, 'active', selected_id)
                         )
                         conn.commit()
                         st.session_state["prasad_inline_action"] = "view"
