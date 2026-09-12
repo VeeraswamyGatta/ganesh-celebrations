@@ -906,7 +906,7 @@ def prasad_seva_tab():
                             if st.button(f"Send Prasad Seva Details to Email ({label})"):
                                 cursor.execute("SELECT email FROM notification_emails")
                                 notification_emails = [row[0] for row in cursor.fetchall() if row[0]]
-                                html_table = filtered_df_tab.drop(columns=["ID", "Created By"]).to_html(index=False, border=1, justify='center')
+                                html_table = filtered_df_tab.drop(columns=["ID", "Created By", "Apartemnt Number"], errors="ignore").to_html(index=False, border=1, justify='center')
                                 send_email(
                                     f"Prasad Seva Sponsors List ({label})",
                                     f"<b>Current Prasad Seva List ({label})</b><br><br>{html_table}",
