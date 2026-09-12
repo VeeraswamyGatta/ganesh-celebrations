@@ -54,15 +54,18 @@ def expenses_tab():
     # Determine tabs to show based on user role
     is_admin = st.session_state.get("admin_logged_in", False)
     if is_admin:
-        section_names = ["Add Expense", "Expenses List", "Expense Summary by Person", "Edit/Delete Expense", "Settlements"]
+        section_names = ["Expenses", "Settlements"]
     else:
-        section_names = ["Expenses List"]
+        section_names = ["Expenses"]
+    if st.session_state.get("expenses_management_menu") not in section_names:
+        st.session_state.pop("expenses_management_menu", None)
     if "expenses_section" not in st.session_state or st.session_state["expenses_section"] not in section_names:
         st.session_state["expenses_section"] = section_names[0]
+        st.session_state["expense_inline_action"] = None
     selected_section = option_menu(
         "Expenses Management",
         section_names,
-        icons=["plus-circle", "list-ul", "file-earmark-image", "bar-chart", "pencil-square", "wallet2"][:len(section_names)],
+        icons=["list-ul", "wallet2"][:len(section_names)],
         menu_icon="cash-stack",
         default_index=section_names.index(st.session_state["expenses_section"]),
         orientation="horizontal",
@@ -97,6 +100,8 @@ def expenses_tab():
         },
     )
     st.session_state["expenses_section"] = selected_section
+    if selected_section != "Expenses":
+        st.session_state["expense_inline_action"] = None
     # Settlements Section (admin only)
     if is_admin and selected_section == "Settlements":
 
@@ -227,7 +232,76 @@ def expenses_tab():
             summary_df = summary_df[cols]
             st.dataframe(summary_df, use_container_width=True)
 
-    if is_admin and selected_section == "Add Expense":
+    if is_admin and selected_section == "Expenses":
+        st.markdown(
+            """
+            <style>
+            .st-key-expense_inline_actions {
+                margin: 0.2rem 0 1rem;
+                padding: 0.55rem;
+                overflow: hidden;
+                border: 1px solid #ead8a9;
+                border-radius: 14px;
+                background: linear-gradient(135deg, #fffdf7 0%, #f1f8e9 100%);
+                box-shadow: 0 4px 14px rgba(93, 64, 55, 0.1);
+            }
+            .st-key-expense_inline_actions [data-testid="stHorizontalBlock"] {
+                flex-wrap: nowrap !important;
+                gap: 0.45rem !important;
+                overflow: hidden;
+            }
+            .st-key-expense_inline_actions [data-testid="stColumn"] {
+                min-width: 0 !important;
+                flex: 1 1 0 !important;
+            }
+            .st-key-expense_inline_actions button {
+                min-height: 2.45rem !important;
+                border: 1px solid #d8b15a !important;
+                border-radius: 10px !important;
+                background: #ffffff !important;
+                color: #6a1b1b !important;
+                font-size: 0.78rem !important;
+                font-weight: 800 !important;
+                white-space: nowrap !important;
+                box-shadow: 0 2px 6px rgba(106, 27, 27, 0.1) !important;
+            }
+            .st-key-expense_inline_actions button:hover {
+                border-color: #8b1737 !important;
+                background: #fff8e1 !important;
+                transform: translateY(-1px);
+            }
+            @media (max-width: 640px) {
+                .st-key-expense_inline_actions {
+                    margin-bottom: 0.8rem;
+                    padding: 0.42rem;
+                }
+                .st-key-expense_inline_actions [data-testid="stColumn"] {
+                    min-width: 0 !important;
+                    flex-basis: 0 !important;
+                }
+                .st-key-expense_inline_actions button {
+                    min-height: 2.25rem !important;
+                    padding: 0.35rem 0.4rem !important;
+                    font-size: 0.65rem !important;
+                }
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+        with st.container(key="expense_inline_actions"):
+            action_columns = st.columns(3)
+            if action_columns[0].button("➕ Add", key="expense_inline_add", use_container_width=True):
+                st.session_state["expense_inline_action"] = "add"
+                st.rerun()
+            if action_columns[1].button("✏️ Edit", key="expense_inline_edit", disabled=df.empty, use_container_width=True):
+                st.session_state["expense_inline_action"] = "edit"
+                st.rerun()
+            if action_columns[2].button("🗑️ Delete", key="expense_inline_delete", disabled=df.empty, use_container_width=True):
+                st.session_state["expense_inline_action"] = "delete"
+                st.rerun()
+
+    if is_admin and selected_section == "Expenses" and st.session_state.get("expense_inline_action") == "add":
             cursor.execute("SELECT item FROM sponsorship_items")
             categories = [row[0] for row in cursor.fetchall()]
             if "Miscellaneous" not in categories:
@@ -314,9 +388,10 @@ def expenses_tab():
                     st.success("✅ Expense added and notification email sent!")
                     # Set flag to clear input fields on next run
                     st.session_state["clear_expense_form"] = True
+                    st.session_state["expense_inline_action"] = None
                     st.rerun()
     # Expenses List Section
-    if selected_section == "Expenses List":
+    if selected_section == "Expenses" and not st.session_state.get("expense_inline_action"):
         category_options = ["All"] + sorted(df["Category"].dropna().unique().tolist())
         with st.popover("🔍", help="Search expenses"):
             selected_category = st.selectbox("Category", category_options, key="filter_category")
@@ -339,16 +414,59 @@ def expenses_tab():
         )
         with open("app/html/expense/category_summary_card.html", "r") as f:
             card_template = f.read()
-        st.markdown(
-            card_template.format(
-                wallet_amount=float(wallet_amount),
-                total_payments=float(total_payments),
-                total_expenses=float(total_expenses),
-                wallet_percent=min(max(float(wallet_amount) / float(total_payments) * 100, 0), 100) if total_payments else 0,
-                table_rows=table_rows,
-            ),
-            unsafe_allow_html=True,
-        )
+        if is_admin:
+            st.markdown(
+                card_template.format(
+                    wallet_amount=float(wallet_amount),
+                    total_payments=float(total_payments),
+                    total_expenses=float(total_expenses),
+                    wallet_percent=min(max(float(wallet_amount) / float(total_payments) * 100, 0), 100) if total_payments else 0,
+                    table_rows=table_rows,
+                ),
+                unsafe_allow_html=True,
+            )
+        if is_admin and not filtered_df.empty:
+            person_summary = (
+                filtered_df.assign(**{"Spent By": filtered_df["Spent By"].fillna("Unknown")})
+                .groupby("Spent By", as_index=False)["Amount"]
+                .sum()
+                .sort_values("Amount", ascending=False)
+                .rename(columns={"Spent By": "Name", "Amount": "Total Amount"})
+            )
+            st.markdown(
+                "<div style='height:1rem;'></div><div style='padding:0.7rem 0 0.55rem; border-top:1px solid #e4ddd7; color:#6a1b1b; font-size:1.05rem; font-weight:800;'>👤 Expense Details by Person</div>",
+                unsafe_allow_html=True,
+            )
+            person_summary["Total Amount"] = person_summary["Total Amount"].astype(float).round(2)
+            person_summary_rows = "".join(
+                f"<tr><td>{escape(str(row['Name']))}</td><td class='expense-person-amount'>${float(row['Total Amount']):,.2f}</td></tr>"
+                for _, row in person_summary.iterrows()
+            )
+            st.markdown(
+                f"""
+<style>
+    .expense-person-table-wrap {{ margin-top:0.2rem; overflow-x:auto; border:1px solid #e4ddd7; border-radius:12px; box-shadow:0 3px 10px rgba(106,27,27,0.08); }}
+    .expense-person-table {{ width:100%; table-layout:fixed; border-collapse:collapse; color:#3e2723; font-size:0.82rem; }}
+    .expense-person-table th {{ width:65%; padding:0.62rem 0.55rem; background:#6a1b1b; color:#fffaf0; font-size:0.72rem; font-weight:800; letter-spacing:0.04em; text-align:left; text-transform:uppercase; white-space:nowrap; }}
+    .expense-person-table th:last-child {{ width:35%; text-align:right; }}
+    .expense-person-table td {{ padding:0.55rem; border-top:1px solid #eee4dc; vertical-align:middle; overflow-wrap:anywhere; }}
+    .expense-person-table tr:nth-child(even) td {{ background:#fffaf5; }}
+    .expense-person-amount {{ color:#8b1737; font-weight:800; text-align:right; white-space:nowrap; }}
+    @media (max-width:640px) {{
+        .expense-person-table {{ font-size:0.75rem; }}
+        .expense-person-table th, .expense-person-table td {{ padding:0.5rem 0.42rem; }}
+        .expense-person-table th {{ font-size:0.64rem; }}
+    }}
+</style>
+<div class='expense-person-table-wrap'>
+<table class='expense-person-table'>
+<thead><tr><th>Name</th><th>Total Amount</th></tr></thead>
+<tbody>{person_summary_rows}</tbody>
+</table>
+</div>
+""",
+                unsafe_allow_html=True,
+            )
         if filtered_df.empty:
             st.info("No expenses recorded yet.")
         else:
@@ -390,30 +508,51 @@ def expenses_tab():
                     f"<div class='receipt-preview-inline'><img src='{data_uri}' class='receipt-preview-image' alt='Receipt preview' /></div>"
                 )
             table_df["ReceiptHtml"] = table_df.apply(build_receipt_html, axis=1)
-            table_df = table_df[["Expense", "Amount", "Date", "ReceiptHtml", "Comments"]].sort_values(
+            report_columns = ["Expense", "Amount", "Date"]
+            if is_admin:
+                report_columns.append("Spent By")
+            report_columns.extend(["ReceiptHtml", "Comments"])
+            table_df = table_df[report_columns].sort_values(
                 by="Date", ascending=False
             ).reset_index(drop=True)
+            def build_expense_row(row):
+                spent_by_cell = f"<td>{escape(str(row['Spent By']))}</td>" if is_admin else ""
+                return (
+                    f"<tr>"
+                    f"<td class='expense-table-name'>{escape(str(row['Expense']))}</td>"
+                    f"<td class='expense-table-amount'>${float(row['Amount']):,.2f}</td>"
+                    f"<td>{escape(str(row['Date']))}</td>"
+                    f"{spent_by_cell}"
+                    f"<td>{row['ReceiptHtml']}</td>"
+                    f"<td>{escape(str(row['Comments']))}</td>"
+                    f"</tr>"
+                )
+
             expense_table_rows = "".join(
-                f"<tr>"
-                f"<td class='expense-table-name'>{escape(str(row['Expense']))}</td>"
-                f"<td class='expense-table-amount'>${float(row['Amount']):,.2f}</td>"
-                f"<td>{escape(str(row['Date']))}</td>"
-                f"<td>{row['ReceiptHtml']}</td>"
-                f"<td>{escape(str(row['Comments']))}</td>"
-                f"</tr>"
+                build_expense_row(row)
                 for _, row in table_df.iterrows()
             )
+            report_headers = "<th>Expense</th><th>Amount</th><th>Date</th>"
+            if is_admin:
+                report_headers += "<th>Spent By</th>"
+            report_headers += "<th>Receipt</th><th>Comments</th>"
             st.markdown(
                 f"""
 <style>
     .expense-table-wrap {{ margin-top:0.7rem; overflow-x:auto; border:1px solid #e4ddd7; border-radius:12px; box-shadow:0 3px 10px rgba(106,27,27,0.08); }}
     .expense-table {{ width:100%; min-width:0; table-layout:fixed; border-collapse:collapse; color:#3e2723; font-size:0.82rem; }}
-    .expense-table th {{ padding:0.65rem 0.55rem; background:#6a1b1b; color:#fffaf0; font-size:0.72rem; font-weight:800; letter-spacing:0.04em; text-align:left; text-transform:uppercase; }}
+    .expense-table th {{ padding:0.65rem 0.55rem; background:#6a1b1b; color:#fffaf0; font-size:0.72rem; font-weight:800; letter-spacing:0.04em; text-align:left; text-transform:uppercase; white-space:nowrap; vertical-align:middle; }}
     .expense-table th:nth-child(1) {{ width:40%; }}
     .expense-table th:nth-child(2) {{ width:14%; text-align:right; }}
     .expense-table th:nth-child(3) {{ width:16%; }}
     .expense-table th:nth-child(4) {{ width:12%; }}
     .expense-table th:nth-child(5) {{ width:18%; }}
+    .expense-table-admin th:nth-child(1) {{ width:28%; }}
+    .expense-table-admin th:nth-child(2) {{ width:12%; text-align:right; }}
+    .expense-table-admin th:nth-child(3) {{ width:13%; }}
+    .expense-table-admin th:nth-child(4) {{ width:15%; }}
+    .expense-table-admin th:nth-child(5) {{ width:14%; }}
+    .expense-table-admin th:nth-child(6) {{ width:18%; }}
     .expense-table td {{ padding:0.62rem 0.55rem; border-top:1px solid #eee4dc; vertical-align:top; overflow-wrap:anywhere; }}
     .expense-table tr:nth-child(even) td {{ background:#fffaf5; }}
     .expense-table-name {{ color:#3e2723; font-weight:700; line-height:1.35; }}
@@ -432,11 +571,17 @@ def expenses_tab():
         .expense-table th:nth-child(3) {{ width:16%; }}
         .expense-table th:nth-child(4) {{ width:12%; }}
         .expense-table th:nth-child(5) {{ width:21%; }}
+        .expense-table-admin th:nth-child(1) {{ width:26%; }}
+        .expense-table-admin th:nth-child(2) {{ width:13%; }}
+        .expense-table-admin th:nth-child(3) {{ width:14%; }}
+        .expense-table-admin th:nth-child(4) {{ width:16%; }}
+        .expense-table-admin th:nth-child(5) {{ width:13%; }}
+        .expense-table-admin th:nth-child(6) {{ width:18%; }}
     }}
 </style>
 <div class='expense-table-wrap'>
-<table class='expense-table'>
-<thead><tr><th>Expense</th><th>Amount</th><th>Date</th><th>Receipt</th><th>Comments</th></tr></thead>
+<table class='expense-table {'expense-table-admin' if is_admin else ''}'>
+<thead><tr>{report_headers}</tr></thead>
 <tbody>{expense_table_rows}</tbody>
 </table>
 </div>
@@ -445,7 +590,7 @@ def expenses_tab():
             )
 
     # Expense Summary by Person Section (admin only)
-    if is_admin and selected_section == "Expense Summary by Person":
+    if is_admin and selected_section == "Expenses" and st.session_state.get("expense_inline_action") == "summary":
             cursor.execute("SELECT spent_by, SUM(amount) FROM expenses WHERE status='active' GROUP BY spent_by ORDER BY SUM(amount) DESC")
             summary_rows = cursor.fetchall()
             if summary_rows:
@@ -457,7 +602,7 @@ def expenses_tab():
             else:
                 st.info("No expense summary available yet.")
     # Edit/Delete Expense Section (admin only)
-    if is_admin and selected_section == "Edit/Delete Expense":
+    if is_admin and selected_section == "Expenses" and st.session_state.get("expense_inline_action") in ("edit", "delete"):
             if rows:
                 categories = []
                 cursor.execute("SELECT item FROM sponsorship_items")
@@ -584,6 +729,7 @@ def expenses_tab():
                                 from app.email_utils import send_email
                                 send_email(subject, body, recipients)
                             st.success("✅ Updated and notification email sent!")
+                            st.session_state["expense_inline_action"] = None
                             st.rerun()
                     with delete_tab:
                         entered_cat = st.text_input(f"Type the Category to confirm deletion ({entry['Category']})", key=f"delete_cat_{selected_id}")
@@ -621,6 +767,7 @@ def expenses_tab():
                                 from app.email_utils import send_email
                                 send_email(subject, body, recipients)
                                 st.success("🗑️ Deleted and notification email sent!")
+                                st.session_state["expense_inline_action"] = None
                                 st.rerun()
                             else:
                                 st.warning(f"Please type the exact Category '{entry['Category']}' and Sub Category '{entry['Sub Category']}' to confirm deletion.")

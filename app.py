@@ -1062,6 +1062,9 @@ else:
         if st.session_state.get("content_loading_message"):
             content_loader = show_page_loader(st.session_state.content_loading_message)
 
+        if main_menu != "Expenses":
+            st.session_state["expense_inline_action"] = None
+
         if main_menu == "Dashboard":
             from app.sponsorship import sponsorship_tab
             with st.container(key="dashboard_content"):

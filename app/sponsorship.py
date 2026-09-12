@@ -498,7 +498,7 @@ def sponsorship_tab(dashboard_only=False):
     if dashboard_only:
         st.markdown("""
 <style>
-    button#dashboard_donate_cta {
+    button#dashboard_donate_cta, button#dashboard_donate_cta_full {
         background: linear-gradient(135deg, #ff8f00 0%, #ff5e00 45%, #d81b60 100%) !important;
         color: #ffffff !important;
         border: 1px solid #ffb300 !important;
@@ -513,7 +513,7 @@ def sponsorship_tab(dashboard_only=False):
         animation: sponsorDonateBlink 1.2s infinite;
         transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
-    button#dashboard_donate_cta:hover {
+    button#dashboard_donate_cta:hover, button#dashboard_donate_cta_full:hover {
         transform: translateY(-1px) scale(1.01);
         box-shadow: 0 10px 26px rgba(216, 27, 96, 0.28), 0 0 18px rgba(255, 170, 0, 0.55);
     }
@@ -539,7 +539,8 @@ def sponsorship_tab(dashboard_only=False):
 </div>
 """, unsafe_allow_html=True)
 
-        if st.button("✨ Click here to sponsor/donate ✨", key="dashboard_donate_cta", type="primary", use_container_width=True):
+        dashboard_cta = "✨ Click here to donate ✨" if not sponsorship_items or remaining_slots <= 0 else "✨ Click here to sponsor/donate ✨"
+        if st.button(dashboard_cta, key="dashboard_donate_cta", type="primary", use_container_width=True):
             st.session_state.main_navigation = "Donate"
             st.session_state.page_loading_message = "Loading sponsorship details"
             st.session_state.scroll_to_top = True
@@ -611,6 +612,7 @@ def sponsorship_tab(dashboard_only=False):
         <div class='summary-finance-item wallet' style='margin-top:0.8rem;'>
             <div class='balance-summary-row'><span class='balance-summary-label'>💳 BALANCE AFTER EXPENSES</span><span class='balance-summary-value'>${available_wallet:,.2f}</span></div>
             <div class='wallet-table'>
+                <div class='wallet-row'><span>Pending received</span><strong>${total_pending:,.2f}</strong></div>
                 <div class='wallet-row'><span>Amount received</span><strong>${total_received:,.2f}</strong></div>
                 <div class='wallet-row'><span>Approved expenses</span><strong>&minus; ${approved_expenses:,.2f}</strong></div>
                 <div class='wallet-row'><span>Today's submissions</span><strong>${today_total:,.2f}</strong></div>
@@ -633,13 +635,33 @@ def sponsorship_tab(dashboard_only=False):
                     for row in dashboard_items
                 )
                 if all_items_sponsored:
-                    st.markdown(
-                        "<div style='margin:0.8rem 0 1rem; padding:1rem 1.2rem; border:1px solid #a5d6a7; border-left:5px solid #2e7d32; border-radius:12px; background:linear-gradient(100deg,#f1f8e9,#fffde7); color:#3e2723;'>"
-                        "<div style='font-size:1.05rem; font-weight:800; color:#1b5e20;'>🎉 All sponsorship items are fully sponsored!</div>"
-                        "<div style='margin-top:0.35rem; font-size:0.9rem; line-height:1.5;'>You can still contribute a donation to help support our celebration events, food distribution, and other community activities.</div>"
-                        "</div>",
-                        unsafe_allow_html=True,
-                    )
+                    with st.container(key="fully_sponsored_donation"):
+                        st.markdown(
+                            """
+                            <style>
+                            .st-key-fully_sponsored_donation {
+                                margin: 0.8rem 0 1rem;
+                                padding: 1rem 1.2rem 0.85rem;
+                                border: 1px solid #a5d6a7;
+                                border-left: 5px solid #2e7d32;
+                                border-radius: 12px;
+                                background: linear-gradient(100deg, #f1f8e9, #fffde7);
+                                color: #3e2723;
+                            }
+                            .st-key-fully_sponsored_donation button {
+                                margin-top: 0.8rem;
+                            }
+                            </style>
+                            <div style='font-size:1.05rem; font-weight:800; color:#1b5e20;'>🎉 All sponsorship items are fully sponsored!</div>
+                            <div style='margin-top:0.35rem; font-size:0.9rem; line-height:1.5;'>You can still contribute a donation to help support our celebration events, food distribution, and other community activities.</div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+                        if st.button("✨ Click here to donate ✨", key="dashboard_donate_cta_full", type="primary", use_container_width=True):
+                            st.session_state.main_navigation = "Donate"
+                            st.session_state.page_loading_message = "Loading donation details"
+                            st.session_state.scroll_to_top = True
+                            st.rerun()
                 # Show available sponsorship items first, then sold-out items.
                 dashboard_items = sorted(
                     dashboard_items,
@@ -1121,10 +1143,11 @@ def sponsorship_tab(dashboard_only=False):
         available_items,
         key=lambda row: (-(row[5]), row[0])
     )
-    sponsorship_form.markdown(
-        "<div class='sponsor-items-heading'>Select Items to Sponsor</div>",
-        unsafe_allow_html=True,
-    )
+    if available_items:
+        sponsorship_form.markdown(
+            "<div class='sponsor-items-heading'>Select Items to Sponsor</div>",
+            unsafe_allow_html=True,
+        )
     selected_items = []
     cards_per_row = 1
     for row_start in range(0, len(available_items), cards_per_row):
@@ -1171,11 +1194,15 @@ def sponsorship_tab(dashboard_only=False):
             "or if you want to <strong>donate directly without selecting any sponsorship</strong>."
         )
     else:
-        donation_label = "Donation amount (required)"
-        note_text = "📌 You can <strong>donate directly</strong> by entering an amount here."
+        donation_label = "Donation amount"
+        note_text = ""
+    donation_note_html = (
+        f"<div style='color:#e65100; font-size:0.9em; margin:4px 0 8px; line-height:1.5;'>{note_text}</div>"
+        if note_text else ""
+    )
     sponsorship_form.markdown(
         f"<div style='font-size:1rem; font-weight:600; color:#31333F;'>{donation_label}</div>"
-        f"<div style='color:#e65100; font-size:0.9em; margin:4px 0 8px; line-height:1.5;'>{note_text}</div>",
+        f"{donation_note_html}",
         unsafe_allow_html=True
     )
     donation = sponsorship_form.number_input(
@@ -1204,7 +1231,12 @@ def sponsorship_tab(dashboard_only=False):
     def format_name(name_str):
         return ' '.join(word.capitalize() for word in (name_str or "").strip().split())
 
-    validation_errors = st.session_state.get("sponsorship_validation_errors", [])
+    validation_errors = [
+        "Please enter a donation amount"
+        if str(error).startswith("Please enter a donation amount")
+        else error
+        for error in st.session_state.get("sponsorship_validation_errors", [])
+    ]
     if validation_errors:
         sponsorship_form.error("Please complete the required fields before submitting:")
         for error in validation_errors:
@@ -1251,7 +1283,7 @@ def sponsorship_tab(dashboard_only=False):
                 if slots_available:
                     errors.append("Please sponsor at least one item or donate an amount.")
                 else:
-                    errors.append("Please enter a donation amount because all sponsorship items are currently full.")
+                    errors.append("Please enter a donation amount")
             if email_val and ('@' not in email_val or not email_val.lower().endswith('.com')):
                 errors.append("Please enter a valid email address (must contain '@' and end with .com)")
 

@@ -35,10 +35,26 @@ st.markdown('''
         background-color: #2e7d32;
         height: 3px;
     }
+    div[data-testid="stRadio"] div[role="radiogroup"] {
+        flex-wrap: nowrap !important;
+        gap: 0.65rem !important;
+        overflow-x: auto;
+        white-space: nowrap;
+    }
+    div[data-testid="stRadio"] div[role="radiogroup"] label {
+        flex: 0 0 auto !important;
+        white-space: nowrap;
+    }
     @media (max-width: 640px) {
         div[data-testid="stTabs"] [data-baseweb="tab"] {
             padding: 0.5rem 0.7rem;
             font-size: 0.86rem;
+        }
+        div[data-testid="stRadio"] div[role="radiogroup"] {
+            gap: 0.35rem !important;
+        }
+        div[data-testid="stRadio"] div[role="radiogroup"] label {
+            font-size: 0.78rem;
         }
     }
     </style>
@@ -57,7 +73,7 @@ from email.mime.text import MIMEText
 def statistics_tab():
     # --- Combined PayPal + Cash Total ---
     st.session_state['active_tab'] = 'Statistics'
-    is_admin = st.session_state.get('is_admin', False)
+    is_admin = st.session_state.get('admin_logged_in', False)
     # --- Audit trail: Your Full Name ---
     # Removed audit trail full name requirement as requested
     # (Removed duplicate display of audit name in statistics page)
@@ -107,6 +123,8 @@ def statistics_tab():
             if submission_date:
                 daily_records.append({'Date': submission_date, 'Amount': donation_amt})
     df = pd.DataFrame(records)
+    sponsor_names = raw_df['name'].dropna().astype(str).str.strip()
+    total_sponsors = sponsor_names[sponsor_names != ''].nunique()
     aggregation = {'Amount': 'sum'}
     if is_admin:
         aggregation.update({'Apartment': 'first', 'Gothram': 'first'})
@@ -133,20 +151,14 @@ def statistics_tab():
         for item, amount, limit in available_items
     ])
 
-    daily_tab, sponsored_records_tab, available_items_tab = st.tabs([
-        "📈 Daily Submitted",
-        "📋 Sponsored Records",
-        "🧾 Available Items",
-    ])
-    with daily_tab:
-        st.download_button(
-            "⬇️ Download daily amounts",
-            data=daily_export.to_csv(index=False),
-            file_name="daily_submitted_sponsorship_amount.csv",
-            mime="text/csv",
-            key="stats_daily_amount_download",
-            help="Download daily submitted amounts",
-        )
+    statistics_view = st.radio(
+        "Statistics view",
+        ["📈 Daily Submitted", "📋 Sponsored Records", "🧾 Available Items"],
+        horizontal=True,
+        key="stats_view",
+        label_visibility="collapsed",
+    )
+    if statistics_view == "📈 Daily Submitted":
         if daily_df.empty:
             st.info("No dated sponsorship submissions available to chart.")
         else:
@@ -175,7 +187,7 @@ def statistics_tab():
                 use_container_width=True,
             )
 
-    with available_items_tab:
+    if statistics_view == "🧾 Available Items":
         avail_filtered = df_available.copy()
         st.dataframe(avail_filtered.reset_index(drop=True), use_container_width=True, hide_index=True)
         st.download_button(
@@ -187,10 +199,29 @@ def statistics_tab():
             help="Download available sponsorship items",
         )
 
-    with sponsored_records_tab:
-        records_tab, chart_tab = st.tabs(["Records", "Chart"])
-    with records_tab:
-        display_columns = ['Name', 'Apartment', 'Gothram', 'Amount'] if is_admin else ['Name', 'Amount']
+    if statistics_view == "📋 Sponsored Records":
+        records_view = st.radio(
+            "Sponsored records view",
+            ["Records", "Chart"],
+            horizontal=True,
+            key="stats_sponsored_records_view",
+            label_visibility="collapsed",
+        )
+    else:
+        records_view = None
+    if statistics_view == "📋 Sponsored Records" and records_view == "Records":
+        if is_admin:
+            st.metric("Total sponsors", total_sponsors)
+            available_display_columns = ['Name', 'Apartment', 'Gothram', 'Amount']
+            selected_display_columns = st.multiselect(
+                "Columns to display",
+                options=available_display_columns,
+                default=available_display_columns,
+                key="stats_sponsor_display_columns",
+            )
+            display_columns = selected_display_columns
+        else:
+            display_columns = ['Name', 'Amount']
         table_df = df_display[display_columns].copy()
         table_df.index = range(1, len(table_df) + 1)
 
@@ -213,6 +244,15 @@ def statistics_tab():
 
         filtered_table = filtered_table.reset_index(drop=True)
         filtered_table.index = range(1, len(filtered_table) + 1)
+        if is_admin:
+            st.download_button(
+                "⬇️ Download sponsored records",
+                data=filtered_table.to_csv(index=False),
+                file_name="sponsored_records.csv",
+                mime="text/csv",
+                key="stats_sponsored_records_download",
+                help="Download the filtered sponsored records using the selected columns",
+            )
         if filtered_table.empty:
             st.info("No sponsored records match the selected filters.")
         else:
@@ -253,7 +293,7 @@ def statistics_tab():
                 unsafe_allow_html=True,
             )
 
-    with chart_tab:
+    if statistics_view == "📋 Sponsored Records" and records_view == "Chart":
         if df_display.empty:
             st.info("No sponsorship records available to chart.")
         else:
