@@ -119,8 +119,11 @@ SPONSOR_TABLE_CSS = """
 
 def get_pooja_options_for_date(seva_date):
     start_date = datetime.date(2026, 9, 14)
+    end_date = datetime.date(2026, 9, 20)
     if seva_date is None:
         seva_date = start_date
+    if seva_date == end_date:
+        return ["Morning Pooja"]
     return ["Evening Pooja"] if seva_date == start_date else ["Morning Pooja", "Evening Pooja"]
 
 
@@ -537,6 +540,31 @@ def prasad_seva_tab():
             f"{pd.to_datetime(busiest_slot['Date']).strftime('%d-%b')} · "
             f"{busiest_slot['Pooja Time']} ({busiest_slot['Total People Served']})"
         )
+        total_sponsored = int(merged_df["Total People Served"].sum())
+        cursor.execute(
+            "SELECT names, seva_date, pooja_time FROM prasad_seva "
+            "WHERE status='active' AND NOT (seva_date = '2026-09-20' AND pooja_time = 'Evening Pooja')"
+        )
+        participant_rows = cursor.fetchall()
+        participant_groups = {
+            (normalize_prasad_name_group(name), seva_date, pooja_time)
+            for name, seva_date, pooja_time in participant_rows
+            if normalize_prasad_name_group(name)
+        }
+        total_members = len({group[0] for group in participant_groups})
+        members_by_slot = {}
+        for normalized_name, seva_date, pooja_time in participant_groups:
+            slot_key = (seva_date, pooja_time)
+            members_by_slot.setdefault(slot_key, set()).add(normalized_name)
+        slot_service_totals = {
+            (row["Date"], row["Pooja Time"]): row["Total People Served"]
+            for _, row in merged_df.iterrows()
+        }
+        slot_member_text = "<br>".join(
+            f"<b>{seva_date.strftime('%d-%b')} · {pooja_time.replace(' Pooja', '')}</b>"
+            f" &nbsp; {len(names)} members · {slot_service_totals.get((seva_date, pooja_time), 0)} people served"
+            for (seva_date, pooja_time), names in sorted(members_by_slot.items())
+        ) or "None"
         st.markdown(
             """
             <style>
@@ -675,8 +703,6 @@ def prasad_seva_tab():
         )
         merged_df["Date"] = merged_df["Date"].apply(lambda d: f"<span style='font-size:16px;'>&#128197;</span> <b>{pd.to_datetime(d).strftime('%d-%b-%Y')}</b>")
         merged_df["Total People Served"] = merged_df["Total People Served"].apply(lambda x: f"<span style='background-color:#FFECB3;color:#6D4C41;padding:4px 12px;border-radius:16px;font-weight:bold;display:inline-block;text-align:center;'>{x}</span>")
-        cursor.execute("SELECT SUM(num_people) FROM prasad_seva WHERE status='active'")
-        total_sponsored = cursor.fetchone()[0] or 0
         st.markdown(
             f"""
             <section class='prasad-summary'>
@@ -689,6 +715,10 @@ def prasad_seva_tab():
                     <div class='prasad-summary-metric'>
                         <span class='prasad-summary-metric-label'>Active pooja slots</span>
                         <strong class='prasad-summary-metric-value'>{active_slots}</strong>
+                    </div>
+                    <div class='prasad-summary-metric'>
+                        <span class='prasad-summary-metric-label'>Participating members</span>
+                        <strong class='prasad-summary-metric-value'>{total_members}</strong>
                     </div>
                 </div>
                 <div class='prasad-summary-insights'>
@@ -704,16 +734,13 @@ def prasad_seva_tab():
                         <span class='prasad-summary-insight-label'>Busiest slot</span>
                         <div class='prasad-summary-insight-value'>{busiest_slot_text}</div>
                     </div>
+                    <div class='prasad-summary-insight'>
+                        <span class='prasad-summary-insight-label'>Participation by slot</span>
+                        <div class='prasad-summary-insight-value'>{slot_member_text}</div>
+                    </div>
                 </div>
             </section>
             """,
-            unsafe_allow_html=True,
-        )
-        table_html = merged_df.to_html(
-            escape=False, index=False, justify="left", classes="prasad-summary-table"
-        )
-        st.markdown(
-            f"<div class='prasad-summary-table-wrap'>{table_html}</div>",
             unsafe_allow_html=True,
         )
         raw_metrics_df = merged_df.copy()
@@ -722,7 +749,7 @@ def prasad_seva_tab():
         raw_metrics_df["Total People Served"] = raw_metrics_df["Total People Served"].str.extract(r'>(\d+)<')[0].fillna(0).astype(int)
         raw_metrics_df.to_csv(index=False)
 
-        cursor.execute("SELECT names, SUM(num_people) as total_served FROM prasad_seva WHERE status='active' GROUP BY names ORDER BY total_served DESC")
+        cursor.execute("SELECT names, SUM(num_people) as total_served FROM prasad_seva WHERE status='active' AND NOT (seva_date = '2026-09-20' AND pooja_time = 'Evening Pooja') GROUP BY names ORDER BY names")
         name_rows = cursor.fetchall()
         grouped_name_totals = {}
         grouped_name_labels = {}
@@ -735,8 +762,7 @@ def prasad_seva_tab():
                 (grouped_name_labels[normalized_name], total_served)
                 for normalized_name, total_served in grouped_name_totals.items()
             ],
-            key=lambda row: row[1],
-            reverse=True,
+            key=lambda row: row[0].casefold(),
         )
         st.markdown(
             """
@@ -749,8 +775,8 @@ def prasad_seva_tab():
                 margin: 0 0 0.65rem;
                 padding-bottom: 0.45rem;
                 color: #6d4322;
-                font-family: Georgia, serif;
-                font-size: 1.1rem;
+                font-family: inherit;
+                font-size: 0.95rem;
                 font-weight: 700;
                 border-bottom: 2px solid #e8c98f;
             }
@@ -783,7 +809,7 @@ def prasad_seva_tab():
             .prasad-group-table th:last-child,
             .prasad-group-table td:last-child { width: 30%; text-align: right; }
             @media (max-width: 640px) {
-                .prasad-group-heading { font-size: 1rem; }
+                .prasad-group-heading { font-size: 0.9rem; }
                 .prasad-group-table { font-size: 0.82rem; }
                 .prasad-group-table th, .prasad-group-table td { padding: 0.55rem 0.35rem; }
             }
@@ -817,7 +843,7 @@ def prasad_seva_tab():
 
     elif selected_tab == "Prasad Seva" and st.session_state.get("prasad_inline_action") not in ("edit", "delete"):
         min_date = datetime.date(2026, 9, 14)
-        query = "SELECT id, seva_type, names, item_name, num_people, apartment, seva_date, pooja_time, created_by, status FROM prasad_seva WHERE status='active'"
+        query = "SELECT id, seva_type, names, item_name, num_people, apartment, seva_date, pooja_time, created_by, status FROM prasad_seva WHERE status='active' AND NOT (seva_date = '2026-09-20' AND pooja_time = 'Evening Pooja')"
         query += " ORDER BY seva_date, CASE WHEN pooja_time='Morning Pooja' THEN 0 ELSE 1 END, names, id"
         cursor.execute(query)
         rows = cursor.fetchall()
@@ -919,7 +945,7 @@ def prasad_seva_tab():
             st.info("No Prasad Seva entries yet.")
 
     if selected_tab == "Prasad Seva" and st.session_state.get("prasad_inline_action") in ("edit", "delete"):
-        query = "SELECT id, seva_type, names, item_name, num_people, apartment, seva_date, pooja_time, created_by, status FROM prasad_seva WHERE status='active' ORDER BY seva_date, pooja_time, id"
+        query = "SELECT id, seva_type, names, item_name, num_people, apartment, seva_date, pooja_time, created_by, status FROM prasad_seva WHERE status='active' AND NOT (seva_date = '2026-09-20' AND pooja_time = 'Evening Pooja') ORDER BY seva_date, pooja_time, id"
         cursor.execute(query)
         rows = cursor.fetchall()
         if rows and len(rows) > 0:

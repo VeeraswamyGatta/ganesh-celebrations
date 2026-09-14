@@ -12,6 +12,10 @@ def test_other_days_allow_morning_and_evening_pooja():
     assert options == ["Morning Pooja", "Evening Pooja"]
 
 
+def test_last_day_allows_only_morning_pooja():
+    assert get_pooja_options_for_date(date(2026, 9, 20)) == ["Morning Pooja"]
+
+
 def test_name_group_normalization_merges_separators_spacing_and_case():
     variants = [
         "Veeraswamy & Sivaparvathi",
