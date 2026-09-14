@@ -1,4 +1,5 @@
 import streamlit as st
+from io import BytesIO
 
 # Custom button styles for statistics section
 st.markdown('''
@@ -36,14 +37,42 @@ st.markdown('''
         height: 3px;
     }
     div[data-testid="stRadio"] div[role="radiogroup"] {
+        background: linear-gradient(90deg, #fffaf0 0%, #fffdf8 100%);
+        border: 1px solid #ead8a9;
+        border-radius: 14px;
+        align-items: center !important;
+        display: flex !important;
         flex-wrap: nowrap !important;
-        gap: 0.65rem !important;
-        overflow-x: auto;
+        gap: 0.35rem !important;
+        overflow-x: auto !important;
+        padding: 0.3rem !important;
+        scrollbar-width: none;
         white-space: nowrap;
+        width: 100%;
+    }
+    div[data-testid="stRadio"] div[role="radiogroup"]::-webkit-scrollbar {
+        display: none;
     }
     div[data-testid="stRadio"] div[role="radiogroup"] label {
+        align-items: center !important;
+        border-radius: 10px;
         flex: 0 0 auto !important;
+        line-height: 1.1 !important;
+        margin: 0 !important;
+        padding: 0.42rem 0.65rem !important;
         white-space: nowrap;
+    }
+    div[data-testid="stRadio"] div[role="radiogroup"] label:has(input:checked) {
+        background: #8b1737;
+        box-shadow: 0 3px 8px rgba(139, 23, 55, 0.2);
+        color: #fffaf0;
+        font-weight: 800;
+    }
+    div[data-testid="stRadio"] div[role="radiogroup"] label:has(input:checked) p {
+        color: #fffaf0 !important;
+    }
+    div.st-key-stats_view [data-testid="stRadio"] {
+        overflow-x: auto;
     }
     @media (max-width: 640px) {
         div[data-testid="stTabs"] [data-baseweb="tab"] {
@@ -51,10 +80,11 @@ st.markdown('''
             font-size: 0.86rem;
         }
         div[data-testid="stRadio"] div[role="radiogroup"] {
-            gap: 0.35rem !important;
+            gap: 0.15rem !important;
         }
         div[data-testid="stRadio"] div[role="radiogroup"] label {
-            font-size: 0.78rem;
+            font-size: 0.72rem;
+            padding: 0.38rem 0.48rem !important;
         }
     }
     </style>
@@ -151,14 +181,17 @@ def statistics_tab():
         for item, amount, limit in available_items
     ])
 
+    statistics_options = ["📋 Sponsored", "📈 Daily", "🧾 Items"]
+    if st.session_state.get("stats_view") not in statistics_options:
+        st.session_state.stats_view = statistics_options[0]
     statistics_view = st.radio(
         "Statistics view",
-        ["📈 Daily Submitted", "📋 Sponsored Records", "🧾 Available Items"],
+        statistics_options,
         horizontal=True,
         key="stats_view",
         label_visibility="collapsed",
     )
-    if statistics_view == "📈 Daily Submitted":
+    if statistics_view == "📈 Daily":
         if daily_df.empty:
             st.info("No dated sponsorship submissions available to chart.")
         else:
@@ -187,7 +220,7 @@ def statistics_tab():
                 use_container_width=True,
             )
 
-    if statistics_view == "🧾 Available Items":
+    if statistics_view == "🧾 Items":
         avail_filtered = df_available.copy()
         st.dataframe(avail_filtered.reset_index(drop=True), use_container_width=True, hide_index=True)
         st.download_button(
@@ -199,17 +232,20 @@ def statistics_tab():
             help="Download available sponsorship items",
         )
 
-    if statistics_view == "📋 Sponsored Records":
-        records_view = st.radio(
-            "Sponsored records view",
-            ["Records", "Chart"],
-            horizontal=True,
-            key="stats_sponsored_records_view",
-            label_visibility="collapsed",
-        )
+    if statistics_view == "📋 Sponsored":
+        records_toolbar, download_toolbar = st.columns([1.2, 1], gap="small")
+        with records_toolbar:
+            records_view = st.radio(
+                "Sponsored records view",
+                ["Records", "Chart"],
+                horizontal=True,
+                key="stats_sponsored_records_view",
+                label_visibility="collapsed",
+            )
+        download_slot = download_toolbar.empty()
     else:
         records_view = None
-    if statistics_view == "📋 Sponsored Records" and records_view == "Records":
+    if statistics_view == "📋 Sponsored" and records_view == "Records":
         if is_admin:
             st.metric("Total sponsors", total_sponsors)
             available_display_columns = ['Name', 'Apartment', 'Gothram', 'Amount']
@@ -245,14 +281,20 @@ def statistics_tab():
         filtered_table = filtered_table.reset_index(drop=True)
         filtered_table.index = range(1, len(filtered_table) + 1)
         if is_admin:
-            st.download_button(
-                "⬇️ Download sponsored records",
-                data=filtered_table.to_csv(index=False),
-                file_name="sponsored_records.csv",
-                mime="text/csv",
-                key="stats_sponsored_records_download",
-                help="Download the filtered sponsored records using the selected columns",
-            )
+            xlsx_buffer = BytesIO()
+            with pd.ExcelWriter(xlsx_buffer, engine="xlsxwriter") as writer:
+                filtered_table.to_excel(writer, index=False, sheet_name="Sponsored Records")
+            xlsx_buffer.seek(0)
+            with download_slot.container():
+                st.download_button(
+                    "⬇️ Download sponsored records (XLSX)",
+                    data=xlsx_buffer.getvalue(),
+                    file_name="sponsored_records.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="stats_sponsored_records_download",
+                    use_container_width=True,
+                    help="Download the filtered sponsored records using the selected columns",
+                )
         if filtered_table.empty:
             st.info("No sponsored records match the selected filters.")
         else:
@@ -293,7 +335,7 @@ def statistics_tab():
                 unsafe_allow_html=True,
             )
 
-    if statistics_view == "📋 Sponsored Records" and records_view == "Chart":
+    if statistics_view == "📋 Sponsored" and records_view == "Chart":
         if df_display.empty:
             st.info("No sponsorship records available to chart.")
         else:
