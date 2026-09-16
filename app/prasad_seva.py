@@ -240,8 +240,8 @@ def prasad_seva_tab():
     if st.session_state.get("clear_prasad_form", False):
         st.session_state["prasad_individual_name"] = ""
         st.session_state["prasad_num_people"] = 1
-        min_date = datetime.date(2026, 9, 14)
-        st.session_state["prasad_seva_date"] = min_date
+        today_cst = dt.now(pytz.timezone("US/Central")).date()
+        st.session_state["prasad_seva_date"] = today_cst
         st.session_state["prasad_pooja_time"] = "Evening Pooja"
         st.session_state["prasad_filter_date"] = None
         st.session_state["prasad_filter_name"] = ""
@@ -416,10 +416,10 @@ def prasad_seva_tab():
             """,
             unsafe_allow_html=True,
         )
-        min_date = datetime.date(2026, 9, 14)
-        selected_date = st.session_state.get("prasad_seva_date", min_date)
-        if selected_date < min_date:
-            selected_date = min_date
+        today_cst = dt.now(pytz.timezone("US/Central")).date()
+        selected_date = st.session_state.get("prasad_seva_date", today_cst)
+        if selected_date < today_cst:
+            selected_date = today_cst
             st.session_state["prasad_seva_date"] = selected_date
 
         def reset_prasad_pooja_selection():
@@ -430,7 +430,7 @@ def prasad_seva_tab():
         seva_date = st.date_input(
             "Date",
             value=selected_date,
-            min_value=min_date,
+            min_value=today_cst,
             key="prasad_seva_date",
             on_change=reset_prasad_pooja_selection,
         )
@@ -477,6 +477,9 @@ def prasad_seva_tab():
             elif not seva_date:
                 st.session_state["prasad_submission_in_progress"] = False
                 prasad_form.error("Date is required.")
+            elif seva_date < today_cst:
+                st.session_state["prasad_submission_in_progress"] = False
+                prasad_form.error("Past dates cannot be added. Please select today or a future date.")
             elif not pooja_time:
                 st.session_state["prasad_submission_in_progress"] = False
                 prasad_form.error("Please select at least one Pooja Time.")
