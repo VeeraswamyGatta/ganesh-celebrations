@@ -409,6 +409,50 @@ def prasad_seva_tab():
                 margin-top: 0.15rem;
                 margin-bottom: 0.15rem;
             }
+            .selected-day-banner {
+                display: flex;
+                align-items: baseline;
+                gap: 0.5rem;
+                background: linear-gradient(135deg, #fff7e8 0%, #fff1d2 100%);
+                border: 1px solid #e7c27d;
+                border-left: 4px solid #c9872f;
+                border-radius: 10px;
+                color: #5f3a1d;
+                padding: 0.6rem 0.75rem;
+                margin: 0.15rem 0 0.8rem;
+            }
+            .selected-day-kicker {
+                color: #8a5b2a;
+                font-size: 0.78rem;
+                font-weight: 700;
+                letter-spacing: 0.02em;
+                text-transform: none !important;
+            }
+            .selected-day-banner strong {
+                font-size: 1rem;
+            }
+            .st-key-prasad_pooja_time_row [data-testid="stHorizontalBlock"] {
+                display: grid !important;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 0.5rem;
+            }
+            .st-key-prasad_pooja_time_row [data-testid="column"] {
+                min-width: 0 !important;
+                width: auto !important;
+                box-sizing: border-box;
+                background: #fffdf9;
+                border: 1px solid #e3ced5;
+                border-radius: 11px;
+                padding: 0.2rem 0.4rem 0.1rem;
+            }
+            .st-key-prasad_pooja_time_row .stCheckbox {
+                margin: 0;
+            }
+            .st-key-prasad_pooja_time_row .stCheckbox label {
+                color: #3f2d3d;
+                font-weight: 600;
+                white-space: nowrap;
+            }
             [data-testid="stHorizontalBlock"] {
                 gap: 0.75rem;
             }
@@ -438,19 +482,31 @@ def prasad_seva_tab():
         prasad_form = st.form("add_prasad_seva_form")
         prasad_submit_disabled = st.session_state.get("prasad_submission_in_progress", False)
         seva_type = "Individual"
+        prasad_form.markdown(
+            f"<div class='selected-day-banner'><span class='selected-day-kicker' style='text-transform:none !important;'>Selected Seva Day</span><strong>{seva_date.strftime('%A')}</strong></div>",
+            unsafe_allow_html=True,
+        )
+        prasad_form.markdown("<div class='pooja-time-label'>Pooja Time</div>", unsafe_allow_html=True)
 
-        pooja_container = prasad_form.container()
+        pooja_container = prasad_form.container(key="prasad_pooja_time_row")
         with pooja_container:
-            pooja_container.markdown("<div class='pooja-time-label'>Pooja Time</div>", unsafe_allow_html=True)
             pooja_options = get_pooja_options_for_date(seva_date)
             selected_poojas = []
-            pooja_checkbox_columns = pooja_container.columns(len(pooja_options) if pooja_options else 1)
+            pooja_checkbox_columns = pooja_container.columns(2 if len(pooja_options) > 1 else 1, gap="small")
             for index, option in enumerate(pooja_options):
+                display_option = {
+                    "Morning Pooja": "Morning",
+                    "Evening Pooja": "Evening",
+                }.get(option, option)
                 default_value = option == "Evening Pooja" and seva_date == datetime.date(2026, 9, 14)
                 if option in st.session_state.get("prasad_pooja_times", []):
                     default_value = True
                 with pooja_checkbox_columns[index]:
-                    is_checked = st.checkbox(option, value=default_value, key=f"prasad_pooja_checkbox_{option}")
+                    is_checked = st.checkbox(
+                        display_option,
+                        value=default_value,
+                        key=f"prasad_pooja_checkbox_{option}",
+                    )
                 if is_checked:
                     selected_poojas.append(option)
             st.session_state["prasad_pooja_times"] = selected_poojas
@@ -845,7 +901,6 @@ def prasad_seva_tab():
         st.markdown("</section>", unsafe_allow_html=True)
 
     elif selected_tab == "Prasad Seva" and st.session_state.get("prasad_inline_action") not in ("edit", "delete"):
-        min_date = datetime.date(2026, 9, 14)
         query = "SELECT id, seva_type, names, item_name, num_people, apartment, seva_date, pooja_time, created_by, status FROM prasad_seva WHERE status='active' AND NOT (seva_date = '2026-09-20' AND pooja_time = 'Evening Pooja')"
         query += " ORDER BY seva_date, CASE WHEN pooja_time='Morning Pooja' THEN 0 ELSE 1 END, names, id"
         cursor.execute(query)
@@ -886,7 +941,7 @@ def prasad_seva_tab():
                                     "Name", value="", key=f"prasad_filter_name_{label.lower()}"
                                 )
                                 filter_date = st.date_input(
-                                    "Date", value=None, min_value=min_date, key=f"prasad_filter_date_{label.lower()}"
+                                    "Date", value=None, min_value=today_cst, key=f"prasad_filter_date_{label.lower()}"
                                 )
                                 filter_pooja_time = st.selectbox(
                                     "Pooja Time",
@@ -907,7 +962,7 @@ def prasad_seva_tab():
                     if len(filtered_df_tab) > 0:
                         df_display = filtered_df_tab.drop(columns=["ID", "Created By"])
                         df_display = df_display.drop(columns=["Apartemnt Number"], errors="ignore")
-                        df_display["Date"] = df_display["Date"].apply(lambda d: f"<span style='font-size:16px;'>&#128197;</span> <b>{pd.to_datetime(d).strftime('%d-%b-%Y')}</b>")
+                        df_display["Date"] = df_display["Date"].apply(lambda d: f"<b>{pd.to_datetime(d).strftime('%d-%b-%Y')}</b>")
                         def pooja_time_display(row):
                             return f"<b>{row['Pooja Time'].replace('Pooja', '')}</b>"
                         df_display["Pooja Time"] = df_display.apply(pooja_time_display, axis=1)
