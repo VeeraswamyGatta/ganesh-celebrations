@@ -127,6 +127,58 @@ def get_pooja_options_for_date(seva_date):
     return ["Evening Pooja"] if seva_date == start_date else ["Morning Pooja", "Evening Pooja"]
 
 
+def is_prasad_seva_visible_in_table(seva_date, pooja_time, now_cst):
+    """Hide today's morning seva from the table after 3 PM Central time."""
+    return not (
+        seva_date == now_cst.date()
+        and now_cst.time() >= dttime(15, 0)
+        and "morning" in str(pooja_time).lower()
+    )
+
+
+def get_available_prasad_pooja_options(seva_date, now_cst):
+    return [
+        option
+        for option in get_pooja_options_for_date(seva_date)
+        if is_prasad_seva_visible_in_table(seva_date, option, now_cst)
+    ]
+
+
+def is_prasad_seva_in_past_table(seva_date, pooja_time, now_cst):
+    return seva_date < now_cst.date() or not is_prasad_seva_visible_in_table(seva_date, pooja_time, now_cst)
+
+
+def format_prasad_summary_insight(label, value, variant=""):
+    if value == "None":
+        return ""
+    variant_class = f" {variant}" if variant else ""
+    return (
+        f"<div class='prasad-summary-insight{variant_class}'>"
+        f"<span class='prasad-summary-insight-label'>{label}</span>"
+        f"<div class='prasad-summary-insight-value'>{value}</div>"
+        "</div>"
+    )
+
+
+def get_prasad_slot_status(seva_date, pooja_time, now_cst):
+    if seva_date < now_cst.date():
+        return "completed"
+    if seva_date > now_cst.date():
+        return "upcoming"
+    pooja_time = str(pooja_time).lower()
+    if "morning" in pooja_time:
+        return "current" if now_cst.time() < dttime(15, 0) else "completed"
+    if "evening" in pooja_time:
+        return "current" if now_cst.time() >= dttime(15, 0) else "upcoming"
+    return "upcoming"
+
+
+def get_prasad_slot_sort_key(slot):
+    seva_date, pooja_time = slot
+    pooja_order = 0 if "morning" in str(pooja_time).lower() else 1
+    return seva_date, pooja_order
+
+
 def normalize_prasad_name_group(name):
     name = " ".join(str(name or "").split())
     return re.sub(r"\s*(?:&|,|\band\b)\s*", " and ", name, flags=re.IGNORECASE).casefold()
@@ -325,13 +377,6 @@ def prasad_seva_tab():
         st.markdown(
             """
             <style>
-            div[data-testid="stForm"] > div {
-                background: linear-gradient(135deg, #f8f5f7 0%, #f1edf2 100%);
-                border: 1px solid #d8c8d5;
-                border-radius: 22px;
-                padding: 1.25rem 1.1rem 1rem 1.1rem;
-                box-shadow: 0 10px 24px rgba(60, 41, 61, 0.06);
-            }
             div[data-testid="stForm"] .stBaseButton button {
                 border-radius: 12px;
             }
@@ -490,7 +535,7 @@ def prasad_seva_tab():
 
         pooja_container = prasad_form.container(key="prasad_pooja_time_row")
         with pooja_container:
-            pooja_options = get_pooja_options_for_date(seva_date)
+            pooja_options = get_available_prasad_pooja_options(seva_date, dt.now(pytz.timezone("US/Central")))
             selected_poojas = []
             pooja_checkbox_columns = pooja_container.columns(2 if len(pooja_options) > 1 else 1, gap="small")
             for index, option in enumerate(pooja_options):
@@ -519,7 +564,7 @@ def prasad_seva_tab():
 
         num_people = prasad_form.number_input("Serving count", min_value=1, value=st.session_state.get('prasad_num_people', 1), key="prasad_num_people")
 
-        if prasad_form.form_submit_button("✅ Add Prasad Seva", disabled=prasad_submit_disabled, type="primary"):
+        if prasad_form.form_submit_button("Add Prasad Seva", disabled=prasad_submit_disabled, type="primary"):
             st.session_state["prasad_submission_in_progress"] = True
             if not names:
                 st.session_state["prasad_submission_in_progress"] = False
@@ -582,8 +627,6 @@ def prasad_seva_tab():
         merged_df["Total People Served"] = merged_df["Total People Served"].astype(int)
         active_slots = int((merged_df["Total People Served"] > 0).sum())
         zero_slots = merged_df[merged_df["Total People Served"] == 0]
-        high_demand_slots = merged_df[merged_df["Total People Served"] > 100]
-        busiest_slot = merged_df.loc[merged_df["Total People Served"].idxmax()]
 
         def format_slot_list(slots):
             if slots.empty:
@@ -594,11 +637,6 @@ def prasad_seva_tab():
             )
 
         zero_slot_text = format_slot_list(zero_slots)
-        high_demand_text = format_slot_list(high_demand_slots)
-        busiest_slot_text = (
-            f"{pd.to_datetime(busiest_slot['Date']).strftime('%d-%b')} · "
-            f"{busiest_slot['Pooja Time']} ({busiest_slot['Total People Served']})"
-        )
         total_sponsored = int(merged_df["Total People Served"].sum())
         cursor.execute(
             "SELECT names, seva_date, pooja_time FROM prasad_seva "
@@ -615,15 +653,32 @@ def prasad_seva_tab():
         for normalized_name, seva_date, pooja_time in participant_groups:
             slot_key = (seva_date, pooja_time)
             members_by_slot.setdefault(slot_key, set()).add(normalized_name)
+        now_cst = dt.now(pytz.timezone("US/Central"))
         slot_service_totals = {
             (row["Date"], row["Pooja Time"]): row["Total People Served"]
             for _, row in merged_df.iterrows()
         }
+        served_labels = {
+            "completed": "people served",
+            "current": "people serving now",
+            "upcoming": "people expected",
+        }
         slot_member_text = "<br>".join(
+            f"<span class='prasad-slot-{status}'>"
             f"<b>{seva_date.strftime('%d-%b')} · {pooja_time.replace(' Pooja', '')}</b>"
-            f" &nbsp; {len(names)} members · {slot_service_totals.get((seva_date, pooja_time), 0)} people served"
-            for (seva_date, pooja_time), names in sorted(members_by_slot.items())
+            f" &nbsp; {len(names)} members · {slot_service_totals.get((seva_date, pooja_time), 0)} {served_labels[status]}"
+            "</span>"
+            for (seva_date, pooja_time), names in sorted(
+                members_by_slot.items(), key=lambda item: get_prasad_slot_sort_key(item[0])
+            )
+            for status in [get_prasad_slot_status(seva_date, pooja_time, now_cst)]
         ) or "None"
+        summary_insights = "".join(
+            (
+                format_prasad_summary_insight("No service yet", zero_slot_text, "warning"),
+                format_prasad_summary_insight("Participation by slot", slot_member_text),
+            )
+        )
         st.markdown(
             """
             <style>
@@ -711,6 +766,9 @@ def prasad_seva_tab():
             .prasad-summary-insight.warning .prasad-summary-insight-label { color: #a86b1f; }
             .prasad-summary-insight.demand { border-color: #e9c2b5; background: #fff7f3; }
             .prasad-summary-insight.demand .prasad-summary-insight-label { color: #b14f32; }
+            .prasad-slot-completed { color: #6f625b; }
+            .prasad-slot-current { color: #176b3a; background: #edf8ee; }
+            .prasad-slot-upcoming { color: #9a5a13; background: #fff8e7; }
             .prasad-summary-table-wrap {
                 overflow: hidden;
                 border: 1px solid #dfe9df;
@@ -781,22 +839,7 @@ def prasad_seva_tab():
                     </div>
                 </div>
                 <div class='prasad-summary-insights'>
-                    <div class='prasad-summary-insight warning'>
-                        <span class='prasad-summary-insight-label'>No service yet</span>
-                        <div class='prasad-summary-insight-value'>{zero_slot_text}</div>
-                    </div>
-                    <div class='prasad-summary-insight demand'>
-                        <span class='prasad-summary-insight-label'>High demand · 100+</span>
-                        <div class='prasad-summary-insight-value'>{high_demand_text}</div>
-                    </div>
-                    <div class='prasad-summary-insight'>
-                        <span class='prasad-summary-insight-label'>Busiest slot</span>
-                        <div class='prasad-summary-insight-value'>{busiest_slot_text}</div>
-                    </div>
-                    <div class='prasad-summary-insight'>
-                        <span class='prasad-summary-insight-label'>Participation by slot</span>
-                        <div class='prasad-summary-insight-value'>{slot_member_text}</div>
-                    </div>
+                    {summary_insights}
                 </div>
             </section>
             """,
@@ -827,50 +870,36 @@ def prasad_seva_tab():
             """
             <style>
             .prasad-group-section {
-                margin-top: 1.25rem;
-                padding-top: 0.35rem;
-            }
-            .prasad-group-heading {
-                margin: 0 0 0.65rem;
-                padding-bottom: 0.45rem;
-                color: #6d4322;
-                font-family: inherit;
-                font-size: 0.95rem;
-                font-weight: 700;
-                border-bottom: 2px solid #e8c98f;
-            }
-            .prasad-group-subtitle {
-                margin: 0.2rem 0 0.8rem;
-                color: #806f5e;
-                font-size: 0.84rem;
+                margin-top: 0.6rem;
+                padding-top: 0;
             }
             .prasad-group-table {
                 width: 100%;
                 border-collapse: collapse;
                 color: #493b30;
-                font-size: 0.9rem;
+                font-size: 0.8rem;
             }
             .prasad-group-table th {
-                padding: 0.58rem 0.65rem;
+                padding: 0.35rem 0.45rem;
                 color: #8a5a2b;
-                font-size: 0.75rem;
+                font-size: 0.68rem;
                 text-align: left;
                 text-transform: uppercase;
                 letter-spacing: 0.04em;
             }
             .prasad-group-table td {
-                padding: 0.62rem 0.65rem;
+                padding: 0.35rem 0.45rem;
                 border-top: 1px solid #f0e5d7;
+                line-height: 1.15;
             }
             .prasad-group-table tbody tr:hover td { background: #fff4dd; }
             .prasad-group-table th:first-child,
-            .prasad-group-table td:first-child { width: 10%; text-align: center; color: #b06b2b; font-weight: 800; }
+            .prasad-group-table td:first-child { width: 7%; text-align: center; color: #b06b2b; font-weight: 800; }
             .prasad-group-table th:last-child,
             .prasad-group-table td:last-child { width: 30%; text-align: right; }
             @media (max-width: 640px) {
-                .prasad-group-heading { font-size: 0.9rem; }
-                .prasad-group-table { font-size: 0.82rem; }
-                .prasad-group-table th, .prasad-group-table td { padding: 0.55rem 0.35rem; }
+                .prasad-group-table { font-size: 0.74rem; }
+                .prasad-group-table th, .prasad-group-table td { padding: 0.3rem 0.25rem; }
             }
             </style>
             """,
@@ -879,7 +908,6 @@ def prasad_seva_tab():
         st.markdown(
             """
             <section class='prasad-group-section'>
-                <h3 class='prasad-group-heading'>Prasad Seva Contributors</h3>
             """,
             unsafe_allow_html=True,
         )
@@ -890,7 +918,7 @@ def prasad_seva_tab():
                 lambda name: f"<b>{name}</b>" if name else ""
             )
             name_df["People Served"] = name_df["People Served"].apply(
-                lambda count: f"<span style='background:#ffe7ad;color:#76501e;padding:4px 11px;border-radius:12px;font-weight:800;display:inline-block;'>{count}</span>"
+                lambda count: f"<span style='background:#ffe7ad;color:#76501e;padding:2px 7px;border-radius:8px;font-weight:800;display:inline-block;'>{count}</span>"
             )
             group_table_html = name_df.to_html(
                 escape=False, index=False, justify="left", classes="prasad-group-table"
@@ -914,7 +942,18 @@ def prasad_seva_tab():
             now_cst = dt.now(cst)
             today_cst = now_cst.date()
             df_active = df[pd.to_datetime(df["Date"]).dt.date >= today_cst]
-            df_past = df[pd.to_datetime(df["Date"]).dt.date < today_cst]
+            df_active = df_active[
+                df_active.apply(
+                    lambda row: is_prasad_seva_visible_in_table(row["Date"], row["Pooja Time"], now_cst),
+                    axis=1,
+                )
+            ]
+            df_past = df[
+                df.apply(
+                    lambda row: is_prasad_seva_in_past_table(row["Date"], row["Pooja Time"], now_cst),
+                    axis=1,
+                )
+            ]
             tab1, tab2 = st.tabs(["Active", "Past"])
             for tab, df_tab, label in [(tab1, df_active, "Active"), (tab2, df_past, "Past")]:
                 with tab:
@@ -1053,7 +1092,7 @@ def prasad_seva_tab():
                     min_date = datetime.date(2026, 9, 14)
                     current_date = pd.to_datetime(entry["Date"]).date() if pd.notna(entry["Date"]) else min_date
                     new_date = st.date_input("Date", value=current_date, min_value=min_date, key=f"edit_prasad_date_{selected_id}")
-                    pooja_options = get_pooja_options_for_date(new_date)
+                    pooja_options = get_available_prasad_pooja_options(new_date, dt.now(pytz.timezone("US/Central")))
                     if entry["Pooja Time"] in pooja_options:
                         pooja_index = pooja_options.index(entry["Pooja Time"])
                     else:
