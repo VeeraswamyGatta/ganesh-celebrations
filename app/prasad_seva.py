@@ -201,11 +201,11 @@ def prasad_seva_tab():
     # Define tab_names for all users by default
     tab_names = [
         "Prasad Seva",
-        "Prasad Seva Stats",
+        "Stats",
         laddu_winners_option,
     ]
-    if st.session_state.get("prasad_tab") in ("Prasad Seva Summary", "Total Served by Name/Group"):
-        st.session_state["prasad_tab"] = "Prasad Seva Stats"
+    if st.session_state.get("prasad_tab") in ("Prasad Seva Stats", "Prasad Seva Summary", "Total Served by Name/Group"):
+        st.session_state["prasad_tab"] = "Stats"
     if "prasad_tab" not in st.session_state or st.session_state["prasad_tab"] not in tab_names:
         st.session_state["prasad_tab"] = "Prasad Seva"
     selected_tab = option_menu(
@@ -611,7 +611,7 @@ def prasad_seva_tab():
                 st.session_state["clear_prasad_form"] = True
                 st.rerun()
 
-    elif selected_tab == "Prasad Seva Stats":
+    elif selected_tab == "Stats":
         cursor.execute("SELECT seva_date, pooja_time, SUM(num_people) FROM prasad_seva WHERE status='active' GROUP BY seva_date, pooja_time")
         metrics_rows = cursor.fetchall()
         min_date = datetime.date(2026, 9, 14)
@@ -659,9 +659,9 @@ def prasad_seva_tab():
             for _, row in merged_df.iterrows()
         }
         served_labels = {
-            "completed": "people served",
-            "current": "people serving now",
-            "upcoming": "people expected",
+            "completed": "servings served",
+            "current": "servings in progress",
+            "upcoming": "servings expected",
         }
         slot_member_text = "<br>".join(
             f"<span class='prasad-slot-{status}'>"
@@ -823,7 +823,6 @@ def prasad_seva_tab():
         st.markdown(
             f"""
             <section class='prasad-summary'>
-                <div class='prasad-summary-kicker'>Prasad Seva · Community Service</div>
                 <div class='prasad-summary-metrics'>
                     <div class='prasad-summary-metric'>
                         <span class='prasad-summary-metric-label'>People served</span>
@@ -954,39 +953,93 @@ def prasad_seva_tab():
                     axis=1,
                 )
             ]
-            tab1, tab2 = st.tabs(["Active", "Past"])
-            for tab, df_tab, label in [(tab1, df_active, "Active"), (tab2, df_past, "Past")]:
-                with tab:
-                    toolbar_key = f"prasad-sponsor-toolbar-{label.lower()}"
-                    st.markdown(
-                        textwrap.dedent(f"""
-                        <style>
-                        @media (max-width: 640px) {{
-                            .st-key-{toolbar_key} [data-testid="stHorizontalBlock"] {{ flex-wrap: nowrap !important; }}
-                            .st-key-{toolbar_key} [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(-n+2) {{
-                                flex: 0 0 52px !important;
-                                min-width: 52px !important;
-                            }}
+            selected_table_view = st.session_state.get("prasad_table_view", "Active")
+            if selected_table_view not in ("Active", "Past"):
+                selected_table_view = "Active"
+            for df_tab, label in [(df_active, "Active"), (df_past, "Past")]:
+                if label != selected_table_view:
+                    continue
+                toolbar_key = f"prasad-sponsor-toolbar-{label.lower()}"
+                st.markdown(
+                    textwrap.dedent(f"""
+                    <style>
+                    .st-key-prasad_view_active button,
+                    .st-key-prasad_view_past button {{
+                        width: 100%;
+                        border-radius: 8px !important;
+                        font-size: 0.8rem !important;
+                        font-weight: 700 !important;
+                        white-space: nowrap !important;
+                    }}
+                    .st-key-prasad_view_active button {{
+                        border: 1px solid #2e7d32 !important;
+                        background: #f1f8e9 !important;
+                        color: #2e7d32 !important;
+                    }}
+                    .st-key-prasad_view_past button {{
+                        border: 1px solid #a86b1f !important;
+                        background: #fff8e7 !important;
+                        color: #8a5a2b !important;
+                    }}
+                    .st-key-prasad_view_active button[kind="primary"] {{
+                        background: linear-gradient(135deg, #2e7d32, #43a047) !important;
+                        color: #ffffff !important;
+                    }}
+                    .st-key-prasad_view_past button[kind="primary"] {{
+                        background: linear-gradient(135deg, #a86b1f, #c8872f) !important;
+                        color: #ffffff !important;
+                    }}
+                    .st-key-prasad-filter button {{
+                        width: 100%;
+                        border: 1px solid #8b1737 !important;
+                        border-radius: 8px !important;
+                        background: #fff7f7 !important;
+                        color: #8b1737 !important;
+                        font-weight: 700 !important;
+                    }}
+                    @media (max-width: 640px) {{
+                        .st-key-{toolbar_key} [data-testid="stHorizontalBlock"] {{ flex-wrap: nowrap !important; }}
+                        .st-key-{toolbar_key} [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {{
+                            min-width: 0 !important;
                         }}
-                        </style>
-                        """),
-                        unsafe_allow_html=True,
-                    )
-                    with st.container(key=toolbar_key):
-                        search_column, _ = st.columns([1, 9])
-                        with search_column:
-                            with st.popover("🔍", help="Search sponsors", use_container_width=True):
-                                filter_name = st.text_input(
-                                    "Name", value="", key=f"prasad_filter_name_{label.lower()}"
-                                )
-                                filter_date = st.date_input(
-                                    "Date", value=None, min_value=today_cst, key=f"prasad_filter_date_{label.lower()}"
-                                )
-                                filter_pooja_time = st.selectbox(
-                                    "Pooja Time",
-                                    ["All", "Morning Pooja", "Evening Pooja", "Evening Pooja for Kids"],
-                                    key=f"prasad_filter_pooja_time_{label.lower()}",
-                                )
+                    }}
+                    </style>
+                    """),
+                    unsafe_allow_html=True,
+                )
+                with st.container(key=toolbar_key):
+                    active_column, past_column, _, search_column = st.columns([1.8, 1.8, 5.2, 1.8])
+                    with active_column:
+                        if st.button(
+                            "Active",
+                            key="prasad_view_active",
+                            type="primary" if selected_table_view == "Active" else "secondary",
+                            use_container_width=True,
+                        ) and selected_table_view != "Active":
+                            st.session_state["prasad_table_view"] = "Active"
+                            st.rerun()
+                    with past_column:
+                        if st.button(
+                            "Past",
+                            key="prasad_view_past",
+                            type="primary" if selected_table_view == "Past" else "secondary",
+                            use_container_width=True,
+                        ) and selected_table_view != "Past":
+                            st.session_state["prasad_table_view"] = "Past"
+                            st.rerun()
+                    with search_column:
+                        with st.popover("Filter 🔍", help="Search sponsors", use_container_width=True):
+                            filter_name = st.text_input(
+                                "Name", value="", key=f"prasad_filter_name_{label.lower()}"
+                            )
+                            filter_date = st.date_input(
+                                "Date", value=None, min_value=today_cst, key=f"prasad_filter_date_{label.lower()}"
+                            )
+                            filter_pooja_time = st.selectbox(
+                                "Pooja Time",
+                                ["All", "Morning Pooja", "Evening Pooja", "Evening Pooja for Kids"],
+                                key=f"prasad_filter_pooja_time_{label.lower()}",
+                            )
                     filtered_df_tab = df_tab
                     if filter_name:
                         filtered_df_tab = filtered_df_tab[
