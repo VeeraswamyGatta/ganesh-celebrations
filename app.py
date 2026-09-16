@@ -329,7 +329,7 @@ st.markdown("""
         font-weight: 400;
         line-height: 1;
     }
-    div[class*="st-key-landing_nav_login"] button p:before { content: "⌂"; }
+    div[class*="st-key-landing_nav_login"] button p:before { content: "⇥"; }
     div[class*="st-key-landing_nav_prasad_seva"] button p:before { content: "♨"; }
     div[class*="st-key-landing_nav_events"] button p:before { content: "▣"; }
     div[class*="st-key-landing_nav_login"] button:hover,
