@@ -1,5 +1,4 @@
 import streamlit as st
-import streamlit.components.v1 as components
 from streamlit_option_menu import option_menu
 import datetime
 import time
@@ -855,9 +854,7 @@ if not st.session_state.user_logged_in and not st.session_state.admin_logged_in:
             unsafe_allow_html=True,
         )
 
-    if st.session_state.get("scroll_to_top"):
-        components.html("<script>window.parent.scrollTo({top: 0, behavior: 'instant'});</script>", height=0)
-        st.session_state["scroll_to_top"] = False
+    st.session_state.pop("scroll_to_top", None)
 
     initial_menu = selected_landing_navigation
     if initial_menu == "Prasad Seva":
@@ -1008,63 +1005,7 @@ else:
                         st.session_state.scroll_to_top = True
                         st.rerun()
 
-        components.html(
-            """
-            <script>
-            const parentDocument = window.parent.document;
-            const overlayId = "instant-navigation-loader";
-            if (!parentDocument.getElementById(overlayId)) {
-                const overlay = parentDocument.createElement("div");
-                overlay.id = overlayId;
-                overlay.innerHTML = `
-                    <style>
-                    #${overlayId} {
-                        position: fixed; inset: 0; z-index: 2147483646; display: none;
-                        align-items: center; justify-content: center; background: #ffffff;
-                    }
-                    #${overlayId} .loader-card {
-                        display: flex; align-items: center; gap: 0.8rem; padding: 1rem 1.25rem;
-                        border: 1px solid #d7e3d4; border-radius: 8px; background: #fffdf8;
-                        box-shadow: 0 8px 22px rgba(46, 125, 50, 0.1); color: #28543a; font-weight: 700;
-                    }
-                    #${overlayId} .loader-bars { display: flex; align-items: center; gap: 4px; height: 28px; }
-                    #${overlayId} .loader-bars span {
-                        width: 5px; height: 12px; border-radius: 4px; background: #2e7d32;
-                        animation: instant-loader-pulse 0.85s ease-in-out infinite;
-                    }
-                    #${overlayId} .loader-bars span:nth-child(2) { background: #ef8f20; animation-delay: 0.12s; }
-                    #${overlayId} .loader-bars span:nth-child(3) { background: #bf360c; animation-delay: 0.24s; }
-                    @keyframes instant-loader-pulse {
-                        0%, 100% { height: 10px; opacity: 0.5; }
-                        50% { height: 28px; opacity: 1; }
-                    }
-                    </style>
-                    <div class="loader-card">
-                        <div class="loader-bars"><span></span><span></span><span></span></div>
-                        <span>Loading...</span>
-                    </div>`;
-                parentDocument.body.appendChild(overlay);
-                parentDocument.addEventListener("click", (event) => {
-                    const button = event.target.closest("button");
-                    const labels = ["Home", "Donate", "Stats", "Prasad", "Expenses", "Pay", "Admin"];
-                    if (button && labels.includes(button.innerText.trim())) {
-                        overlay.style.display = "flex";
-                    }
-                }, true);
-                new MutationObserver(() => {
-                    if (parentDocument.querySelector(".page-loader-overlay")) {
-                        overlay.style.display = "none";
-                    }
-                }).observe(parentDocument.body, { childList: true, subtree: true });
-            }
-            </script>
-            """,
-            height=0,
-        )
-
-        if st.session_state.get("scroll_to_top"):
-            components.html("<script>window.parent.scrollTo({top: 0, behavior: 'instant'});</script>", height=0)
-            st.session_state["scroll_to_top"] = False
+        st.session_state.pop("scroll_to_top", None)
 
         main_menu = st.session_state.main_navigation
         if st.session_state.get("page_loading_message"):
