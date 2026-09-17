@@ -817,10 +817,11 @@ if not st.session_state.user_logged_in and not st.session_state.admin_logged_in:
     with st.container(key="landing_top"):
         # Show navigation menu at the top
         with st.container(key="landing_navigation"):
-            nav_cols = st.columns(3)
+            nav_cols = st.columns(4)
             nav_items = [
                 ("Login", "landing_nav_login"),
                 ("Prasad Seva", "landing_nav_prasad_seva"),
+                ("Cultural Event", "landing_nav_cultural_event"),
                 ("Events", "landing_nav_events"),
             ]
             for idx, (label, key_name) in enumerate(nav_items):

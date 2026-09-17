@@ -60,11 +60,46 @@ CULTURAL_EVENT_CSS = """
     font-size: 0.84rem;
     font-weight: 800;
 }
-.cultural-section-heading {
-    margin: 1.15rem 0 0.55rem;
-    color: #4e2922;
-    font-size: 1.35rem;
+.cultural-note {
+    position: relative;
+    margin-top: 1rem;
+    padding: 0.7rem 0.85rem;
+    border-left: 4px solid #c8691d;
+    border-radius: 8px;
+    background: rgba(255, 248, 231, 0.82);
+    color: #b42318;
+    font-size: 0.9rem;
+    font-weight: 800;
+    line-height: 1.45;
+}
+.cultural-note strong {
+    color: #b42318;
+}
+.cultural-note::before,
+.cultural-note::after {
+    position: absolute;
+    color: #ef8f20;
+    font-size: 0.85rem;
     font-weight: 900;
+}
+.cultural-note::before {
+    content: "✦";
+    top: 0.35rem;
+    right: 0.55rem;
+}
+.cultural-note::after {
+    content: "✧";
+    right: 1.5rem;
+    bottom: 0.35rem;
+}
+.cultural-section-heading {
+    margin: 0.7rem 0 0.4rem;
+    color: #4e2922;
+    font-size: 1.05rem;
+    font-weight: 900;
+}
+.cultural-participating-heading {
+    margin-top: 0.25rem;
 }
 .cultural-section-note {
     margin-bottom: 0.7rem;
@@ -74,16 +109,16 @@ CULTURAL_EVENT_CSS = """
 }
 .cultural-order-table {
     width: 100%;
-    margin: 0.35rem 0 1rem;
+    margin: 0.2rem 0 0.65rem;
     border-collapse: separate;
-    border-spacing: 0 0.45rem;
+    border-spacing: 0 0.2rem;
     font-family: "Trebuchet MS", Georgia, serif;
 }
 .cultural-order-table th {
-    padding: 0.65rem 0.75rem;
+    padding: 0.45rem 0.6rem;
     background: #6a1b1b;
     color: #fffaf0;
-    font-size: 0.8rem;
+    font-size: 0.74rem;
     letter-spacing: 0.02em;
     text-align: left;
     text-transform: none;
@@ -91,12 +126,12 @@ CULTURAL_EVENT_CSS = """
 .cultural-order-table th:first-child { border-radius: 9px 0 0 9px; }
 .cultural-order-table th:last-child { border-radius: 0 9px 9px 0; }
 .cultural-order-table td {
-    padding: 0.72rem 0.75rem;
+    padding: 0.48rem 0.6rem;
     border-top: 1px solid #eadcc6;
     border-bottom: 1px solid #eadcc6;
     background: #fffdf8;
     color: #493a35;
-    font-size: 0.92rem;
+    font-size: 0.86rem;
 }
 .cultural-order-table td:first-child {
     border-left: 1px solid #eadcc6;
@@ -233,6 +268,35 @@ TGT_PERFORMANCE_OPTIONS = [
     "Play / Skit",
 ]
 
+TGT_PERFORMANCE_DISPLAY = {
+    "Music / Singing": "Music or Singing",
+    "Playing Instruments": "Instrumental Music",
+    "Play / Skit": "Play or Skit",
+}
+
+
+def _merge_display_registrations(registrations):
+    merged = {}
+    for registration in registrations:
+        registration_id, name, age_group, performance_type = registration[:4]
+        key = (str(name).strip().casefold(), str(age_group).strip().casefold())
+        display_performance = TGT_PERFORMANCE_DISPLAY.get(performance_type, performance_type)
+        if key not in merged:
+            merged[key] = [*registration]
+            merged[key][3] = [display_performance]
+        elif display_performance not in merged[key][3]:
+            merged[key][3].append(display_performance)
+
+    display_registrations = []
+    for registration in merged.values():
+        registration[3] = ", ".join(
+            performance
+            for performance in TGT_PERFORMANCE_OPTIONS
+            if TGT_PERFORMANCE_DISPLAY.get(performance, performance) in registration[3]
+        )
+        display_registrations.append(tuple(registration))
+    return display_registrations
+
 TGT_DEFAULT_DISCLAIMERS = [
     "Registration is mandatory. Participation is allowed only for registered participants; spot participation is not allowed.",
     "If your performance requires an audio track, send the audio file with the participant name to Purna (7209007378) via WhatsApp only.",
@@ -243,6 +307,8 @@ TGT_DEFAULT_DISCLAIMERS = [
     "Because this event is part of the Lord Ganesha celebrations, only devotional songs are permitted. Film songs are not permitted.",
     "I have read and agree to all of the above registration requirements.",
 ]
+
+TGT_EVENT_NOTE = "The program begins after the completion of Lord Ganesha Evening Pooja."
 
 
 def _ensure_tgt_registration_tables(cursor):
@@ -361,7 +427,7 @@ def _ensure_tgt_registration_tables(cursor):
                 datetime.date(2026, 9, 19),
                 "7:00 PM onwards",
                 "Terrazzo Courtyard",
-                "Traditional Fashion Show and Terrazzo Got Talent registration. The program begins after the completion of Lord Ganesha Evening Pooja.",
+                TGT_EVENT_NOTE,
             ),
         )
         cursor.execute(
@@ -550,16 +616,19 @@ def cultural_event_tab():
         )
         disclaimers = cursor.fetchall()
         cursor.execute(
-            "SELECT id, participant_name, age_group, performance_type, apartment_numbers, created_by, modified_by, modified_at, deleted_by, deleted_at, status FROM event_registrations WHERE program_id=%s AND COALESCE(status, 'active')='active' ORDER BY id",
+            "SELECT id, participant_name, age_group, performance_type, apartment_numbers, created_by, modified_by, modified_at, deleted_by, deleted_at, status FROM event_registrations WHERE program_id=%s AND COALESCE(status, 'active')='active' ORDER BY LOWER(participant_name), id",
             (program_id,),
         )
         registrations = cursor.fetchall()
+        display_registrations = _merge_display_registrations(registrations)
 
     if program is None:
         st.warning("Registration is currently unavailable.")
         return
 
     title, event_date, event_time, location, description = program
+    if description and description.startswith("Traditional Fashion Show and Terrazzo Got Talent registration."):
+        description = TGT_EVENT_NOTE
     is_admin = st.session_state.get("admin_logged_in", False)
     st.markdown(CULTURAL_EVENT_CSS, unsafe_allow_html=True)
     st.markdown(
@@ -572,6 +641,7 @@ def cultural_event_tab():
                 <span class="cultural-meta-item">Time: {event_time}</span>
                 <span class="cultural-meta-item">Location: {location}</span>
             </div>
+            <div class="cultural-note"><strong>Note:</strong> {html.escape(str(description or ''))}</div>
         </section>
         """,
         unsafe_allow_html=True,
@@ -593,18 +663,8 @@ def cultural_event_tab():
             },
         )
         if admin_submenu == "Manage Agreements":
-            st.markdown(
-                f'<div class="cultural-description"><strong>About this event</strong><br>{html.escape(str(description or ""))}</div>',
-                unsafe_allow_html=True,
-            )
             _manage_tgt_disclaimers(conn, cursor, program_id, disclaimers, description)
             return
-
-    if not is_admin:
-        st.markdown(
-            f'<div class="cultural-description"><strong>About this event</strong><br>{html.escape(str(description or ""))}</div>',
-            unsafe_allow_html=True,
-        )
 
     admin_participant_action = st.session_state.get("tgt_participant_action", "Participating details")
     if st.session_state.get("admin_logged_in", False):
@@ -693,7 +753,7 @@ def cultural_event_tab():
                 st.session_state.cultural_event_show_form = True
                 st.rerun()
 
-        st.markdown('<div class="cultural-section-heading">Participating details</div>', unsafe_allow_html=True)
+        st.markdown('<div class="cultural-section-heading cultural-participating-heading">Participating details</div>', unsafe_allow_html=True)
         if registrations:
             if st.session_state.get("admin_logged_in", False):
                 export_frame = pd.DataFrame(
@@ -701,13 +761,13 @@ def cultural_event_tab():
                         {
                             "Participant / Group": name,
                             "Age Group": age_group,
-                            "Performance": performance_type,
+                            "Performance": TGT_PERFORMANCE_DISPLAY.get(performance_type, performance_type),
                             "Apartment Number(s)": apartment_numbers,
                             "Created By": created_by or "",
                             "Last Modified By": modified_by or "",
                             "Last Modified At": str(modified_at or ""),
                         }
-                        for _, name, age_group, performance_type, apartment_numbers, created_by, modified_by, modified_at, _, _, _ in registrations
+                        for _, name, age_group, performance_type, apartment_numbers, created_by, modified_by, modified_at, _, _, _ in display_registrations
                     ]
                 )
                 export_buffer = BytesIO()
@@ -731,13 +791,13 @@ def cultural_event_tab():
                 table_headers = "<th>Participant / Group</th><th>Age Group</th><th>Performance</th><th>Created By</th><th>Last Modified By</th><th>Last Modified At</th>"
                 table_rows = "".join(
                     f"<tr><td>{html.escape(str(name))}</td><td>{html.escape(str(age_group))}</td><td>{html.escape(str(performance_type))}</td><td>{html.escape(str(created_by or ''))}</td><td>{html.escape(str(modified_by or ''))}</td><td>{html.escape(str(modified_at or ''))}</td></tr>"
-                    for _, name, age_group, performance_type, _, created_by, modified_by, modified_at, _, _, _ in registrations
+                    for _, name, age_group, performance_type, _, created_by, modified_by, modified_at, _, _, _ in display_registrations
                 )
             else:
                 table_headers = "<th>Participant / Group</th><th>Age Group</th><th>Performance</th>"
                 table_rows = "".join(
                     f"<tr><td>{html.escape(str(name))}</td><td>{html.escape(str(age_group))}</td><td>{html.escape(str(performance_type))}</td></tr>"
-                    for _, name, age_group, performance_type, *_ in registrations
+                    for _, name, age_group, performance_type, *_ in display_registrations
                 )
             st.markdown(
                 f"""
