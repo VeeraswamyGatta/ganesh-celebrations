@@ -101,6 +101,7 @@ st.markdown("""
     /* Ensure login nav items are in one row */
     div[class*="st-key-landing_nav_login"],
     div[class*="st-key-landing_nav_prasad_seva"],
+    div[class*="st-key-landing_nav_cultural_event"],
     div[class*="st-key-landing_nav_events"] {
         width: 33.33% !important;
         flex: 1 !important;
@@ -295,6 +296,7 @@ st.markdown("""
     /* Parent container for landing nav - force horizontal layout */
     [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_login"]),
     [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_prasad_seva"]),
+    [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_cultural_event"]),
     [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_events"]) {
         display: flex !important;
         flex-direction: row !important;
@@ -303,12 +305,14 @@ st.markdown("""
     }
     [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_login"]) > [data-testid="stColumn"],
     [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_prasad_seva"]) > [data-testid="stColumn"],
+    [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_cultural_event"]) > [data-testid="stColumn"],
     [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_events"]) > [data-testid="stColumn"] {
         flex: 1 !important;
         width: 33.33% !important;
     }
     div[class*="st-key-landing_nav_login"] button,
     div[class*="st-key-landing_nav_prasad_seva"] button,
+    div[class*="st-key-landing_nav_cultural_event"] button,
     div[class*="st-key-landing_nav_events"] button {
         width: 100% !important;
         min-height: 3.3rem !important;
@@ -322,6 +326,7 @@ st.markdown("""
     }
     div[class*="st-key-landing_nav_login"] button p:before,
     div[class*="st-key-landing_nav_prasad_seva"] button p:before,
+    div[class*="st-key-landing_nav_cultural_event"] button p:before,
     div[class*="st-key-landing_nav_events"] button p:before {
         display: block;
         margin-bottom: 0.35rem;
@@ -331,6 +336,7 @@ st.markdown("""
     }
     div[class*="st-key-landing_nav_login"] button p:before { content: "⇥"; }
     div[class*="st-key-landing_nav_prasad_seva"] button p:before { content: "♨"; }
+    div[class*="st-key-landing_nav_cultural_event"] button p:before { content: "✦"; }
     div[class*="st-key-landing_nav_events"] button p:before { content: "▣"; }
     div[class*="st-key-landing_nav_login"] button:hover,
     div[class*="st-key-landing_nav_prasad_seva"] button:hover,
@@ -500,6 +506,7 @@ st.markdown("""
         }
         div[class*="st-key-landing_nav_login"] button,
         div[class*="st-key-landing_nav_prasad_seva"] button,
+        div[class*="st-key-landing_nav_cultural_event"] button,
         div[class*="st-key-landing_nav_events"] button {
             min-height: 3.2rem !important;
             border: 1px solid #ead8a9 !important;
@@ -516,6 +523,7 @@ st.markdown("""
         }
         div[class*="st-key-landing_nav_login"] button[kind="primary"],
         div[class*="st-key-landing_nav_prasad_seva"] button[kind="primary"],
+        div[class*="st-key-landing_nav_cultural_event"] button[kind="primary"],
         div[class*="st-key-landing_nav_events"] button[kind="primary"] {
             background: linear-gradient(135deg, #6a1b1b, #8b1737) !important;
             color: #ffffff !important;
@@ -524,6 +532,7 @@ st.markdown("""
         }
         div[class*="st-key-landing_nav_login"] button p,
         div[class*="st-key-landing_nav_prasad_seva"] button p,
+        div[class*="st-key-landing_nav_cultural_event"] button p,
         div[class*="st-key-landing_nav_events"] button p {
             display: flex !important;
             flex-direction: column !important;
@@ -623,6 +632,7 @@ st.markdown("""
         /* Ensure landing nav buttons stay in one row on mobile */
         [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_login"]),
         [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_prasad_seva"]),
+        [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_cultural_event"]),
         [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_events"]) {
             display: flex !important;
             flex-direction: row !important;
@@ -631,6 +641,7 @@ st.markdown("""
         }
         [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_login"]) > [data-testid="stColumn"],
         [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_prasad_seva"]) > [data-testid="stColumn"],
+        [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_cultural_event"]) > [data-testid="stColumn"],
         [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_events"]) > [data-testid="stColumn"] {
             flex: 1 !important;
             width: 33.33% !important;
@@ -638,6 +649,7 @@ st.markdown("""
         }
         div[class*="st-key-landing_nav_login"],
         div[class*="st-key-landing_nav_prasad_seva"],
+        div[class*="st-key-landing_nav_cultural_event"],
         div[class*="st-key-landing_nav_events"] {
             width: 100% !important;
         }
@@ -786,6 +798,7 @@ requested_view = str(
 ).strip().lower()
 open_prasad_seva = requested_view in {"prasad", "prasad-seva", "prasad_seva"}
 open_events = requested_view in {"events", "event"}
+open_cultural_event = requested_view in {"cultural-event", "cultural_event", "tgt-registration", "tgt_registration"}
 # Only show the initial menu if not logged in
 if not st.session_state.user_logged_in and not st.session_state.admin_logged_in:
     if "landing_navigation" not in st.session_state:
@@ -794,8 +807,12 @@ if not st.session_state.user_logged_in and not st.session_state.admin_logged_in:
             if open_prasad_seva
             else "Events"
             if open_events
+            else "Cultural Event"
+            if open_cultural_event
             else "Login"
         )
+    elif st.session_state.landing_navigation == "Cultural Event" and not open_cultural_event:
+        st.session_state.landing_navigation = "Login"
     selected_landing_navigation = st.session_state.landing_navigation
 
     with st.container(key="landing_top"):
@@ -849,6 +866,9 @@ if not st.session_state.user_logged_in and not st.session_state.admin_logged_in:
     elif initial_menu == "Events":
         from app.events import events_tab
         events_tab()
+    elif initial_menu == "Cultural Event":
+        from app.cultural_event import cultural_event_tab
+        cultural_event_tab()
     elif initial_menu == "Login":
         show_login_form = True
 else:
@@ -931,11 +951,11 @@ if show_login_form:
 else:
     # Show menu based on role after successful login
     if st.session_state.admin_logged_in:
-        menu_items = ["Dashboard", "Donate", "Statistics", "Prasad", "Events", "Expenses", "Payments", "Admin", "Ganesh Pooja Seating"]
-        menu_icons = ["bar-chart", "gift", "chart-line", "award", "calendar-event", "cash-coin", "credit-card", "lock", "calendar3"]
+        menu_items = ["Dashboard", "Donate", "Statistics", "Prasad", "Events", "Cultural", "Expenses", "Payments", "Admin", "Ganesh Pooja Seating"]
+        menu_icons = ["bar-chart", "gift", "chart-line", "award", "calendar-event", "person-check", "cash-coin", "credit-card", "lock", "calendar3"]
     elif st.session_state.user_logged_in:
-        menu_items = ["Dashboard", "Donate", "Statistics", "Prasad", "Events", "Expenses"]
-        menu_icons = ["bar-chart", "gift", "chart-line", "award", "calendar-event", "cash-coin"]
+        menu_items = ["Dashboard", "Donate", "Statistics", "Prasad", "Events", "Cultural", "Expenses"]
+        menu_icons = ["bar-chart", "gift", "chart-line", "award", "calendar-event", "person-check", "cash-coin"]
     else:
         menu_items = []
         menu_icons = []
@@ -952,6 +972,7 @@ else:
             "Statistics": ":material/trending_up: Stats",
             "Prasad": ":material/restaurant: Prasad",
             "Events": ":material/event: Events",
+            "Cultural": ":material/person_check: Cultural",
             "Ganesh Pooja Seating": ":material/chair_alt: Pooja",
             "Expenses": ":material/receipt_long: Expenses",
             "Payments": ":material/credit_card: Pay",
@@ -976,6 +997,7 @@ else:
                             "Statistics": "Loading statistics",
                             "Prasad": "Loading prasad seva details",
                             "Events": "Loading events",
+                            "Cultural": "Loading cultural event",
                             "Ganesh Pooja Seating": "Loading ganesh pooja seating",
                             "Expenses": "Loading expense details",
                             "Payments": "Loading payment details",
@@ -1081,6 +1103,9 @@ else:
         elif main_menu == "Events":
             from app.events import events_tab
             events_tab()
+        elif main_menu == "Cultural":
+            from app.cultural_event import cultural_event_tab
+            cultural_event_tab()
         elif main_menu == "Ganesh Pooja Seating":
             from app.events import _ganesh_pooja_seating_tab
             _ganesh_pooja_seating_tab()
