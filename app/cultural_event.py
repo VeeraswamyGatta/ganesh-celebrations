@@ -186,11 +186,14 @@ div[data-testid="stCheckbox"] label p {
     font-weight: 800 !important;
 }
 div[data-testid="stForm"]:has(.cultural-form-marker) {
-    padding: 0.55rem 1.15rem 1.15rem;
+    padding: 0.15rem 1.15rem 1.15rem;
     border: 1px solid #eadcc6;
     border-radius: 16px;
     background: linear-gradient(180deg, #fffefb 0%, #f7f1e9 100%);
     box-shadow: 0 8px 20px rgba(105, 76, 52, 0.08);
+}
+div[data-testid="stForm"]:has(.cultural-form-marker) .cultural-section-heading {
+    margin-top: 0.3rem;
 }
 .cultural-form-marker {
     display: none;
@@ -527,7 +530,15 @@ def cultural_event_tab():
     with st.spinner("Loading cultural event details..."):
         conn = get_connection()
         cursor = conn.cursor()
-        program_id = _initialize_tgt_registration_tables()
+        cursor.execute(
+            "SELECT id FROM event_registration_programs WHERE slug=%s AND active=TRUE",
+            ("terrazzo-ganesha-events-2026",),
+        )
+        program_row = cursor.fetchone()
+        if program_row is None:
+            st.warning("Registration is currently unavailable.")
+            return
+        program_id = program_row[0]
         cursor.execute(
             "SELECT title, event_date, event_time, location, description FROM event_registration_programs WHERE id=%s AND active=TRUE",
             (program_id,),
