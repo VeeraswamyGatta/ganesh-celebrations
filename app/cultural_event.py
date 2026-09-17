@@ -381,6 +381,25 @@ def _ensure_tgt_registration_tables(cursor):
     return program_id
 
 
+@st.cache_resource(show_spinner=False)
+def _initialize_tgt_registration_tables():
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        if not hasattr(cursor.connection, "account"):
+            cursor.execute(
+                "SELECT pg_advisory_xact_lock(hashtext('ganesh_cultural_event_schema'))"
+            )
+        program_id = _ensure_tgt_registration_tables(cursor)
+        conn.commit()
+        return program_id
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cursor.close()
+
+
 def _manage_tgt_disclaimers(conn, cursor, program_id, disclaimers, description):
     st.markdown('<div class="cultural-section-heading">Agreement management</div>', unsafe_allow_html=True)
     if disclaimers:
@@ -505,11 +524,10 @@ def _manage_tgt_disclaimers(conn, cursor, program_id, disclaimers, description):
 
 
 def cultural_event_tab():
-    conn = get_connection()
-    cursor = conn.cursor()
-    try:
-        program_id = _ensure_tgt_registration_tables(cursor)
-        conn.commit()
+    with st.spinner("Loading cultural event details..."):
+        conn = get_connection()
+        cursor = conn.cursor()
+        program_id = _initialize_tgt_registration_tables()
         cursor.execute(
             "SELECT title, event_date, event_time, location, description FROM event_registration_programs WHERE id=%s AND active=TRUE",
             (program_id,),
@@ -525,9 +543,6 @@ def cultural_event_tab():
             (program_id,),
         )
         registrations = cursor.fetchall()
-    except Exception:
-        conn.rollback()
-        raise
 
     if program is None:
         st.warning("Registration is currently unavailable.")
@@ -736,13 +751,18 @@ def cultural_event_tab():
 
     with st.form("tgt_registration_form"):
         st.markdown('<span class="cultural-form-marker"></span>', unsafe_allow_html=True)
-        st.markdown(
-            '<div class="cultural-attention-note"><span class="cultural-attention-title">A kind request before you register</span><br>Please take a moment to read each point carefully and check every acknowledgement box. Your cooperation helps us conduct the program smoothly and respectfully.</div>',
-            unsafe_allow_html=True,
+        st.markdown('<div class="cultural-section-heading">Participant details</div>', unsafe_allow_html=True)
+        participant_name = st.text_input("Participant Name/Group Participants Names")
+        age_group = st.text_input(
+            "Age/Age Group (example: 30 or 30-40)",
+            placeholder="Enter age or age range, e.g. 30 or 30-40",
         )
+        performance_type = st.selectbox("What are you performing?", TGT_PERFORMANCE_OPTIONS)
+        apartment_numbers = st.text_input("Apartment Number(s)")
+
         st.markdown('<div class="cultural-section-heading">Important requests</div>', unsafe_allow_html=True)
         st.markdown(
-            '<div class="cultural-section-note">Each acknowledgement is required before submitting the registration.</div>',
+            '<div class="cultural-section-note">All acknowledgement boxes below are required before submitting the registration.</div>',
             unsafe_allow_html=True,
         )
         agreements = []
@@ -753,14 +773,6 @@ def cultural_event_tab():
             )
             agreements.append((is_required, agreement))
 
-        st.markdown('<div class="cultural-section-heading">Participant details</div>', unsafe_allow_html=True)
-        participant_name = st.text_input("Participant Name/Group Participants Names")
-        age_group = st.text_input(
-            "Age/Age Group (example: 30 or 30-40)",
-            placeholder="Enter age or age range, e.g. 30 or 30-40",
-        )
-        performance_type = st.selectbox("What are you performing?", TGT_PERFORMANCE_OPTIONS)
-        apartment_numbers = st.text_input("Apartment Number(s)")
         validation_message = st.empty()
         submitted = st.form_submit_button("Submit Registration")
 
