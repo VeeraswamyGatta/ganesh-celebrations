@@ -6,7 +6,13 @@ import time
 import base64
 from io import BytesIO
 
-from app.login_audit import end_login_audit, get_today_visit_count, start_login_audit, touch_login_audit
+from app.login_audit import (
+    end_login_audit,
+    get_today_visit_count,
+    is_user_login_tracking_enabled,
+    start_login_audit,
+    touch_login_audit,
+)
 
 
 st.set_page_config(page_title="Terrazzo Ganesh Celebrations 2026", page_icon="🙏", layout="wide")
@@ -41,21 +47,21 @@ st.markdown("""
         padding-top: 1rem !important;
         border-radius: 10px;
     }
-    #main-menu-wrapper {
+    div.st-key-main_menu_wrapper {
         margin-bottom: -1rem !important;
     }
-    #main-menu-wrapper [data-testid="stHorizontalBlock"] {
+    div.st-key-main_menu_wrapper [data-testid="stHorizontalBlock"] {
         margin-bottom: 0 !important;
         gap: 0.75rem !important;
     }
-    #main-menu-wrapper + div {
+    div.st-key-main_menu_wrapper + div {
         margin-top: 0 !important;
     }
-    #main-menu-wrapper + div > div:first-child {
+    div.st-key-main_menu_wrapper + div > div:first-child {
         margin-top: 0 !important;
     }
-    [data-testid="stVerticalBlock"]:has(#main-menu-wrapper),
-    [data-testid="stHorizontalBlock"]:has(#main-menu-wrapper) {
+    [data-testid="stVerticalBlock"]:has(div.st-key-main_menu_wrapper),
+    [data-testid="stHorizontalBlock"]:has(div.st-key-main_menu_wrapper) {
         gap: 0 !important;
     }
     div[data-testid="stVerticalBlock"].st-key-dashboard_content {
@@ -95,6 +101,7 @@ st.markdown("""
     /* Ensure login nav items are in one row */
     div[class*="st-key-landing_nav_login"],
     div[class*="st-key-landing_nav_prasad_seva"],
+    div[class*="st-key-landing_nav_cultural_event"],
     div[class*="st-key-landing_nav_events"] {
         width: 33.33% !important;
         flex: 1 !important;
@@ -289,6 +296,7 @@ st.markdown("""
     /* Parent container for landing nav - force horizontal layout */
     [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_login"]),
     [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_prasad_seva"]),
+    [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_cultural_event"]),
     [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_events"]) {
         display: flex !important;
         flex-direction: row !important;
@@ -297,12 +305,14 @@ st.markdown("""
     }
     [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_login"]) > [data-testid="stColumn"],
     [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_prasad_seva"]) > [data-testid="stColumn"],
+    [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_cultural_event"]) > [data-testid="stColumn"],
     [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_events"]) > [data-testid="stColumn"] {
         flex: 1 !important;
         width: 33.33% !important;
     }
     div[class*="st-key-landing_nav_login"] button,
     div[class*="st-key-landing_nav_prasad_seva"] button,
+    div[class*="st-key-landing_nav_cultural_event"] button,
     div[class*="st-key-landing_nav_events"] button {
         width: 100% !important;
         min-height: 3.3rem !important;
@@ -316,6 +326,7 @@ st.markdown("""
     }
     div[class*="st-key-landing_nav_login"] button p:before,
     div[class*="st-key-landing_nav_prasad_seva"] button p:before,
+    div[class*="st-key-landing_nav_cultural_event"] button p:before,
     div[class*="st-key-landing_nav_events"] button p:before {
         display: block;
         margin-bottom: 0.35rem;
@@ -323,8 +334,9 @@ st.markdown("""
         font-weight: 400;
         line-height: 1;
     }
-    div[class*="st-key-landing_nav_login"] button p:before { content: "⌂"; }
+    div[class*="st-key-landing_nav_login"] button p:before { content: "⇥"; }
     div[class*="st-key-landing_nav_prasad_seva"] button p:before { content: "♨"; }
+    div[class*="st-key-landing_nav_cultural_event"] button p:before { content: "✦"; }
     div[class*="st-key-landing_nav_events"] button p:before { content: "▣"; }
     div[class*="st-key-landing_nav_login"] button:hover,
     div[class*="st-key-landing_nav_prasad_seva"] button:hover,
@@ -494,6 +506,7 @@ st.markdown("""
         }
         div[class*="st-key-landing_nav_login"] button,
         div[class*="st-key-landing_nav_prasad_seva"] button,
+        div[class*="st-key-landing_nav_cultural_event"] button,
         div[class*="st-key-landing_nav_events"] button {
             min-height: 3.2rem !important;
             border: 1px solid #ead8a9 !important;
@@ -510,6 +523,7 @@ st.markdown("""
         }
         div[class*="st-key-landing_nav_login"] button[kind="primary"],
         div[class*="st-key-landing_nav_prasad_seva"] button[kind="primary"],
+        div[class*="st-key-landing_nav_cultural_event"] button[kind="primary"],
         div[class*="st-key-landing_nav_events"] button[kind="primary"] {
             background: linear-gradient(135deg, #6a1b1b, #8b1737) !important;
             color: #ffffff !important;
@@ -518,6 +532,7 @@ st.markdown("""
         }
         div[class*="st-key-landing_nav_login"] button p,
         div[class*="st-key-landing_nav_prasad_seva"] button p,
+        div[class*="st-key-landing_nav_cultural_event"] button p,
         div[class*="st-key-landing_nav_events"] button p {
             display: flex !important;
             flex-direction: column !important;
@@ -617,6 +632,7 @@ st.markdown("""
         /* Ensure landing nav buttons stay in one row on mobile */
         [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_login"]),
         [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_prasad_seva"]),
+        [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_cultural_event"]),
         [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_events"]) {
             display: flex !important;
             flex-direction: row !important;
@@ -625,6 +641,7 @@ st.markdown("""
         }
         [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_login"]) > [data-testid="stColumn"],
         [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_prasad_seva"]) > [data-testid="stColumn"],
+        [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_cultural_event"]) > [data-testid="stColumn"],
         [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_events"]) > [data-testid="stColumn"] {
             flex: 1 !important;
             width: 33.33% !important;
@@ -632,6 +649,7 @@ st.markdown("""
         }
         div[class*="st-key-landing_nav_login"],
         div[class*="st-key-landing_nav_prasad_seva"],
+        div[class*="st-key-landing_nav_cultural_event"],
         div[class*="st-key-landing_nav_events"] {
             width: 100% !important;
         }
@@ -719,6 +737,51 @@ def enforce_idle_timeout():
         touch_login_audit(st.session_state.get("login_audit_session_id"))
 
 
+def show_page_loader(message):
+    loader = st.empty()
+    loader.markdown(
+        f"""
+        <style>
+        .page-loader-overlay {{
+            position: fixed !important;
+            top: 0 !important; right: 0 !important; bottom: 0 !important; left: 0 !important;
+            width: 100vw !important; height: 100vh !important; min-height: 100vh !important;
+            z-index: 2147483647 !important;
+            display: flex !important; align-items: center !important; justify-content: center !important;
+            background: #ffffff !important;
+            opacity: 1 !important;
+            pointer-events: all !important;
+        }}
+        .page-loader {{
+            display: flex; align-items: center; justify-content: center; gap: 0.8rem;
+            max-width: 360px; margin: 0 1rem; padding: 1rem 1.25rem;
+            border: 1px solid #d7e3d4; border-radius: 8px; background: #fffdf8;
+            box-shadow: 0 8px 22px rgba(46, 125, 50, 0.1); color: #28543a; font-weight: 700;
+        }}
+        .page-loader-bars {{ display: flex; align-items: center; gap: 4px; height: 28px; }}
+        .page-loader-bars span {{
+            display: block; width: 5px; height: 12px; border-radius: 4px; background: #2e7d32;
+            animation: page-loader-pulse 0.85s ease-in-out infinite;
+        }}
+        .page-loader-bars span:nth-child(2) {{ background: #ef8f20; animation-delay: 0.12s; }}
+        .page-loader-bars span:nth-child(3) {{ background: #bf360c; animation-delay: 0.24s; }}
+        @keyframes page-loader-pulse {{
+            0%, 100% {{ height: 10px; opacity: 0.5; }}
+            50% {{ height: 28px; opacity: 1; }}
+        }}
+        </style>
+        <div class="page-loader-overlay">
+            <div class="page-loader">
+                <div class="page-loader-bars"><span></span><span></span><span></span></div>
+                <span>{message}</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    return loader
+
+
 
 
 # ---------- User Login on Landing Page ----------
@@ -727,35 +790,28 @@ USER_PASSWORD = st.secrets["user_password"]
 
 if "user_logged_in" not in st.session_state:
     st.session_state.user_logged_in = False
-if "auth_loading" not in st.session_state:
-    st.session_state.auth_loading = False
 enforce_idle_timeout()
 
-if st.session_state.get("auth_loading") or st.session_state.get("home_loading"):
-    st.markdown(
-        """
-        <div style='position:fixed; inset:0; z-index:9999; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.92);'>
-            <div style='display:flex; align-items:center; flex-direction:column; gap:0.8rem; padding:1.5rem 2rem; border:1px solid #d7e3d4; border-radius:14px; background:#ffffff; box-shadow:0 8px 24px rgba(46,125,50,0.16);'>
-                <div style='width:54px; height:54px; border:5px solid rgba(46,125,50,0.15); border-top:5px solid #2e7d32; border-radius:50%; animation:spin 0.9s linear infinite;'></div>
-                <div style='font-size:1.05rem; font-weight:700; color:#2e7d32;'>Loading...</div>
-            </div>
-        </div>
-        <style>
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-    with st.spinner("Please wait while we load the page..."):
-        time.sleep(0.75)
-    st.session_state.auth_loading = False
-    st.session_state.home_loading = False
-    st.rerun()
-
 show_login_form = False
+requested_view = str(
+    st.query_params.get("page", st.query_params.get("view", ""))
+).strip().lower()
+open_prasad_seva = requested_view in {"prasad", "prasad-seva", "prasad_seva"}
+open_events = requested_view in {"events", "event"}
+open_cultural_event = requested_view in {"cultural-event", "cultural_event", "tgt-registration", "tgt_registration"}
 # Only show the initial menu if not logged in
 if not st.session_state.user_logged_in and not st.session_state.admin_logged_in:
     if "landing_navigation" not in st.session_state:
+        st.session_state.landing_navigation = (
+            "Prasad Seva"
+            if open_prasad_seva
+            else "Events"
+            if open_events
+            else "Cultural Event"
+            if open_cultural_event
+            else "Login"
+        )
+    elif st.session_state.landing_navigation == "Cultural Event" and not open_cultural_event:
         st.session_state.landing_navigation = "Login"
     selected_landing_navigation = st.session_state.landing_navigation
 
@@ -810,6 +866,9 @@ if not st.session_state.user_logged_in and not st.session_state.admin_logged_in:
     elif initial_menu == "Events":
         from app.events import events_tab
         events_tab()
+    elif initial_menu == "Cultural Event":
+        from app.cultural_event import cultural_event_tab
+        cultural_event_tab()
     elif initial_menu == "Login":
         show_login_form = True
 else:
@@ -826,28 +885,24 @@ if show_login_form:
     if st.session_state.get("admin_audit_name_pending", False):
         login_left, login_center, login_right = st.columns([1, 1.15, 1])
         with login_center:
-            st.markdown(
-                "<h2 class='login-panel-title'>Complete Admin Sign In</h2>"
-                "<p class='login-panel-copy'>Add your name to continue securely.</p>",
-                unsafe_allow_html=True,
-            )
             with st.form("admin_audit_name_form"):
                 full_name = st.text_input(
                     "📝 Your Full Name (for audit trail) *",
                     placeholder="Enter your full name",
                 )
-                save_name = st.form_submit_button("Continue", use_container_width=True)
+                admin_login_button = st.empty()
+                save_name = admin_login_button.form_submit_button("Continue", use_container_width=True)
         if save_name:
             if not full_name.strip():
                 st.error("Your Full Name is required for audit trail.")
             else:
+                admin_login_button.form_submit_button(":material/hourglass_top: Logging in...", disabled=True, use_container_width=True)
                 st.session_state.admin_full_name = full_name.strip()
                 st.session_state.admin_logged_in = True
                 st.session_state.admin_audit_name_pending = False
-                st.session_state.auth_loading = True
+                st.session_state.page_loading_message = "Loading celebration details"
                 st.session_state.login_audit_session_id = start_login_audit("Admin", ADMIN_USERNAME)
                 st.session_state.last_activity_at = time.monotonic()
-                st.success("✅ Admin access granted!")
                 st.rerun()
     else:
         login_left, login_center, login_right = st.columns([1, 1.15, 1])
@@ -856,16 +911,18 @@ if show_login_form:
                 user = st.text_input("👤 Username")
                 pwd = st.text_input("🔒 Password", type="password")
                 login_error = st.empty()
-                login = st.form_submit_button("Login", use_container_width=True)
+                login_button = st.empty()
+                login = login_button.form_submit_button("Login", use_container_width=True)
             if login:
                 username = user.strip().lower()
                 password = pwd.strip()
                 if username == ADMIN_USERNAME.lower() and password == get_admin_password():
-                    st.session_state.auth_loading = True
+                    login_button.form_submit_button(":material/hourglass_top: Logging in...", disabled=True, use_container_width=True)
                     st.session_state.admin_audit_name_pending = True
                     st.rerun()
                 elif username == USER_USERNAME.lower() and password == USER_PASSWORD:
-                    st.session_state.auth_loading = True
+                    login_button.form_submit_button(":material/hourglass_top: Logging in...", disabled=True, use_container_width=True)
+                    st.session_state.page_loading_message = "Loading celebration details"
                     st.session_state.user_logged_in = True
                     st.session_state.user_apartment = ""
                     st.session_state.login_audit_session_id = start_login_audit("User", USER_USERNAME)
@@ -894,55 +951,141 @@ if show_login_form:
 else:
     # Show menu based on role after successful login
     if st.session_state.admin_logged_in:
-        menu_items = ["Dashboard", "Donate", "Statistics", "Prasad", "Expenses", "Payments", "Admin"]
-        menu_icons = ["bar-chart", "gift", "chart-line", "award", "cash-coin", "credit-card", "lock"]
+        menu_items = ["Dashboard", "Donate", "Statistics", "Prasad", "Events", "Cultural", "Expenses", "Payments", "Admin", "Ganesh Pooja Seating"]
+        menu_icons = ["bar-chart", "gift", "chart-line", "award", "calendar-event", "person-check", "cash-coin", "credit-card", "lock", "calendar3"]
     elif st.session_state.user_logged_in:
-        menu_items = ["Dashboard", "Donate", "Statistics", "Prasad", "Expenses"]
-        menu_icons = ["bar-chart", "gift", "chart-line", "award", "cash-coin"]
+        menu_items = ["Dashboard", "Donate", "Statistics", "Prasad", "Events", "Cultural", "Expenses"]
+        menu_icons = ["bar-chart", "gift", "chart-line", "award", "calendar-event", "person-check", "cash-coin"]
     else:
         menu_items = []
         menu_icons = []
     if menu_items:
+        if open_prasad_seva and st.session_state.get("last_requested_view") != requested_view:
+            st.session_state.main_navigation = "Prasad"
+            st.session_state.last_requested_view = requested_view
         if st.session_state.get("main_navigation") not in menu_items:
             st.session_state.main_navigation = "Dashboard"
 
-        st.markdown('<div id="main-menu-wrapper">', unsafe_allow_html=True)
         menu_labels = {
             "Dashboard": ":material/dashboard: Home",
             "Donate": ":material/volunteer_activism: Donate",
             "Statistics": ":material/trending_up: Stats",
             "Prasad": ":material/restaurant: Prasad",
+            "Events": ":material/event: Events",
+            "Cultural": ":material/person_check: Cultural",
+            "Ganesh Pooja Seating": ":material/chair_alt: Pooja",
             "Expenses": ":material/receipt_long: Expenses",
             "Payments": ":material/credit_card: Pay",
             "Admin": ":material/admin_panel_settings: Admin",
         }
-        menu_columns = st.columns(len(menu_items))
-        for idx, menu_item in enumerate(menu_items):
-            with menu_columns[idx]:
-                is_active = st.session_state.main_navigation == menu_item
-                if st.button(
-                    menu_labels[menu_item],
-                    key=f"main_nav_{menu_item.lower()}",
-                    type="primary" if is_active else "secondary",
-                    use_container_width=True,
-                ):
-                    previous_main_navigation = st.session_state.main_navigation
-                    st.session_state.main_navigation = menu_item
-                    if menu_item == "Dashboard" and previous_main_navigation != "Dashboard":
-                        st.session_state.home_loading = True
-                    st.session_state.scroll_to_top = True
-                    st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+        with st.container(key="main_menu_wrapper"):
+            menu_columns = st.columns(len(menu_items))
+            for idx, menu_item in enumerate(menu_items):
+                with menu_columns[idx]:
+                    is_active = st.session_state.main_navigation == menu_item
+                    if st.button(
+                        menu_labels[menu_item],
+                        key=f"main_nav_{menu_item.lower()}",
+                        type="primary" if is_active else "secondary",
+                        use_container_width=True,
+                    ):
+                        previous_main_navigation = st.session_state.main_navigation
+                        st.session_state.main_navigation = menu_item
+                        loading_messages = {
+                            "Dashboard": "Loading celebration details",
+                            "Donate": "Loading sponsorship details",
+                            "Statistics": "Loading statistics",
+                            "Prasad": "Loading prasad seva details",
+                            "Events": "Loading events",
+                            "Cultural": "Loading cultural event",
+                            "Ganesh Pooja Seating": "Loading ganesh pooja seating",
+                            "Expenses": "Loading expense details",
+                            "Payments": "Loading payment details",
+                            "Admin": "Loading admin tools",
+                        }
+                        if menu_item != previous_main_navigation:
+                            st.session_state.page_loading_message = loading_messages[menu_item]
+                        st.session_state.scroll_to_top = True
+                        st.rerun()
+
+        components.html(
+            """
+            <script>
+            const parentDocument = window.parent.document;
+            const overlayId = "instant-navigation-loader";
+            if (!parentDocument.getElementById(overlayId)) {
+                const overlay = parentDocument.createElement("div");
+                overlay.id = overlayId;
+                overlay.innerHTML = `
+                    <style>
+                    #${overlayId} {
+                        position: fixed; inset: 0; z-index: 2147483646; display: none;
+                        align-items: center; justify-content: center; background: #ffffff;
+                    }
+                    #${overlayId} .loader-card {
+                        display: flex; align-items: center; gap: 0.8rem; padding: 1rem 1.25rem;
+                        border: 1px solid #d7e3d4; border-radius: 8px; background: #fffdf8;
+                        box-shadow: 0 8px 22px rgba(46, 125, 50, 0.1); color: #28543a; font-weight: 700;
+                    }
+                    #${overlayId} .loader-bars { display: flex; align-items: center; gap: 4px; height: 28px; }
+                    #${overlayId} .loader-bars span {
+                        width: 5px; height: 12px; border-radius: 4px; background: #2e7d32;
+                        animation: instant-loader-pulse 0.85s ease-in-out infinite;
+                    }
+                    #${overlayId} .loader-bars span:nth-child(2) { background: #ef8f20; animation-delay: 0.12s; }
+                    #${overlayId} .loader-bars span:nth-child(3) { background: #bf360c; animation-delay: 0.24s; }
+                    @keyframes instant-loader-pulse {
+                        0%, 100% { height: 10px; opacity: 0.5; }
+                        50% { height: 28px; opacity: 1; }
+                    }
+                    </style>
+                    <div class="loader-card">
+                        <div class="loader-bars"><span></span><span></span><span></span></div>
+                        <span>Loading...</span>
+                    </div>`;
+                parentDocument.body.appendChild(overlay);
+                parentDocument.addEventListener("click", (event) => {
+                    const button = event.target.closest("button");
+                    const labels = ["Home", "Donate", "Stats", "Prasad", "Expenses", "Pay", "Admin"];
+                    if (button && labels.includes(button.innerText.trim())) {
+                        overlay.style.display = "flex";
+                    }
+                }, true);
+                new MutationObserver(() => {
+                    if (parentDocument.querySelector(".page-loader-overlay")) {
+                        overlay.style.display = "none";
+                    }
+                }).observe(parentDocument.body, { childList: true, subtree: true });
+            }
+            </script>
+            """,
+            height=0,
+        )
 
         if st.session_state.get("scroll_to_top"):
             components.html("<script>window.parent.scrollTo({top: 0, behavior: 'instant'});</script>", height=0)
             st.session_state["scroll_to_top"] = False
 
         main_menu = st.session_state.main_navigation
+        if st.session_state.get("page_loading_message"):
+            loading_message = st.session_state.page_loading_message
+            show_page_loader(loading_message)
+            time.sleep(0.9)
+            st.session_state.pop("page_loading_message", None)
+            st.session_state.content_loading_message = loading_message
+            st.rerun()
+
         if st.button(":material/logout:", help="Logout", key="logout_button"):
             end_session()
             st.session_state.pop('is_admin', None)
             st.rerun()
+
+        content_loader = None
+        if st.session_state.get("content_loading_message"):
+            content_loader = show_page_loader(st.session_state.content_loading_message)
+
+        if main_menu != "Expenses":
+            st.session_state["expense_inline_action"] = None
 
         if main_menu == "Dashboard":
             from app.sponsorship import sponsorship_tab
@@ -957,6 +1100,15 @@ else:
         elif main_menu == "Prasad":
             from app.prasad_seva import prasad_seva_tab
             prasad_seva_tab()
+        elif main_menu == "Events":
+            from app.events import events_tab
+            events_tab()
+        elif main_menu == "Cultural":
+            from app.cultural_event import cultural_event_tab
+            cultural_event_tab()
+        elif main_menu == "Ganesh Pooja Seating":
+            from app.events import _ganesh_pooja_seating_tab
+            _ganesh_pooja_seating_tab()
         elif main_menu == "Expenses":
             from app.expenses import expenses_tab
             expenses_tab()
@@ -967,11 +1119,12 @@ else:
             if 'admin_full_name' not in st.session_state:
                 st.session_state.admin_full_name = ''
             from app.admin import admin_tab
-            try:
-                admin_visits, user_visits, total_visits = get_today_visit_count()
-                today_label = datetime.datetime.now().strftime("%A, %d %B %Y")
-                st.markdown(
-                    f"""
+            if is_user_login_tracking_enabled():
+                try:
+                    admin_visits, user_visits, total_visits = get_today_visit_count()
+                    today_label = datetime.datetime.now().strftime("%A, %d %B %Y")
+                    st.markdown(
+                        f"""
                     <div style="
                         margin: 1.2rem 0 1.5rem;
                         padding: 1.1rem 1.4rem;
@@ -987,20 +1140,24 @@ else:
                         <div style="color:#546e7a; font-size:0.9rem; margin-top:0.55rem;">Admin: <strong>{admin_visits}</strong> &nbsp;&nbsp;|&nbsp;&nbsp; Users: <strong>{user_visits}</strong></div>
                     </div>
                     """,
-                    unsafe_allow_html=True,
-                )
-            except Exception:
-                st.warning("Today's visit count is currently unavailable.")
+                        unsafe_allow_html=True,
+                    )
+                except Exception:
+                    st.warning("Today's visit count is currently unavailable.")
+            admin_sections = [
+                "Sponsorship Record",
+                "Sponsorship Items",
+                "Committee Members",
+                "Manage Notification Emails",
+            ]
+            admin_icons = ["pencil-square", "card-checklist", "people-fill", "envelope-paper-fill"]
+            if is_user_login_tracking_enabled():
+                admin_sections.insert(0, "User Login Activity")
+                admin_icons.insert(0, "bar-chart-fill")
             admin_menu = option_menu(
                 "Admin Sections",
-                [
-                    "User Login Activity",
-                    "Sponsorship Record",
-                    "Sponsorship Items",
-                    "Committee Members",
-                    "Manage Notification Emails"
-                ],
-                icons=["bar-chart-fill", "pencil-square", "card-checklist", "people-fill", "envelope-paper-fill"],
+                admin_sections,
+                icons=admin_icons,
                 menu_icon="shield-lock-fill",
                 default_index=0,
                 orientation="horizontal",
@@ -1043,3 +1200,7 @@ else:
                 }
             )
             admin_tab(menu=admin_menu)
+
+        if content_loader:
+            content_loader.empty()
+            st.session_state.pop("content_loading_message", None)

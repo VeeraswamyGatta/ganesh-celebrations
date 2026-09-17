@@ -1,38 +1,41 @@
-<div style="max-width:540px;margin:36px auto 0 auto;padding:0;">
-    <div style="background:linear-gradient(90deg,#43cea2 0%,#185a9d 100%);color:#fff;padding:22px 32px 20px 32px;border-radius:22px;box-shadow:0 4px 24px #b2dfdb;display:flex;align-items:center;justify-content:space-between;">
-        <div style="display:flex;align-items:center;">
-            <span style="font-size:2.2em;margin-right:18px;">💰</span>
-            <div>
-                <div style="font-size:1.25em;font-weight:600;letter-spacing:0.5px;">Available Amount in Wallet</div>
-                <div style="font-size:0.98em;color:#e0f7fa;margin-top:2px;">Total Received - Total Expenses</div>
-            </div>
-        </div>
-        <div style="background:#fffde7;color:#388E3C;padding:10px 28px;border-radius:16px;font-size:1.45em;font-weight:bold;box-shadow:0 2px 12px #c8e6c9;min-width:120px;text-align:center;">
-            {wallet_amount}
-        </div>
+<div class="expense-summary-panel">
+    <style>
+        .expense-summary-panel {{ max-width: 620px; margin: 1rem auto 0; padding: 1rem; border: 1px solid #c8d9d0; border-radius: 16px; background: linear-gradient(145deg, #fbfffc, #eef7f1); box-shadow: 0 8px 22px rgba(46, 125, 50, 0.12); color: #263238; }}
+        .expense-wallet-head {{ display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.2rem 0 0.8rem; border-bottom: 1px solid #c8d9d0; }}
+        .expense-wallet-title {{ color: #176b3a; font-size: 1.08rem; font-weight: 850; }}
+        .expense-wallet-value {{ padding: 0.3rem 0.65rem; border-radius: 9px; background: #e3f2fd; color: #0d47a1; font-size: 1.3rem; font-weight: 850; white-space: nowrap; }}
+        .expense-wallet-subtitle {{ margin-top: 0.2rem; color: #607d6b; font-size: 0.76rem; }}
+        .expense-wallet-bar {{ height: 8px; margin: 0.85rem 0 0.25rem; overflow: hidden; border-radius: 99px; background: #ffcdd2; }}
+        .expense-wallet-bar-fill {{ height: 100%; border-radius: 99px; background: linear-gradient(90deg, #43a047, #1e88e5); }}
+        .expense-wallet-bar-label {{ display: flex; justify-content: space-between; color: #607d6b; font-size: 0.7rem; }}
+        .expense-reconciliation {{ margin: 0.8rem 0 1rem; padding: 0.55rem 0.8rem; border: 1px solid #e1ece5; border-radius: 12px; background: rgba(255,255,255,0.68); }}
+        .expense-reconciliation-row {{ display: flex; justify-content: space-between; gap: 0.75rem; align-items: center; padding: 0.48rem 0; color: #546e7a; font-size: 0.84rem; }}
+        .expense-reconciliation-row strong {{ color: #263238; white-space: nowrap; }}
+        .expense-reconciliation-row.received strong {{ color: #2e7d32; }}
+        .expense-reconciliation-row.expenses strong {{ color: #c62828; }}
+        .expense-reconciliation-total {{ margin-top: 0.25rem; padding-top: 0.6rem; border-top: 2px solid #a5d6a7; color: #0d47a1; font-weight: 800; }}
+        .expense-category-title {{ margin: 0.2rem 0 0.45rem; color: #185a9d; font-size: 1rem; font-weight: 800; }}
+        .expense-category-row {{ display: flex; justify-content: space-between; gap: 0.75rem; padding: 0.55rem 0.65rem; border-bottom: 1px solid #dce7df; color: #4e342e; font-size: 0.86rem; }}
+        .expense-category-row:last-child {{ border-bottom: 0; }}
+        .expense-category-row strong {{ padding: 0.15rem 0.45rem; border-radius: 6px; background: #fff8e1; color: #2e7d32; white-space: nowrap; }}
+        @media (max-width: 640px) {{
+            .expense-summary-panel {{ margin-top: 0.8rem; padding: 0.8rem; border-radius: 13px; }}
+            .expense-wallet-title {{ font-size: 0.95rem; }}
+            .expense-wallet-value {{ font-size: 1.1rem; }}
+            .expense-category-row {{ padding-left: 0.25rem; padding-right: 0.25rem; }}
+        }}
+    </style>
+    <div class="expense-wallet-head">
+        <div><div class="expense-wallet-title">💰 Available Wallet</div><div class="expense-wallet-subtitle">Total received minus approved expenses</div></div>
+        <div class="expense-wallet-value">${wallet_amount:,.2f}</div>
     </div>
-    <div style="background:#fff;padding:22px 32px 32px 32px;border-radius:22px;box-shadow:0 2px 18px #b2dfdb;margin-top:22px;">
-        <table style="width:100%;margin-bottom:18px;border-collapse:separate;border-spacing:0;">
-            <tr>
-                <td style="font-size:1.08em;color:#388E3C;font-weight:600;padding:8px 0;">Total Received</td>
-                <td style="font-size:1.08em;color:#388E3C;font-weight:600;text-align:right;padding:8px 0;">{total_payments}</td>
-            </tr>
-            <tr>
-                <td style="font-size:1.08em;color:#D84315;font-weight:600;padding:8px 0;">Total Expenses</td>
-                <td style="font-size:1.08em;color:#D84315;font-weight:600;text-align:right;padding:8px 0;">{total_expenses}</td>
-            </tr>
-        </table>
-        <div style="font-size:1.18em;font-weight:bold;color:#185a9d;margin-bottom:10px;letter-spacing:0.5px;">📊 Category Expense Summary</div>
-        <table style='width:100%;border-collapse:separate;border-spacing:0;'>
-            <thead>
-                <tr style='background:#F5F5F5;'>
-                    <th style='text-align:left;padding:8px 18px;color:#185a9d;font-size:1.08em;'>Category</th>
-                    <th style='text-align:right;padding:8px 18px;color:#185a9d;font-size:1.08em;'>Amount</th>
-                </tr>
-            </thead>
-            <tbody>
-                {table_rows}
-            </tbody>
-        </table>
+    <div class="expense-wallet-bar"><div class="expense-wallet-bar-fill" style="width:{wallet_percent:.1f}%;"></div></div>
+    <div class="expense-wallet-bar-label"><span>{wallet_percent:.1f}% available</span><span>Received funds</span></div>
+    <div class="expense-reconciliation">
+        <div class="expense-reconciliation-row received"><span>💰 Total received</span><strong>${total_payments:,.2f}</strong></div>
+        <div class="expense-reconciliation-row expenses"><span>🧾 Total expenses</span><strong>− ${total_expenses:,.2f}</strong></div>
+        <div class="expense-reconciliation-row expense-reconciliation-total"><span>Available wallet</span><strong>${wallet_amount:,.2f}</strong></div>
     </div>
+    <div class="expense-category-title">📊 Category Expense Summary</div>
+    <div>{table_rows}</div>
 </div>

@@ -1,8 +1,10 @@
 import streamlit as st
 import pandas as pd
 import datetime
+import base64
 from streamlit_option_menu import option_menu
 from .db import get_connection
+from html import escape
 import io
 
 
@@ -48,19 +50,22 @@ def expenses_tab():
         return lines
     df["Comments"] = df["Comments"].apply(format_comments)
 
-    # Tabs for Expenses List, Receipts, and Expense Summary
+    # Tabs for expense management and summaries
     # Determine tabs to show based on user role
     is_admin = st.session_state.get("admin_logged_in", False)
     if is_admin:
-        section_names = ["Add Expense", "Expenses List", "Receipts", "Expense Summary by Person", "Edit/Delete Expense", "Settlements"]
+        section_names = ["Expenses", "Settlements"]
     else:
-        section_names = ["Expenses List", "Receipts"]
+        section_names = ["Expenses"]
+    if st.session_state.get("expenses_management_menu") not in section_names:
+        st.session_state.pop("expenses_management_menu", None)
     if "expenses_section" not in st.session_state or st.session_state["expenses_section"] not in section_names:
         st.session_state["expenses_section"] = section_names[0]
+        st.session_state["expense_inline_action"] = None
     selected_section = option_menu(
         "Expenses Management",
         section_names,
-        icons=["plus-circle", "list-ul", "file-earmark-image", "bar-chart", "pencil-square", "wallet2"][:len(section_names)],
+        icons=["list-ul", "wallet2"][:len(section_names)],
         menu_icon="cash-stack",
         default_index=section_names.index(st.session_state["expenses_section"]),
         orientation="horizontal",
@@ -95,6 +100,8 @@ def expenses_tab():
         },
     )
     st.session_state["expenses_section"] = selected_section
+    if selected_section != "Expenses":
+        st.session_state["expense_inline_action"] = None
     # Settlements Section (admin only)
     if is_admin and selected_section == "Settlements":
 
@@ -196,10 +203,10 @@ def expenses_tab():
             cursor.execute("SELECT spent_by, SUM(amount) FROM expenses WHERE status='active' GROUP BY spent_by")
             spent_rows = cursor.fetchall()
             spent_dict = {row[0]: row[1] for row in spent_rows}
-            if hasattr(cursor, 'connection') and hasattr(cursor.connection, 'account'):
+            if st.secrets.get("db_type", "postgres").lower() == "snowflake":
                 cursor.execute("SELECT name, SUM(amount), LISTAGG(comments, '\n') WITHIN GROUP (ORDER BY name) FROM settlements GROUP BY name")
             else:
-                cursor.execute("SELECT name, SUM(amount), GROUP_CONCAT(comments) FROM settlements GROUP BY name")
+                cursor.execute("SELECT name, SUM(amount), STRING_AGG(comments, '\n') FROM settlements GROUP BY name")
             settlement_rows = cursor.fetchall()
             # Show all names, even if their net amount is zero or negative
             all_names = set(spent_dict.keys()) | set(row[0] for row in settlement_rows)
@@ -225,12 +232,81 @@ def expenses_tab():
             summary_df = summary_df[cols]
             st.dataframe(summary_df, use_container_width=True)
 
-    if is_admin and selected_section == "Add Expense":
+    if is_admin and selected_section == "Expenses":
+        st.markdown(
+            """
+            <style>
+            .st-key-expense_inline_actions {
+                margin: 0.2rem 0 1rem;
+                padding: 0.55rem;
+                overflow: hidden;
+                border: 1px solid #ead8a9;
+                border-radius: 14px;
+                background: linear-gradient(135deg, #fffdf7 0%, #f1f8e9 100%);
+                box-shadow: 0 4px 14px rgba(93, 64, 55, 0.1);
+            }
+            .st-key-expense_inline_actions [data-testid="stHorizontalBlock"] {
+                flex-wrap: nowrap !important;
+                gap: 0.45rem !important;
+                overflow: hidden;
+            }
+            .st-key-expense_inline_actions [data-testid="stColumn"] {
+                min-width: 0 !important;
+                flex: 1 1 0 !important;
+            }
+            .st-key-expense_inline_actions button {
+                min-height: 2.45rem !important;
+                border: 1px solid #d8b15a !important;
+                border-radius: 10px !important;
+                background: #ffffff !important;
+                color: #6a1b1b !important;
+                font-size: 0.78rem !important;
+                font-weight: 800 !important;
+                white-space: nowrap !important;
+                box-shadow: 0 2px 6px rgba(106, 27, 27, 0.1) !important;
+            }
+            .st-key-expense_inline_actions button:hover {
+                border-color: #8b1737 !important;
+                background: #fff8e1 !important;
+                transform: translateY(-1px);
+            }
+            @media (max-width: 640px) {
+                .st-key-expense_inline_actions {
+                    margin-bottom: 0.8rem;
+                    padding: 0.42rem;
+                }
+                .st-key-expense_inline_actions [data-testid="stColumn"] {
+                    min-width: 0 !important;
+                    flex-basis: 0 !important;
+                }
+                .st-key-expense_inline_actions button {
+                    min-height: 2.25rem !important;
+                    padding: 0.35rem 0.4rem !important;
+                    font-size: 0.65rem !important;
+                }
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+        with st.container(key="expense_inline_actions"):
+            action_columns = st.columns(3)
+            if action_columns[0].button("➕ Add", key="expense_inline_add", use_container_width=True):
+                st.session_state["expense_inline_action"] = "add"
+                st.rerun()
+            if action_columns[1].button("✏️ Edit", key="expense_inline_edit", disabled=df.empty, use_container_width=True):
+                st.session_state["expense_inline_action"] = "edit"
+                st.rerun()
+            if action_columns[2].button("🗑️ Delete", key="expense_inline_delete", disabled=df.empty, use_container_width=True):
+                st.session_state["expense_inline_action"] = "delete"
+                st.rerun()
+
+    if is_admin and selected_section == "Expenses" and st.session_state.get("expense_inline_action") == "add":
             cursor.execute("SELECT item FROM sponsorship_items")
             categories = [row[0] for row in cursor.fetchall()]
             if "Miscellaneous" not in categories:
                 categories.append("Miscellaneous")
-            MAX_RECEIPT_SIZE_MB = 10
+            MAX_RECEIPT_SIZE_MB = 1
             MAX_RECEIPT_SIZE_BYTES = MAX_RECEIPT_SIZE_MB * 1024 * 1024
             expense_form = st.form("add_expense_form")
             expense_submit_disabled = st.session_state.get("expense_submission_in_progress", False)
@@ -271,10 +347,10 @@ def expenses_tab():
                     st.session_state["expense_submission_in_progress"] = False
                     expense_status.update(label="Please complete the required fields", state="error", expanded=True)
                     st.error("Spent By is required.")
-                elif uploaded_receipt is not None and (uploaded_receipt.size > 10 * 1024 * 1024 or uploaded_receipt.type not in ["image/jpeg", "image/png"]):
+                elif uploaded_receipt is not None and (uploaded_receipt.size > MAX_RECEIPT_SIZE_BYTES or uploaded_receipt.type not in ["image/jpeg", "image/png"]):
                     st.session_state["expense_submission_in_progress"] = False
                     expense_status.update(label="Please choose a valid receipt", state="error", expanded=True)
-                    st.error("Invalid receipt file. Only JPG/PNG under 10MB allowed.")
+                    st.error(f"Invalid receipt file. Only JPG/PNG under {MAX_RECEIPT_SIZE_MB}MB allowed.")
                 else:
                     if hasattr(cursor, 'execute') and hasattr(cursor.connection, 'account'):  # crude check for Snowflake
                         cursor.execute("INSERT INTO expenses (category, sub_category, amount, date, spent_by, comments, receipt_path, receipt_blob, status) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'active')", (category, sub_category, amount, date, spent_by, comments, receipt_path, receipt_bytes))
@@ -312,85 +388,209 @@ def expenses_tab():
                     st.success("✅ Expense added and notification email sent!")
                     # Set flag to clear input fields on next run
                     st.session_state["clear_expense_form"] = True
+                    st.session_state["expense_inline_action"] = None
                     st.rerun()
     # Expenses List Section
-    if selected_section == "Expenses List":
-        # Category filter (for all)
+    if selected_section == "Expenses" and not st.session_state.get("expense_inline_action"):
         category_options = ["All"] + sorted(df["Category"].dropna().unique().tolist())
-        selected_category = st.selectbox("Filter by Category", category_options, key="filter_category")
+        with st.popover("🔍", help="Search expenses"):
+            selected_category = st.selectbox("Category", category_options, key="filter_category")
+            selected_spent_by = "All"
+            if is_admin:
+                spent_by_options = ["All"] + sorted(df["Spent By"].dropna().unique().tolist())
+                selected_spent_by = st.selectbox("Spent By", spent_by_options, key="filter_spent_by")
         filtered_df = df.copy()
         if selected_category != "All":
             filtered_df = filtered_df[filtered_df["Category"] == selected_category]
 
-        # Spent By filter (admin only)
-        if is_admin:
-            spent_by_options = ["All"] + sorted(filtered_df["Spent By"].dropna().unique().tolist())
-            selected_spent_by = st.selectbox("Filter by Spent By", spent_by_options, key="filter_spent_by")
-            if selected_spent_by != "All":
-                filtered_df = filtered_df[filtered_df["Spent By"] == selected_spent_by]
+        if selected_spent_by != "All":
+            filtered_df = filtered_df[filtered_df["Spent By"] == selected_spent_by]
 
-        drop_cols = ["Receipt Blob", "Receipt"]
-        if not is_admin and "Spent By" in filtered_df.columns:
-            drop_cols.append("Spent By")
-        show_df = filtered_df.drop(drop_cols, axis=1)
-        if "ID" in show_df.columns:
-            show_df = show_df.sort_values(by="ID").reset_index(drop=True)
-            show_df = show_df[["ID"] + [c for c in show_df.columns if c != "ID"]]
-        show_df["Comments"] = show_df["Comments"].apply(lambda x: "  \n".join([str(line) for line in x if str(line).strip()]) if isinstance(x, list) else str(x))
-        show_df.index = show_df.index + 1
-        st.dataframe(show_df, use_container_width=True)
-        st.markdown(f"<div style='font-size:1.1em; font-weight:bold; margin-top:10px; text-align:right;'>Total Expenses: <span style='color:#6D4C41'>{filtered_df['Amount'].sum():.2f}</span></div>", unsafe_allow_html=True)
-        if not len(filtered_df):
-                st.info("No expenses recorded yet.")
-        # Show category summary (category and total amount) below the table
-        if not filtered_df.empty:
-                cat_summary = filtered_df.groupby("Category")['Amount'].sum().reset_index()
-                cat_summary = cat_summary.sort_values(by="Amount", ascending=False)
-                # Modern card design for summary
-                table_rows = "".join([
-                        f"<tr>"
-                        f"<td style='padding:8px 18px;font-weight:500;color:#4E342E;font-size:1.08em;'>🗂️ {row['Category']}</td>"
-                        f"<td style='padding:8px 18px;text-align:right;font-weight:bold;color:#388E3C;background:#FFFDE7;border-radius:8px;font-size:1.08em;'>{row['Amount']:.2f}</td>"
-                        f"</tr>"
-                        for _, row in cat_summary.iterrows()
-                ])
-                with open("app/html/expense/category_summary_card.html", "r") as f:
-                    card_template = f.read()
-                card_html = card_template.format(
-                    wallet_amount=wallet_amount,
-                    total_payments=total_payments,
-                    total_expenses=total_expenses,
-                    table_rows=table_rows
+        filtered_total = float(filtered_df["Amount"].sum()) if not filtered_df.empty else 0.0
+        cat_summary = filtered_df.groupby("Category")["Amount"].sum().reset_index().sort_values(by="Amount", ascending=False) if not filtered_df.empty else pd.DataFrame(columns=["Category", "Amount"])
+        table_rows = "".join(
+            f"<div class='expense-category-row'><span>🗂️ {escape(str(row['Category']))}</span><strong>${float(row['Amount']):,.2f}</strong></div>"
+            for _, row in cat_summary.iterrows()
+        )
+        with open("app/html/expense/category_summary_card.html", "r") as f:
+            card_template = f.read()
+        if is_admin:
+            st.markdown(
+                card_template.format(
+                    wallet_amount=float(wallet_amount),
+                    total_payments=float(total_payments),
+                    total_expenses=float(total_expenses),
+                    wallet_percent=min(max(float(wallet_amount) / float(total_payments) * 100, 0), 100) if total_payments else 0,
+                    table_rows=table_rows,
+                ),
+                unsafe_allow_html=True,
+            )
+        if is_admin and not filtered_df.empty:
+            person_summary = (
+                filtered_df.assign(**{"Spent By": filtered_df["Spent By"].fillna("Unknown")})
+                .groupby("Spent By", as_index=False)["Amount"]
+                .sum()
+                .sort_values("Amount", ascending=False)
+                .rename(columns={"Spent By": "Name", "Amount": "Total Amount"})
+            )
+            st.markdown(
+                "<div style='height:1rem;'></div><div style='padding:0.7rem 0 0.55rem; border-top:1px solid #e4ddd7; color:#6a1b1b; font-size:1.05rem; font-weight:800;'>👤 Expense Details by Person</div>",
+                unsafe_allow_html=True,
+            )
+            person_summary["Total Amount"] = person_summary["Total Amount"].astype(float).round(2)
+            person_summary_rows = "".join(
+                f"<tr><td>{escape(str(row['Name']))}</td><td class='expense-person-amount'>${float(row['Total Amount']):,.2f}</td></tr>"
+                for _, row in person_summary.iterrows()
+            )
+            st.markdown(
+                f"""
+<style>
+    .expense-person-table-wrap {{ margin-top:0.2rem; overflow-x:auto; border:1px solid #e4ddd7; border-radius:12px; box-shadow:0 3px 10px rgba(106,27,27,0.08); }}
+    .expense-person-table {{ width:100%; table-layout:fixed; border-collapse:collapse; color:#3e2723; font-size:0.82rem; }}
+    .expense-person-table th {{ width:65%; padding:0.62rem 0.55rem; background:#6a1b1b; color:#fffaf0; font-size:0.72rem; font-weight:800; letter-spacing:0.04em; text-align:left; text-transform:uppercase; white-space:nowrap; }}
+    .expense-person-table th:last-child {{ width:35%; text-align:right; }}
+    .expense-person-table td {{ padding:0.55rem; border-top:1px solid #eee4dc; vertical-align:middle; overflow-wrap:anywhere; }}
+    .expense-person-table tr:nth-child(even) td {{ background:#fffaf5; }}
+    .expense-person-amount {{ color:#8b1737; font-weight:800; text-align:right; white-space:nowrap; }}
+    @media (max-width:640px) {{
+        .expense-person-table {{ font-size:0.75rem; }}
+        .expense-person-table th, .expense-person-table td {{ padding:0.5rem 0.42rem; }}
+        .expense-person-table th {{ font-size:0.64rem; }}
+    }}
+</style>
+<div class='expense-person-table-wrap'>
+<table class='expense-person-table'>
+<thead><tr><th>Name</th><th>Total Amount</th></tr></thead>
+<tbody>{person_summary_rows}</tbody>
+</table>
+</div>
+""",
+                unsafe_allow_html=True,
+            )
+        if filtered_df.empty:
+            st.info("No expenses recorded yet.")
+        else:
+            st.markdown(
+                "<div style='height:1.25rem; clear:both;'></div>"
+                "<div style='padding:0.7rem 0 0.55rem; border-top:1px solid #e4ddd7; color:#6a1b1b; font-size:1.05rem; font-weight:800;'>🧾 Detailed Expense Report</div>",
+                unsafe_allow_html=True,
+            )
+            table_df = filtered_df.copy()
+            table_df["Comments"] = table_df["Comments"].apply(
+                lambda value: " | ".join(str(line).strip() for line in value if str(line).strip())
+                if isinstance(value, list) else str(value or "")
+            )
+            table_df["ReceiptPath"] = table_df["Receipt"].apply(
+                lambda value: value if isinstance(value, str) and value.strip() else ""
+            )
+            table_df["Receipt"] = table_df["Receipt"].apply(
+                lambda value: "Available" if isinstance(value, str) and value.strip() else "Not attached"
+            )
+            table_df["Expense"] = table_df.apply(
+                lambda row: f"{row['Category']} - {row['Sub Category']}" if row["Sub Category"] else str(row["Category"]),
+                axis=1,
+            )
+            def build_receipt_html(row):
+                receipt_name = str(row.get("ReceiptPath") or "")
+                receipt_blob = row.get("Receipt Blob")
+                if not receipt_name or not receipt_blob:
+                    return "<span class='expense-table-receipt no-receipt'>Not attached</span>"
+                if isinstance(receipt_blob, memoryview):
+                    receipt_bytes = receipt_blob.tobytes()
+                elif isinstance(receipt_blob, (bytearray, bytes)):
+                    receipt_bytes = bytes(receipt_blob)
+                else:
+                    receipt_bytes = receipt_blob
+                ext = receipt_name.rsplit(".", 1)[-1].lower() if "." in receipt_name else "png"
+                mime_type = "image/jpeg" if ext in ["jpg", "jpeg"] else "image/png"
+                data_uri = f"data:{mime_type};base64,{base64.b64encode(receipt_bytes).decode('ascii')}"
+                return (
+                    f"<div class='receipt-preview-inline'><img src='{data_uri}' class='receipt-preview-image' alt='Receipt preview' /></div>"
                 )
-                st.markdown(card_html, unsafe_allow_html=True)
-    # Receipts Section
-    if selected_section == "Receipts":
-        receipts_df = df.sort_values(by="ID")
-        for idx, row in receipts_df.iterrows():
-            receipt_name = row["Receipt"]
-            receipt_blob = row["Receipt Blob"]
-            is_admin = st.session_state.get("admin_logged_in", False)
-            if isinstance(receipt_name, str) and receipt_name.strip() and receipt_blob:
-                data = receipt_blob
-                if isinstance(data, memoryview):
-                    data = data.tobytes()
-                elif isinstance(data, bytearray):
-                    data = bytes(data)
-                label_text = f"View Receipt: ID {row['ID']} | Amount {row['Amount']} | Date {row['Date']}"
-                if is_admin and "Spent By" in row:
-                    label_text += f" | Spent By {row['Spent By']}"
-                if st.button(label_text, key=f"view_receipt_{row['ID']}"):
-                    import base64
-                    img_type = "jpeg" if receipt_name.lower().endswith((".jpg", ".jpeg")) else "png"
-                    img_base64 = base64.b64encode(data).decode("utf-8")
-                    st.markdown(f"<div style='margin-bottom:18px;'><img src='data:image/{img_type};base64,{img_base64}' style='max-width:320px;max-height:320px;border-radius:12px;border:2px solid #eee;box-shadow:0 2px 8px #ccc;margin-top:8px;'/></div>", unsafe_allow_html=True)
-            else:
-                label_text = f"No Receipt for ID {row['ID']} | Amount {row['Amount']} | Date {row['Date']}"
-                if is_admin and "Spent By" in row:
-                    label_text += f" | Spent By {row['Spent By']}"
-                st.markdown(f"<span style='color:#888;'>{label_text}</span>", unsafe_allow_html=True)
+            table_df["ReceiptHtml"] = table_df.apply(build_receipt_html, axis=1)
+            report_columns = ["Expense", "Amount", "Date"]
+            if is_admin:
+                report_columns.append("Spent By")
+            report_columns.extend(["ReceiptHtml", "Comments"])
+            table_df = table_df[report_columns].sort_values(
+                by="Date", ascending=False
+            ).reset_index(drop=True)
+            def build_expense_row(row):
+                spent_by_cell = f"<td>{escape(str(row['Spent By']))}</td>" if is_admin else ""
+                return (
+                    f"<tr>"
+                    f"<td class='expense-table-name'>{escape(str(row['Expense']))}</td>"
+                    f"<td class='expense-table-amount'>${float(row['Amount']):,.2f}</td>"
+                    f"<td>{escape(str(row['Date']))}</td>"
+                    f"{spent_by_cell}"
+                    f"<td>{row['ReceiptHtml']}</td>"
+                    f"<td>{escape(str(row['Comments']))}</td>"
+                    f"</tr>"
+                )
+
+            expense_table_rows = "".join(
+                build_expense_row(row)
+                for _, row in table_df.iterrows()
+            )
+            report_headers = "<th>Expense</th><th>Amount</th><th>Date</th>"
+            if is_admin:
+                report_headers += "<th>Spent By</th>"
+            report_headers += "<th>Receipt</th><th>Comments</th>"
+            st.markdown(
+                f"""
+<style>
+    .expense-table-wrap {{ margin-top:0.7rem; overflow-x:auto; border:1px solid #e4ddd7; border-radius:12px; box-shadow:0 3px 10px rgba(106,27,27,0.08); }}
+    .expense-table {{ width:100%; min-width:0; table-layout:fixed; border-collapse:collapse; color:#3e2723; font-size:0.82rem; }}
+    .expense-table th {{ padding:0.65rem 0.55rem; background:#6a1b1b; color:#fffaf0; font-size:0.72rem; font-weight:800; letter-spacing:0.04em; text-align:left; text-transform:uppercase; white-space:nowrap; vertical-align:middle; }}
+    .expense-table th:nth-child(1) {{ width:40%; }}
+    .expense-table th:nth-child(2) {{ width:14%; text-align:right; }}
+    .expense-table th:nth-child(3) {{ width:16%; }}
+    .expense-table th:nth-child(4) {{ width:12%; }}
+    .expense-table th:nth-child(5) {{ width:18%; }}
+    .expense-table-admin th:nth-child(1) {{ width:28%; }}
+    .expense-table-admin th:nth-child(2) {{ width:12%; text-align:right; }}
+    .expense-table-admin th:nth-child(3) {{ width:13%; }}
+    .expense-table-admin th:nth-child(4) {{ width:15%; }}
+    .expense-table-admin th:nth-child(5) {{ width:14%; }}
+    .expense-table-admin th:nth-child(6) {{ width:18%; }}
+    .expense-table td {{ padding:0.62rem 0.55rem; border-top:1px solid #eee4dc; vertical-align:top; overflow-wrap:anywhere; }}
+    .expense-table tr:nth-child(even) td {{ background:#fffaf5; }}
+    .expense-table-name {{ color:#3e2723; font-weight:700; line-height:1.35; }}
+    .expense-table-amount {{ color:#8b1737; font-weight:800; text-align:right; white-space:nowrap; }}
+    .expense-table-receipt {{ font-size:0.72rem; font-weight:700; }}
+    .expense-table-receipt.has-receipt {{ color:#2e7d32; }}
+    .expense-table-receipt.no-receipt {{ color:#8d6e63; }}
+    .receipt-preview-inline {{ display:flex; align-items:center; justify-content:center; }}
+    .receipt-preview-image {{ max-width:100%; max-height:90px; border-radius:8px; border:1px solid #e0d7cf; background:#fff; display:block; }}
+    @media (max-width:640px) {{
+        .expense-table {{ font-size:0.75rem; }}
+        .expense-table th, .expense-table td {{ padding:0.55rem 0.38rem; }}
+        .expense-table th {{ font-size:0.64rem; }}
+        .expense-table th:nth-child(1) {{ width:36%; }}
+        .expense-table th:nth-child(2) {{ width:15%; }}
+        .expense-table th:nth-child(3) {{ width:16%; }}
+        .expense-table th:nth-child(4) {{ width:12%; }}
+        .expense-table th:nth-child(5) {{ width:21%; }}
+        .expense-table-admin th:nth-child(1) {{ width:26%; }}
+        .expense-table-admin th:nth-child(2) {{ width:13%; }}
+        .expense-table-admin th:nth-child(3) {{ width:14%; }}
+        .expense-table-admin th:nth-child(4) {{ width:16%; }}
+        .expense-table-admin th:nth-child(5) {{ width:13%; }}
+        .expense-table-admin th:nth-child(6) {{ width:18%; }}
+    }}
+</style>
+<div class='expense-table-wrap'>
+<table class='expense-table {'expense-table-admin' if is_admin else ''}'>
+<thead><tr>{report_headers}</tr></thead>
+<tbody>{expense_table_rows}</tbody>
+</table>
+</div>
+""",
+                unsafe_allow_html=True,
+            )
+
     # Expense Summary by Person Section (admin only)
-    if is_admin and selected_section == "Expense Summary by Person":
+    if is_admin and selected_section == "Expenses" and st.session_state.get("expense_inline_action") == "summary":
             cursor.execute("SELECT spent_by, SUM(amount) FROM expenses WHERE status='active' GROUP BY spent_by ORDER BY SUM(amount) DESC")
             summary_rows = cursor.fetchall()
             if summary_rows:
@@ -402,7 +602,7 @@ def expenses_tab():
             else:
                 st.info("No expense summary available yet.")
     # Edit/Delete Expense Section (admin only)
-    if is_admin and selected_section == "Edit/Delete Expense":
+    if is_admin and selected_section == "Expenses" and st.session_state.get("expense_inline_action") in ("edit", "delete"):
             if rows:
                 categories = []
                 cursor.execute("SELECT item FROM sponsorship_items")
@@ -480,8 +680,8 @@ def expenses_tab():
                                 st.rerun()
                         else:
                             st.info("No receipt uploaded yet. You can upload one below.")
-                        # Ensure MAX_RECEIPT_SIZE_MB is defined
-                        MAX_RECEIPT_SIZE_MB = 10
+                        MAX_RECEIPT_SIZE_MB = 1
+                        MAX_RECEIPT_SIZE_BYTES = MAX_RECEIPT_SIZE_MB * 1024 * 1024
                         uploaded_new_receipt = st.file_uploader(f"Upload New Receipt (JPG/PNG, max {MAX_RECEIPT_SIZE_MB}MB)", type=["jpg", "jpeg", "png"], key=f"edit_upload_receipt_{selected_id}")
                         if uploaded_new_receipt is not None:
                             if uploaded_new_receipt.size > MAX_RECEIPT_SIZE_BYTES:
@@ -529,6 +729,7 @@ def expenses_tab():
                                 from app.email_utils import send_email
                                 send_email(subject, body, recipients)
                             st.success("✅ Updated and notification email sent!")
+                            st.session_state["expense_inline_action"] = None
                             st.rerun()
                     with delete_tab:
                         entered_cat = st.text_input(f"Type the Category to confirm deletion ({entry['Category']})", key=f"delete_cat_{selected_id}")
@@ -566,6 +767,7 @@ def expenses_tab():
                                 from app.email_utils import send_email
                                 send_email(subject, body, recipients)
                                 st.success("🗑️ Deleted and notification email sent!")
+                                st.session_state["expense_inline_action"] = None
                                 st.rerun()
                             else:
                                 st.warning(f"Please type the exact Category '{entry['Category']}' and Sub Category '{entry['Sub Category']}' to confirm deletion.")
