@@ -320,12 +320,6 @@ def _ensure_tgt_registration_tables(cursor):
             )
             """
         )
-        cursor.execute("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS created_by TEXT")
-        cursor.execute("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS modified_by TEXT")
-        cursor.execute("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS modified_at TIMESTAMP")
-        cursor.execute("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS deleted_by TEXT")
-        cursor.execute("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP")
-        cursor.execute("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active'")
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS event_registrations (
@@ -339,6 +333,12 @@ def _ensure_tgt_registration_tables(cursor):
             )
             """
         )
+        cursor.execute("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS created_by TEXT")
+        cursor.execute("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS modified_by TEXT")
+        cursor.execute("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS modified_at TIMESTAMP")
+        cursor.execute("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS deleted_by TEXT")
+        cursor.execute("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP")
+        cursor.execute("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active'")
 
     cursor.execute(
         "SELECT id FROM event_registration_programs WHERE slug=%s AND active=TRUE",
