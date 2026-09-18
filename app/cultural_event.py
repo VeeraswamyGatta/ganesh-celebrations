@@ -101,6 +101,24 @@ CULTURAL_EVENT_CSS = """
 .cultural-participating-heading {
     margin-top: 0.25rem;
 }
+.cultural-inline-label {
+    margin: 0;
+    color: #4e2922;
+    font-size: 1.05rem;
+    font-weight: 900;
+    line-height: 2.4rem;
+    white-space: nowrap;
+}
+.cultural-filter-label {
+    display: flex;
+    align-items: center;
+    min-height: 2.35rem;
+    color: #6d625b;
+    font-size: 0.82rem;
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
+}
 .cultural-section-note {
     margin-bottom: 0.7rem;
     color: #b42318;
@@ -109,29 +127,32 @@ CULTURAL_EVENT_CSS = """
 }
 .cultural-order-table {
     width: 100%;
-    margin: 0.2rem 0 0.65rem;
+    margin: 0.15rem 0 0.45rem;
     border-collapse: separate;
-    border-spacing: 0 0.2rem;
+    border-spacing: 0 0.1rem;
     font-family: "Trebuchet MS", Georgia, serif;
 }
 .cultural-order-table th {
-    padding: 0.45rem 0.6rem;
+    padding: 0.32rem 0.45rem;
     background: #6a1b1b;
     color: #fffaf0;
-    font-size: 0.74rem;
+    font-size: 0.7rem;
     letter-spacing: 0.02em;
+    line-height: 1.2;
     text-align: left;
     text-transform: none;
 }
 .cultural-order-table th:first-child { border-radius: 9px 0 0 9px; }
 .cultural-order-table th:last-child { border-radius: 0 9px 9px 0; }
 .cultural-order-table td {
-    padding: 0.48rem 0.6rem;
+    padding: 0.3rem 0.45rem;
     border-top: 1px solid #eadcc6;
     border-bottom: 1px solid #eadcc6;
     background: #fffdf8;
     color: #493a35;
-    font-size: 0.86rem;
+    font-size: 0.8rem;
+    line-height: 1.3;
+    vertical-align: middle;
 }
 .cultural-order-table td:first-child {
     border-left: 1px solid #eadcc6;
@@ -139,6 +160,76 @@ CULTURAL_EVENT_CSS = """
     font-weight: 900;
 }
 .cultural-order-table td:last-child { border-right: 1px solid #eadcc6; }
+.cultural-performance-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.4rem;
+    margin: 0.25rem 0 0.55rem;
+}
+.cultural-performance-stat {
+    position: relative;
+    min-height: 3.45rem;
+    padding: 0.55rem 0.7rem 0.5rem;
+    overflow: hidden;
+    border: 1px solid #eadcc6;
+    border-left: 4px solid #c8691d;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #fffdf8 0%, #f7eee3 100%);
+    box-shadow: 0 4px 10px rgba(105, 76, 52, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.cultural-performance-stat:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 14px rgba(105, 76, 52, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+.cultural-performance-stat:nth-child(1) {
+    border-left-color: #6a1b1b;
+    background: linear-gradient(135deg, #fff8e8 0%, #f5e1d0 100%);
+}
+.cultural-performance-stat:nth-child(3) { border-left-color: #2e7d32; }
+.cultural-performance-stat:nth-child(4) { border-left-color: #1565c0; }
+.cultural-performance-stat:nth-child(5) { border-left-color: #7e57c2; }
+.cultural-performance-stat:nth-child(6) { border-left-color: #00838f; }
+.cultural-performance-stat:nth-child(2) { border-left-color: #ef6c00; }
+.cultural-performance-stat:nth-child(1) .cultural-performance-stat-count {
+    color: #6a1b1b;
+}
+.cultural-performance-stat::after {
+    position: absolute;
+    right: -0.25rem;
+    bottom: -0.65rem;
+    color: rgba(166, 75, 18, 0.1);
+    content: "✦";
+    font-size: 2.8rem;
+    line-height: 1;
+}
+.cultural-performance-stat-label {
+    display: block;
+    color: #6d625b;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    line-height: 1.2;
+}
+.cultural-performance-stat-count {
+    display: block;
+    margin-top: 0.12rem;
+    color: #6a1b1b;
+    font-size: 1.45rem;
+    font-weight: 900;
+    line-height: 1;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+.cultural-performance-stat-unit {
+    display: inline-block;
+    margin-left: 0.25rem;
+    color: #8b6f61;
+    font-size: 0.63rem;
+    font-weight: 700;
+}
+@media (max-width: 560px) {
+    .cultural-performance-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .cultural-order-empty {
     display: flex;
     align-items: center;
@@ -156,11 +247,61 @@ CULTURAL_EVENT_CSS = """
     line-height: 1.5;
 }
 div[class*="st-key-tgt_add_registration"] button {
-    border: 0 !important;
-    border-radius: 10px !important;
-    background: linear-gradient(135deg, #9d2738 0%, #6a1b1b 100%) !important;
-    color: #fff !important;
+    min-height: 2.45rem !important;
+    padding: 0.55rem 0.85rem !important;
+    border: 1px solid #ffb300 !important;
+    border-radius: 14px !important;
+    background: linear-gradient(135deg, #ff8f00 0%, #ff5e00 45%, #d81b60 100%) !important;
+    color: #ffffff !important;
     font-weight: 800 !important;
+    box-shadow: 0 5px 14px rgba(255, 94, 0, 0.25) !important;
+}
+div[class*="st-key-tgt_participant_details_button"] button,
+div[class*="st-key-tgt_participant_add_button"] button,
+div[class*="st-key-tgt_participant_edit_button"] button,
+div[class*="st-key-tgt_participant_delete_button"] button {
+    min-height: 2.35rem !important;
+    padding: 0.45rem 0.35rem !important;
+    border: 0 !important;
+    border-radius: 9px !important;
+    color: #ffffff !important;
+    font-size: 0.78rem !important;
+    font-weight: 800 !important;
+    white-space: nowrap !important;
+}
+div[class*="st-key-tgt_participant_details_button"] button { background: #6a1b1b !important; }
+div[class*="st-key-tgt_participant_add_button"] button { background: #2e7d32 !important; }
+div[class*="st-key-tgt_participant_edit_button"] button { background: #1565c0 !important; }
+div[class*="st-key-tgt_participant_delete_button"] button { background: #c62828 !important; }
+div[class*="st-key-tgt_agreement_actions"] {
+    margin: 0.35rem 0 1.05rem !important;
+    padding-bottom: 0.2rem !important;
+}
+div[class*="st-key-tgt_agreement_add_button"] button,
+div[class*="st-key-tgt_agreement_edit_button"] button,
+div[class*="st-key-tgt_agreement_delete_button"] button,
+div[class*="st-key-tgt_agreement_description_button"] button {
+    min-height: 2.35rem !important;
+    padding: 0.45rem 0.35rem !important;
+    border: 0 !important;
+    border-radius: 9px !important;
+    color: #ffffff !important;
+    font-size: 0.78rem !important;
+    font-weight: 800 !important;
+    white-space: nowrap !important;
+}
+div[class*="st-key-tgt_agreement_add_button"] button { background: #ef5350 !important; }
+div[class*="st-key-tgt_agreement_edit_button"] button { background: #1565c0 !important; }
+div[class*="st-key-tgt_agreement_delete_button"] button { background: #ad1457 !important; }
+div[class*="st-key-tgt_agreement_description_button"] button { background: #ef6c00 !important; }
+div[class*="st-key-download_cultural_event_participants"] button {
+    width: 2.35rem !important;
+    min-height: 2.35rem !important;
+    padding: 0.35rem !important;
+    border: 1px solid #eadcc6 !important;
+    border-radius: 9px !important;
+    background: #fff8e8 !important;
+    color: #6a1b1b !important;
 }
 .cultural-form-header {
     display: flex;
@@ -275,24 +416,47 @@ TGT_PERFORMANCE_DISPLAY = {
 }
 
 
-def _merge_display_registrations(registrations):
+def _registration_performances(performance_type):
+    values = performance_type if isinstance(performance_type, (list, tuple)) else str(performance_type or "").split(",")
+    display_to_option = {display: option for option, display in TGT_PERFORMANCE_DISPLAY.items()}
+    return [
+        display_to_option.get(str(value).strip(), str(value).strip())
+        for value in values
+        if str(value).strip()
+    ]
+
+
+def _format_performances(performance_type):
+    return ", ".join(
+        TGT_PERFORMANCE_DISPLAY.get(option, option)
+        for option in _registration_performances(performance_type)
+    )
+
+
+def _merge_display_registrations(registrations, performance_filter="All"):
     merged = {}
     for registration in registrations:
         registration_id, name, age_group, performance_type = registration[:4]
+        performances = _registration_performances(performance_type)
+        if performance_filter != "All" and performance_filter not in performances:
+            continue
+        if performance_filter != "All":
+            performances = [performance_filter]
         key = (str(name).strip().casefold(), str(age_group).strip().casefold())
-        display_performance = TGT_PERFORMANCE_DISPLAY.get(performance_type, performance_type)
         if key not in merged:
             merged[key] = [*registration]
-            merged[key][3] = [display_performance]
-        elif display_performance not in merged[key][3]:
-            merged[key][3].append(display_performance)
+            merged[key][3] = list(performances)
+        else:
+            for performance in performances:
+                if performance not in merged[key][3]:
+                    merged[key][3].append(performance)
 
     display_registrations = []
     for registration in merged.values():
         registration[3] = ", ".join(
-            performance
+            TGT_PERFORMANCE_DISPLAY.get(performance, performance)
             for performance in TGT_PERFORMANCE_OPTIONS
-            if TGT_PERFORMANCE_DISPLAY.get(performance, performance) in registration[3]
+            if performance in registration[3]
         )
         display_registrations.append(tuple(registration))
     return display_registrations
@@ -301,7 +465,7 @@ TGT_DEFAULT_DISCLAIMERS = [
     "Registration is mandatory. Participation is allowed only for registered participants; spot participation is not allowed.",
     "If your performance requires an audio track, send the audio file with the participant name to Purna (7209007378) via WhatsApp only.",
     "Due to technical limitations, songs cannot be played directly from YouTube or another online source. Only audio files shared with the organizers in advance will be played.",
-    "The organizers will announce the performance sequence at the event based on available time and event circumstances.",
+    "The organizers will announce the performance order at the event and determine the sequence based on available time and event circumstances.",
     "Parents and participants must not insist that children perform first or pressure the organizers at the performance area.",
     "Only parents or guardians of children aged 3-6 years may accompany them in the performance area. Parents of children in other age groups must remain in the audience area.",
     "Because this event is part of the Lord Ganesha celebrations, only devotional songs are permitted. Film songs are not permitted.",
@@ -447,6 +611,14 @@ def _ensure_tgt_registration_tables(cursor):
                 "INSERT INTO event_registration_disclaimers (program_id, sort_order, disclaimer_text, is_required) VALUES (%s, %s, %s, %s)",
                 (program_id, sort_order, disclaimer, True),
             )
+    cursor.execute(
+        "UPDATE event_registration_disclaimers SET disclaimer_text=%s WHERE program_id=%s AND disclaimer_text=%s",
+        (
+            TGT_DEFAULT_DISCLAIMERS[3],
+            program_id,
+            "The organizers will announce the performance sequence at the event based on available time and event circumstances.",
+        ),
+    )
     return program_id
 
 
@@ -471,7 +643,33 @@ def _initialize_tgt_registration_tables():
 
 def _manage_tgt_disclaimers(conn, cursor, program_id, disclaimers, description):
     st.markdown('<div class="cultural-section-heading">Agreement management</div>', unsafe_allow_html=True)
-    if disclaimers:
+    management_actions = [
+        ("Add", "tgt_agreement_add_button"),
+        ("Edit", "tgt_agreement_edit_button"),
+        ("Delete", "tgt_agreement_delete_button"),
+        ("Event Description", "tgt_agreement_description_button"),
+    ]
+    management_view = st.session_state.get("tgt_agreement_management_view", "List")
+    with st.container(
+        horizontal=True,
+        wrap=False,
+        vertical_alignment="center",
+        gap="small",
+        key="tgt_agreement_actions",
+    ):
+        for action_label, action_key in management_actions:
+            if st.button(
+                action_label,
+                key=action_key,
+                type="primary" if management_view == action_label else "secondary",
+                width="stretch",
+            ):
+                st.session_state.tgt_agreement_management_view = (
+                    "List" if management_view == action_label else action_label
+                )
+                st.rerun()
+
+    if management_view == "List" and disclaimers:
         agreement_rows = []
         for index, (_, _, text, is_required) in enumerate(disclaimers, start=1):
             required_badge = '<span class="cultural-agreement-required">Required</span>' if is_required else ""
@@ -482,24 +680,8 @@ def _manage_tgt_disclaimers(conn, cursor, program_id, disclaimers, description):
             f"<div class='cultural-agreement-list'>{''.join(agreement_rows)}</div>",
             unsafe_allow_html=True,
         )
-    else:
+    elif management_view == "List":
         st.info("No agreement points have been added yet.")
-
-    management_view = option_menu(
-        "Agreement actions",
-        ["Add", "Edit", "Delete", "Event Description"],
-        icons=["plus-circle", "pencil-square", "trash", "file-text"],
-        menu_icon="list-ul",
-        default_index=0,
-        orientation="horizontal",
-        key="tgt_agreement_management_view",
-        styles={
-            "container": {"padding": "0.25rem", "background": "#fffaf0", "border": "1px solid #eadcc6", "border-radius": "12px"},
-            "icon": {"color": "#a64b12", "font-size": "0.95rem"},
-            "nav-link": {"font-size": "0.82rem", "font-weight": "700", "color": "#6d625b"},
-            "nav-link-selected": {"background": "#6a1b1b", "color": "#ffffff"},
-        },
-    )
 
     if management_view == "Add":
         with st.form("tgt_add_disclaimer_form"):
@@ -563,15 +745,24 @@ def _manage_tgt_disclaimers(conn, cursor, program_id, disclaimers, description):
             key="tgt_delete_disclaimer_id",
         )
         st.warning("Deleting an agreement removes it from the registration form for everyone.")
+        st.info(f"To confirm deletion, enter agreement ID: {selected_id}")
+        confirmation_id = st.text_input(
+            "Agreement ID confirmation",
+            key="tgt_delete_disclaimer_confirmation",
+            placeholder=f"Enter {selected_id}",
+        )
         if st.button("Delete Agreement", key="tgt_delete_disclaimer", type="primary"):
-            cursor.execute(
-                "DELETE FROM event_registration_disclaimers WHERE id=%s AND program_id=%s",
-                (selected_id, program_id),
-            )
-            conn.commit()
-            st.success("Agreement deleted successfully.")
-            st.rerun()
-    else:
+            if confirmation_id.strip() != str(selected_id):
+                st.error("The agreement ID does not match. Agreement was not deleted.")
+            else:
+                cursor.execute(
+                    "DELETE FROM event_registration_disclaimers WHERE id=%s AND program_id=%s",
+                    (selected_id, program_id),
+                )
+                conn.commit()
+                st.success("Agreement deleted successfully.")
+                st.rerun()
+    elif management_view == "Event Description":
         with st.form("tgt_edit_description_form"):
             edited_description = st.text_area(
                 "Event description",
@@ -652,7 +843,7 @@ def cultural_event_tab():
             None,
             ["Manage Agreements", "Registration"],
             icons=["file-earmark-text", "person-plus"],
-            default_index=0,
+            default_index=1,
             orientation="horizontal",
             key="cultural_event_admin_submenu",
             styles={
@@ -668,16 +859,15 @@ def cultural_event_tab():
 
     admin_participant_action = st.session_state.get("tgt_participant_action", "Participating details")
     if st.session_state.get("admin_logged_in", False):
-        action_columns = st.columns(4)
         action_labels = [
             ("Participating details", "tgt_participant_details_button"),
             ("Add", "tgt_participant_add_button"),
             ("Edit", "tgt_participant_edit_button"),
             ("Delete", "tgt_participant_delete_button"),
         ]
-        for action_column, (action_label, action_key) in zip(action_columns, action_labels):
-            with action_column:
-                if st.button(action_label, key=action_key, use_container_width=True):
+        with st.container(horizontal=True, wrap=False, vertical_alignment="center", gap="small"):
+            for action_label, action_key in action_labels:
+                if st.button(action_label, key=action_key, width="stretch"):
                     st.session_state.tgt_participant_action = action_label
                     st.rerun()
 
@@ -703,11 +893,10 @@ def cultural_event_tab():
             with st.form("tgt_edit_registration_form"):
                 edited_name = st.text_input("Participant Name/Group Participants Names", value=selected_registration[1])
                 edited_age = st.text_input("Age/Age Group", value=selected_registration[2])
-                edited_performance = st.selectbox(
+                edited_performance = st.multiselect(
                     "What are you performing?",
                     TGT_PERFORMANCE_OPTIONS,
-                    index=TGT_PERFORMANCE_OPTIONS.index(selected_registration[3])
-                    if selected_registration[3] in TGT_PERFORMANCE_OPTIONS else 0,
+                    default=_registration_performances(selected_registration[3]),
                 )
                 edited_apartment = st.text_input("Apartment Number(s)", value=selected_registration[4])
                 if st.form_submit_button("Save Participant", type="primary"):
@@ -717,7 +906,7 @@ def cultural_event_tab():
                     else:
                         cursor.execute(
                             "UPDATE event_registrations SET participant_name=%s, age_group=%s, performance_type=%s, apartment_numbers=%s, modified_by=%s, modified_at=CURRENT_TIMESTAMP WHERE id=%s AND program_id=%s",
-                            (*edited_values[:2], edited_performance, edited_values[2], st.session_state.get("admin_full_name", "Admin"), selected_registration_id, program_id),
+                            (*edited_values[:2], ", ".join(edited_performance), edited_values[2], st.session_state.get("admin_full_name", "Admin"), selected_registration_id, program_id),
                         )
                         conn.commit()
                         st.success("Participant updated successfully.")
@@ -748,20 +937,56 @@ def cultural_event_tab():
         show_registration_form = True
 
     if not show_registration_form:
-        if not st.session_state.get("admin_logged_in", False):
-            if st.button("Add Registration", key="tgt_add_registration", use_container_width=True, type="primary"):
-                st.session_state.cultural_event_show_form = True
-                st.rerun()
-
-        st.markdown('<div class="cultural-section-heading cultural-participating-heading">Participating details</div>', unsafe_allow_html=True)
+        with st.container(horizontal=True, wrap=False, vertical_alignment="center", gap="small"):
+            st.markdown('<div class="cultural-inline-label">Participating details</div>', unsafe_allow_html=True)
+            if not st.session_state.get("admin_logged_in", False):
+                if st.button("✨ Click here to add registration ✨", key="tgt_add_registration", type="primary", width="content"):
+                    st.session_state.cultural_event_show_form = True
+                    st.rerun()
         if registrations:
+            with st.container(horizontal=True, wrap=False, vertical_alignment="center", gap="small"):
+                st.markdown('<div class="cultural-filter-label">Filter by performance</div>', unsafe_allow_html=True)
+                performance_filter = st.selectbox(
+                    "Filter by performance",
+                    ["All"] + TGT_PERFORMANCE_OPTIONS,
+                    format_func=lambda option: "All performances" if option == "All" else TGT_PERFORMANCE_DISPLAY.get(option, option),
+                    label_visibility="collapsed",
+                    key="tgt_performance_filter",
+                )
+                download_placeholder = st.empty()
+            display_registrations = _merge_display_registrations(registrations, performance_filter)
+            performance_counts = {performance: 0 for performance in TGT_PERFORMANCE_OPTIONS}
+            for registration in display_registrations:
+                for performance in _registration_performances(registration[3]):
+                    if performance in performance_counts:
+                        performance_counts[performance] += 1
+            stats_performances = (
+                TGT_PERFORMANCE_OPTIONS
+                if performance_filter == "All"
+                else [performance_filter]
+            )
+            stats_items = [("Total Participants / Groups", len(display_registrations))] + [
+                (TGT_PERFORMANCE_DISPLAY.get(performance, performance), performance_counts[performance])
+                for performance in stats_performances
+            ]
+            stats_html = "".join(
+                f'<div class="cultural-performance-stat"><span class="cultural-performance-stat-label">{html.escape(label)}</span><span class="cultural-performance-stat-count">{count}<span class="cultural-performance-stat-unit">Participant / Group</span></span></div>'
+                for label, count in stats_items
+            )
+            st.markdown(
+                f'<div class="cultural-performance-stats">{stats_html}</div>',
+                unsafe_allow_html=True,
+            )
+            if not display_registrations:
+                st.info("No participants match the selected performance.")
+                return
             if st.session_state.get("admin_logged_in", False):
                 export_frame = pd.DataFrame(
                     [
                         {
                             "Participant / Group": name,
                             "Age Group": age_group,
-                            "Performance": TGT_PERFORMANCE_DISPLAY.get(performance_type, performance_type),
+                            "Performance": _format_performances(performance_type),
                             "Apartment Number(s)": apartment_numbers,
                             "Created By": created_by or "",
                             "Last Modified By": modified_by or "",
@@ -779,25 +1004,27 @@ def cultural_event_tab():
                     worksheet.set_column("C:C", 24)
                     worksheet.set_column("D:D", 20)
                     worksheet.set_column("E:G", 22)
-                st.download_button(
-                    "Download Participating Details (XLSX)",
-                    data=export_buffer.getvalue(),
-                    file_name="cultural_event_participants.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    key="download_cultural_event_participants",
-                    use_container_width=True,
-                )
+                with download_placeholder.container():
+                    st.download_button(
+                        "",
+                        data=export_buffer.getvalue(),
+                        file_name="cultural_event_participants.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="download_cultural_event_participants",
+                        help="Download participation details as an XLSX file",
+                        icon=":material/download:",
+                    )
             if st.session_state.get("admin_logged_in", False):
-                table_headers = "<th>Participant / Group</th><th>Age Group</th><th>Performance</th><th>Created By</th><th>Last Modified By</th><th>Last Modified At</th>"
+                table_headers = "<th>Participant / Group</th><th>Age Group</th><th>Performance</th><th>Created By</th><th>Last Modified By</th><th>Last Modified At</th><th>Apartment Number(s)</th>"
                 table_rows = "".join(
-                    f"<tr><td>{html.escape(str(name))}</td><td>{html.escape(str(age_group))}</td><td>{html.escape(str(performance_type))}</td><td>{html.escape(str(created_by or ''))}</td><td>{html.escape(str(modified_by or ''))}</td><td>{html.escape(str(modified_at or ''))}</td></tr>"
-                    for _, name, age_group, performance_type, _, created_by, modified_by, modified_at, _, _, _ in display_registrations
+                    f"<tr><td>{html.escape(str(name))}</td><td>{html.escape(str(age_group))}</td><td>{html.escape(str(performance_type))}</td><td>{html.escape(str(created_by or ''))}</td><td>{html.escape(str(modified_by or ''))}</td><td>{html.escape(str(modified_at or ''))}</td><td>{html.escape(str(apartment_numbers))}</td></tr>"
+                    for _, name, age_group, performance_type, apartment_numbers, created_by, modified_by, modified_at, _, _, _ in display_registrations
                 )
             else:
-                table_headers = "<th>Participant / Group</th><th>Age Group</th><th>Performance</th>"
+                table_headers = "<th>Participant / Group</th><th>Age Group</th><th>Performance</th><th>Apartment Number(s)</th>"
                 table_rows = "".join(
-                    f"<tr><td>{html.escape(str(name))}</td><td>{html.escape(str(age_group))}</td><td>{html.escape(str(performance_type))}</td></tr>"
-                    for _, name, age_group, performance_type, *_ in display_registrations
+                    f"<tr><td>{html.escape(str(name))}</td><td>{html.escape(str(age_group))}</td><td>{html.escape(str(performance_type))}</td><td>{html.escape(str(apartment_numbers))}</td></tr>"
+                    for _, name, age_group, performance_type, apartment_numbers, *_ in display_registrations
                 )
             st.markdown(
                 f"""
@@ -828,7 +1055,7 @@ def cultural_event_tab():
             "Age/Age Group (example: 30 or 30-40)",
             placeholder="Enter age or age range, e.g. 30 or 30-40",
         )
-        performance_type = st.selectbox("What are you performing?", TGT_PERFORMANCE_OPTIONS)
+        performance_type = st.multiselect("What are you performing?", TGT_PERFORMANCE_OPTIONS)
         apartment_numbers = st.text_input("Apartment Number(s)")
 
         st.markdown('<div class="cultural-section-heading">Important requests</div>', unsafe_allow_html=True)
@@ -853,6 +1080,8 @@ def cultural_event_tab():
             "Apartment Number(s)": apartment_numbers.strip(),
         }
         missing_fields = [label for label, value in required_values.items() if not value]
+        if not performance_type:
+            missing_fields.append("Performance")
         normalized_age_group = re.sub(r"\s+", "", age_group.strip())
         age_format_is_valid = bool(re.fullmatch(r"\d{1,3}(?:-\d{1,3})?", normalized_age_group))
         age_range_is_valid = True
@@ -878,7 +1107,7 @@ def cultural_event_tab():
             try:
                 cursor.execute(
                     "INSERT INTO event_registrations (program_id, participant_name, age_group, performance_type, apartment_numbers, created_by, status) VALUES (%s, %s, %s, %s, %s, %s, 'active')",
-                    (program_id, participant_name.strip(), age_group.strip(), performance_type, apartment_numbers.strip(), st.session_state.get("admin_full_name", "Public registration")),
+                    (program_id, participant_name.strip(), age_group.strip(), ", ".join(performance_type), apartment_numbers.strip(), st.session_state.get("admin_full_name", "Public registration")),
                 )
                 conn.commit()
                 st.session_state.cultural_event_show_form = False

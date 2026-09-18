@@ -810,8 +810,6 @@ if not st.session_state.user_logged_in and not st.session_state.admin_logged_in:
             if open_cultural_event
             else "Login"
         )
-    elif st.session_state.landing_navigation == "Cultural Event" and not open_cultural_event:
-        st.session_state.landing_navigation = "Login"
     selected_landing_navigation = st.session_state.landing_navigation
 
     with st.container(key="landing_top"):
