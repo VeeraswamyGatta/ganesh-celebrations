@@ -649,9 +649,9 @@ st.markdown("""
             min-width: 0 !important;
         }
         [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(div[class*="st-key-landing_nav_prasad_seva"]) {
-            flex: 0 0 5.5rem !important;
-            width: 5.5rem !important;
-            min-width: 5.5rem !important;
+            flex: 0 0 6.25rem !important;
+            width: 6.25rem !important;
+            min-width: 6.25rem !important;
         }
         [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(div[class*="st-key-landing_nav_cultural_event"]) {
             flex: 0 0 6.75rem !important;
@@ -664,9 +664,9 @@ st.markdown("""
             min-width: 4.75rem !important;
         }
         [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(div[class*="st-key-landing_nav_events"]) {
-            flex: 0 0 5.25rem !important;
-            width: 5.25rem !important;
-            min-width: 5.25rem !important;
+            flex: 0 0 4.5rem !important;
+            width: 4.5rem !important;
+            min-width: 4.5rem !important;
         }
         div[class*="st-key-landing_nav_login"],
         div[class*="st-key-landing_nav_prasad_seva"],
@@ -675,7 +675,7 @@ st.markdown("""
             width: 100% !important;
         }
         div[class*="st-key-landing_nav_prasad_seva"] button {
-            width: 5.5rem !important;
+            width: 6.25rem !important;
         }
         div[class*="st-key-landing_nav_cultural_event"] button {
             width: 6.75rem !important;
