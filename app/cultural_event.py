@@ -965,7 +965,11 @@ def cultural_event_tab():
                 if performance_filter == "All"
                 else [performance_filter]
             )
-            stats_items = [("Total Participants / Groups", len(display_registrations))] + [
+            stats_items = (
+                [("Total Participants / Groups", len(display_registrations))]
+                if performance_filter == "All"
+                else []
+            ) + [
                 (TGT_PERFORMANCE_DISPLAY.get(performance, performance), performance_counts[performance])
                 for performance in stats_performances
             ]

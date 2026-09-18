@@ -646,6 +646,11 @@ st.markdown("""
             width: 33.33% !important;
             min-width: 0 !important;
         }
+        [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_cultural_event"]) > [data-testid="stColumn"] {
+            flex: 0 0 8.5rem !important;
+            width: 8.5rem !important;
+            min-width: 8.5rem !important;
+        }
         div[class*="st-key-landing_nav_login"],
         div[class*="st-key-landing_nav_prasad_seva"],
         div[class*="st-key-landing_nav_cultural_event"],
