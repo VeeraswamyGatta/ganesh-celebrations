@@ -636,7 +636,7 @@ st.markdown("""
         [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_events"]) {
             display: flex !important;
             flex-direction: row !important;
-            gap: 1rem !important;
+            gap: 0.75rem !important;
             width: 100% !important;
         }
         [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_login"]) > [data-testid="stColumn"],
@@ -648,14 +648,14 @@ st.markdown("""
             min-width: 0 !important;
         }
         [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(div[class*="st-key-landing_nav_prasad_seva"]) {
-            flex: 0 0 7rem !important;
-            width: 7rem !important;
-            min-width: 7rem !important;
+            flex: 0 0 6.5rem !important;
+            width: 6.5rem !important;
+            min-width: 6.5rem !important;
         }
         [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(div[class*="st-key-landing_nav_cultural_event"]) {
-            flex: 0 0 8.5rem !important;
-            width: 8.5rem !important;
-            min-width: 8.5rem !important;
+            flex: 0 0 8rem !important;
+            width: 8rem !important;
+            min-width: 8rem !important;
         }
         [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(div[class*="st-key-landing_nav_login"]) {
             flex: 0 0 4.75rem !important;
@@ -674,10 +674,10 @@ st.markdown("""
             width: 100% !important;
         }
         div[class*="st-key-landing_nav_prasad_seva"] button {
-            width: 7rem !important;
+            width: 6.5rem !important;
         }
         div[class*="st-key-landing_nav_cultural_event"] button {
-            width: 8.5rem !important;
+            width: 8rem !important;
         }
     }
     /* Global Rich Table & DataFrame Styling */
