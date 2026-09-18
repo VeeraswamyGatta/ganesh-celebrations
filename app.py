@@ -642,14 +642,12 @@ st.markdown("""
         [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_prasad_seva"]) > [data-testid="stColumn"],
         [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_cultural_event"]) > [data-testid="stColumn"],
         [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_events"]) > [data-testid="stColumn"] {
-            flex: 1 !important;
-            width: 33.33% !important;
+            flex: 1 1 0 !important;
+            width: auto !important;
             min-width: 0 !important;
         }
         [data-testid="stHorizontalBlock"]:has([class*="st-key-landing_nav_cultural_event"]) > [data-testid="stColumn"] {
-            flex: 0 0 8.5rem !important;
-            width: 8.5rem !important;
-            min-width: 8.5rem !important;
+            flex: 1.35 1 0 !important;
         }
         div[class*="st-key-landing_nav_login"],
         div[class*="st-key-landing_nav_prasad_seva"],
