@@ -630,6 +630,21 @@ def sponsorship_tab(dashboard_only=False):
             cursor.execute("SELECT item, amount, sponsor_limit, image_blob, image_filename FROM sponsorship_items ORDER BY id")
             dashboard_items = cursor.fetchall()
             if dashboard_items:
+                has_available_sponsorship = any(
+                    row[2] - sponsored_counts.get(row[0], 0) > 0
+                    for row in dashboard_items
+                )
+                if has_available_sponsorship:
+                    if st.button(
+                        "✨ Click here to sponsor ✨",
+                        key="sponsors_table_donate_cta",
+                        type="primary",
+                        use_container_width=True,
+                    ):
+                        st.session_state.main_navigation = "Donate"
+                        st.session_state.page_loading_message = "Loading sponsorship details"
+                        st.session_state.scroll_to_top = True
+                        st.rerun()
                 all_items_sponsored = all(
                     row[2] - sponsored_counts.get(row[0], 0) <= 0
                     for row in dashboard_items
@@ -739,6 +754,16 @@ def sponsorship_tab(dashboard_only=False):
             else:
                 st.info("No sponsorships have been submitted yet.")
         with donations_tab:
+            if st.button(
+                "✨ Click here to donate ✨",
+                key="donations_table_donate_cta",
+                type="primary",
+                use_container_width=True,
+            ):
+                st.session_state.main_navigation = "Donate"
+                st.session_state.page_loading_message = "Loading donation details"
+                st.session_state.scroll_to_top = True
+                st.rerun()
             cursor.execute("SELECT name, donation, submitted_at FROM sponsors WHERE donation IS NOT NULL AND donation > 0 ORDER BY submitted_at DESC")
             donor_rows = cursor.fetchall()
             if donor_rows:
@@ -747,7 +772,7 @@ def sponsorship_tab(dashboard_only=False):
                 for idx, row in enumerate(donor_rows):
                     donor_name = escape(str(row[0] or "Anonymous"))
                     donation_amt = float(row[1] or 0)
-                    date_str = row[2].strftime("%d %b %Y") if row[2] else "N/A"
+                    date_str = row[2].strftime("%d %b %y") if row[2] else "N/A"
                     bg_color = "#fdfbf7" if idx % 2 == 1 else "#ffffff"
                     rows_html += (
                         f"<tr style='background:{bg_color};'>"
@@ -758,7 +783,19 @@ def sponsorship_tab(dashboard_only=False):
                     )
 
                 donations_card_html = (
-                    "<div class='rich-table-card'>"
+                    "<style>"
+                    ".donations-summary-card { padding: 0.8rem; margin-bottom: 0.8rem; }"
+                    ".donations-summary-card .rich-table { font-size: 0.82rem; }"
+                    ".donations-summary-card .rich-table th { padding: 8px 10px; }"
+                    ".donations-summary-card .rich-table td { padding: 8px 10px; }"
+                    ".donations-summary-card .rich-table th:last-child, .donations-summary-card .rich-table td:last-child { white-space: nowrap; }"
+                    "@media (max-width:640px) {"
+                    ".donations-summary-card { padding: 0.6rem; border-radius: 12px; }"
+                    ".donations-summary-card .rich-table { font-size: 0.76rem; }"
+                    ".donations-summary-card .rich-table th, .donations-summary-card .rich-table td { padding: 6px 8px; }"
+                    "}"
+                    "</style>"
+                    "<div class='rich-table-card donations-summary-card'>"
                     "<div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:1.1rem; flex-wrap:wrap; gap:0.6rem;'>"
                     "<div>"
                     "<div style='font-size:1.15rem; font-weight:850; color:#1b5e20;'>💝 Donations Summary</div>"
