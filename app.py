@@ -975,11 +975,11 @@ if show_login_form:
 else:
     # Show menu based on role after successful login
     if st.session_state.admin_logged_in:
-        menu_items = ["Dashboard", "Donate", "Statistics", "Prasad", "Events", "Cultural", "Expenses", "Payments", "Admin", "Ganesh Pooja Seating"]
-        menu_icons = ["bar-chart", "gift", "chart-line", "award", "calendar-event", "person-check", "cash-coin", "credit-card", "lock", "calendar3"]
+        menu_items = ["Dashboard", "Donate", "Expenses", "Statistics", "Prasad", "Events", "Cultural", "Payments", "Admin", "Ganesh Pooja Seating"]
+        menu_icons = ["bar-chart", "gift", "cash-coin", "chart-line", "award", "calendar-event", "person-check", "credit-card", "lock", "calendar3"]
     elif st.session_state.user_logged_in:
-        menu_items = ["Dashboard", "Donate", "Statistics", "Prasad", "Events", "Cultural", "Expenses"]
-        menu_icons = ["bar-chart", "gift", "chart-line", "award", "calendar-event", "person-check", "cash-coin"]
+        menu_items = ["Dashboard", "Donate", "Expenses", "Statistics", "Prasad", "Events", "Cultural"]
+        menu_icons = ["bar-chart", "gift", "cash-coin", "chart-line", "award", "calendar-event", "person-check"]
     else:
         menu_items = []
         menu_icons = []

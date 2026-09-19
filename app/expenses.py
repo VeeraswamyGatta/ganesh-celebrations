@@ -393,12 +393,8 @@ def expenses_tab():
     # Expenses List Section
     if selected_section == "Expenses" and not st.session_state.get("expense_inline_action"):
         category_options = ["All"] + sorted(df["Category"].dropna().unique().tolist())
-        with st.popover("🔍", help="Search expenses"):
-            selected_category = st.selectbox("Category", category_options, key="filter_category")
-            selected_spent_by = "All"
-            if is_admin:
-                spent_by_options = ["All"] + sorted(df["Spent By"].dropna().unique().tolist())
-                selected_spent_by = st.selectbox("Spent By", spent_by_options, key="filter_spent_by")
+        selected_category = st.session_state.get("filter_category", "All")
+        selected_spent_by = st.session_state.get("filter_spent_by", "All") if is_admin else "All"
         filtered_df = df.copy()
         if selected_category != "All":
             filtered_df = filtered_df[filtered_df["Category"] == selected_category]
@@ -406,75 +402,93 @@ def expenses_tab():
         if selected_spent_by != "All":
             filtered_df = filtered_df[filtered_df["Spent By"] == selected_spent_by]
 
-        filtered_total = float(filtered_df["Amount"].sum()) if not filtered_df.empty else 0.0
-        cat_summary = filtered_df.groupby("Category")["Amount"].sum().reset_index().sort_values(by="Amount", ascending=False) if not filtered_df.empty else pd.DataFrame(columns=["Category", "Amount"])
-        table_rows = "".join(
-            f"<div class='expense-category-row'><span>🗂️ {escape(str(row['Category']))}</span><strong>${float(row['Amount']):,.2f}</strong></div>"
-            for _, row in cat_summary.iterrows()
+        st.markdown(
+            "<div style='height:1.25rem; clear:both;'></div>"
+            "<div style='padding:0.7rem 0 0.55rem; border-top:1px solid #e4ddd7; color:#6a1b1b; font-size:1.05rem; font-weight:800;'>🧾 Detailed Expense Report</div>",
+            unsafe_allow_html=True,
         )
-        with open("app/html/expense/category_summary_card.html", "r") as f:
-            card_template = f.read()
-        if is_admin:
+        st.markdown("<div style='height:0.65rem;'></div>", unsafe_allow_html=True)
+        with st.container(horizontal=True, wrap=True, vertical_alignment="center", gap="small"):
+            st.markdown(
+                '<div style="display:flex;align-items:center;min-height:2.35rem;color:#6d625b;font-size:0.82rem;font-weight:700;line-height:1.2;white-space:nowrap;">Filter by expense</div>',
+                unsafe_allow_html=True,
+            )
+            st.selectbox(
+                "Filter by category",
+                category_options,
+                index=category_options.index(selected_category) if selected_category in category_options else 0,
+                format_func=lambda option: "All categories" if option == "All" else option,
+                label_visibility="collapsed",
+                key="filter_category",
+            )
+            if is_admin:
+                spent_by_options = ["All"] + sorted(df["Spent By"].dropna().unique().tolist())
+                st.selectbox(
+                    "Filter by person",
+                    spent_by_options,
+                    index=spent_by_options.index(selected_spent_by) if selected_spent_by in spent_by_options else 0,
+                    format_func=lambda option: "All people" if option == "All" else option,
+                    label_visibility="collapsed",
+                    key="filter_spent_by",
+                )
+                st.download_button(
+                    "",
+                    data=filtered_df.drop(columns=["Receipt Blob", "Comments"], errors="ignore").to_csv(index=False),
+                    file_name="filtered_expenses.csv",
+                    mime="text/csv",
+                    key="download_filtered_expenses",
+                    help="Download filtered expenses",
+                    icon=":material/download:",
+                )
+        if filtered_df.empty:
+            st.markdown(
+                """
+<div style="display:flex;align-items:center;gap:0.65rem;margin:0.15rem 0 0.8rem;padding:0.9rem 1rem;border:1px solid #eadcc6;border-left:4px solid #c8691d;border-radius:10px;background:linear-gradient(135deg,#fffdf8 0%,#f7eee3 100%);box-shadow:0 4px 10px rgba(105,76,52,0.1);color:#6d625b;font-family:'Trebuchet MS',Georgia,serif;font-size:0.9rem;font-weight:700;">
+    <span style="font-size:1.15rem;">🧾</span>
+    <span>No expenses match the selected filters.</span>
+</div>
+""",
+                unsafe_allow_html=True,
+            )
+        else:
+            cat_summary = filtered_df.groupby("Category")["Amount"].sum().reset_index().sort_values(by="Amount", ascending=False)
+            category_stats = "".join(
+                f"<div class='expense-stat-card'><span class='expense-stat-label'>🗂️ {escape(str(row['Category']))}</span><span class='expense-stat-count'>${float(row['Amount']):,.2f}<span class='expense-stat-unit'>Total Amount</span></span></div>"
+                for _, row in cat_summary.iterrows()
+            )
+            with open("app/html/expense/category_summary_card.html", "r") as f:
+                card_template = f.read()
             st.markdown(
                 card_template.format(
                     wallet_amount=float(wallet_amount),
                     total_payments=float(total_payments),
                     total_expenses=float(total_expenses),
                     wallet_percent=min(max(float(wallet_amount) / float(total_payments) * 100, 0), 100) if total_payments else 0,
-                    table_rows=table_rows,
+                    table_rows=category_stats,
                 ),
                 unsafe_allow_html=True,
             )
-        if is_admin and not filtered_df.empty:
-            person_summary = (
-                filtered_df.assign(**{"Spent By": filtered_df["Spent By"].fillna("Unknown")})
-                .groupby("Spent By", as_index=False)["Amount"]
-                .sum()
-                .sort_values("Amount", ascending=False)
-                .rename(columns={"Spent By": "Name", "Amount": "Total Amount"})
-            )
-            st.markdown(
-                "<div style='height:1rem;'></div><div style='padding:0.7rem 0 0.55rem; border-top:1px solid #e4ddd7; color:#6a1b1b; font-size:1.05rem; font-weight:800;'>👤 Expense Details by Person</div>",
-                unsafe_allow_html=True,
-            )
-            person_summary["Total Amount"] = person_summary["Total Amount"].astype(float).round(2)
-            person_summary_rows = "".join(
-                f"<tr><td>{escape(str(row['Name']))}</td><td class='expense-person-amount'>${float(row['Total Amount']):,.2f}</td></tr>"
-                for _, row in person_summary.iterrows()
-            )
-            st.markdown(
-                f"""
-<style>
-    .expense-person-table-wrap {{ margin-top:0.2rem; overflow-x:auto; border:1px solid #e4ddd7; border-radius:12px; box-shadow:0 3px 10px rgba(106,27,27,0.08); }}
-    .expense-person-table {{ width:100%; table-layout:fixed; border-collapse:collapse; color:#3e2723; font-size:0.82rem; }}
-    .expense-person-table th {{ width:65%; padding:0.62rem 0.55rem; background:#6a1b1b; color:#fffaf0; font-size:0.72rem; font-weight:800; letter-spacing:0.04em; text-align:left; text-transform:uppercase; white-space:nowrap; }}
-    .expense-person-table th:last-child {{ width:35%; text-align:right; }}
-    .expense-person-table td {{ padding:0.55rem; border-top:1px solid #eee4dc; vertical-align:middle; overflow-wrap:anywhere; }}
-    .expense-person-table tr:nth-child(even) td {{ background:#fffaf5; }}
-    .expense-person-amount {{ color:#8b1737; font-weight:800; text-align:right; white-space:nowrap; }}
-    @media (max-width:640px) {{
-        .expense-person-table {{ font-size:0.75rem; }}
-        .expense-person-table th, .expense-person-table td {{ padding:0.5rem 0.42rem; }}
-        .expense-person-table th {{ font-size:0.64rem; }}
-    }}
-</style>
-<div class='expense-person-table-wrap'>
-<table class='expense-person-table'>
-<thead><tr><th>Name</th><th>Total Amount</th></tr></thead>
-<tbody>{person_summary_rows}</tbody>
-</table>
+            if is_admin:
+                person_summary = (
+                    filtered_df.assign(**{"Spent By": filtered_df["Spent By"].fillna("Unknown")})
+                    .groupby("Spent By", as_index=False)["Amount"]
+                    .sum()
+                    .sort_values("Amount", ascending=False)
+                    .rename(columns={"Spent By": "Name", "Amount": "Total Amount"})
+                )
+                person_stats = "".join(
+                    f"<div class='expense-stat-card'><span class='expense-stat-label'>👤 {escape(str(row['Name']))}</span><span class='expense-stat-count'>${float(row['Total Amount']):,.2f}<span class='expense-stat-unit'>Total Amount</span></span></div>"
+                    for _, row in person_summary.iterrows()
+                )
+                st.markdown(
+                    f"""
+<div class='expense-person-summary'>
+<div class='expense-summary-heading'>👤 Expense Details by Person</div>
+<div class='expense-stats-grid'>{person_stats}</div>
 </div>
 """,
-                unsafe_allow_html=True,
-            )
-        if filtered_df.empty:
-            st.info("No expenses recorded yet.")
-        else:
-            st.markdown(
-                "<div style='height:1.25rem; clear:both;'></div>"
-                "<div style='padding:0.7rem 0 0.55rem; border-top:1px solid #e4ddd7; color:#6a1b1b; font-size:1.05rem; font-weight:800;'>🧾 Detailed Expense Report</div>",
-                unsafe_allow_html=True,
-            )
+                    unsafe_allow_html=True,
+                )
             table_df = filtered_df.copy()
             table_df["Comments"] = table_df["Comments"].apply(
                 lambda value: " | ".join(str(line).strip() for line in value if str(line).strip())
@@ -516,7 +530,7 @@ def expenses_tab():
                 by="Date", ascending=False
             ).reset_index(drop=True)
             def build_expense_row(row):
-                spent_by_cell = f"<td>{escape(str(row['Spent By']))}</td>" if is_admin else ""
+                spent_by_cell = f"<td>{escape(str(row['Spent By'] or 'Unknown'))}</td>" if is_admin else ""
                 return (
                     f"<tr>"
                     f"<td class='expense-table-name'>{escape(str(row['Expense']))}</td>"
