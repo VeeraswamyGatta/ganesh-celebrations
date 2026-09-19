@@ -475,6 +475,11 @@ TGT_DEFAULT_DISCLAIMERS = [
 TGT_EVENT_NOTE = "The program begins after the completion of Lord Ganesha Evening Pooja."
 
 
+def can_access_cultural_registration(session_state=None):
+    state = session_state if session_state is not None else st.session_state
+    return bool(state.get("admin_logged_in", False))
+
+
 def _ensure_tgt_registration_tables(cursor):
     is_snowflake = hasattr(cursor.connection, "account")
     if is_snowflake:
@@ -939,7 +944,7 @@ def cultural_event_tab():
     if not show_registration_form:
         with st.container(horizontal=True, wrap=False, vertical_alignment="center", gap="small"):
             st.markdown('<div class="cultural-inline-label">Participating details</div>', unsafe_allow_html=True)
-            if not st.session_state.get("admin_logged_in", False):
+            if can_access_cultural_registration(st.session_state):
                 if st.button("✨ Click here to add registration ✨", key="tgt_add_registration", type="primary", width="content"):
                     st.session_state.cultural_event_show_form = True
                     st.rerun()

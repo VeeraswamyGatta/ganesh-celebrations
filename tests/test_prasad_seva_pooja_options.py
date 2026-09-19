@@ -1,6 +1,7 @@
 from datetime import date, datetime
 import pytz
 
+from app.cultural_event import can_access_cultural_registration
 from app.prasad_seva import (
     display_prasad_name_group,
     format_prasad_summary_insight,
@@ -79,3 +80,9 @@ def test_prasad_slot_sort_keeps_morning_before_evening():
         (date(2026, 9, 16), "Morning Pooja"),
         (date(2026, 9, 16), "Evening Pooja"),
     ]
+
+
+def test_cultural_registration_requires_login():
+    assert can_access_cultural_registration({}) is False
+    assert can_access_cultural_registration({"admin_logged_in": False}) is False
+    assert can_access_cultural_registration({"admin_logged_in": True}) is True
