@@ -106,7 +106,7 @@ def expenses_tab():
     # Settlements Section (admin only)
     if is_admin and selected_section == "Settlements":
 
-        tab1, tab2, tab3 = st.tabs(["Add Settlement", "Wallet Summary", "Settlements Summary"])
+        tab1, tab2 = st.tabs(["Add Settlement", "Settlements Summary"])
 
         with tab1:
             st.markdown("### Add Settlement")
@@ -142,8 +142,9 @@ def expenses_tab():
                 st.session_state["settlement_last_name"] = name
                 st.session_state["settlement_last_default_amount"] = default_amount
             # Remove min_value to allow negative values
-            amount = st.number_input("Amount", value=default_amount, format="%.2f", key="settlement_amount")
-            payment_columns = pd.read_sql("SELECT * FROM payment_details LIMIT 0", conn).columns.str.lower()
+            amount = st.number_input("Amount", format="%.2f", key="settlement_amount")
+            cursor.execute("SELECT * FROM payment_details LIMIT 0")
+            payment_columns = [column[0].lower() for column in cursor.description]
             if "recieved_zelle_acc_name" in payment_columns:
                 cursor.execute(
                     "SELECT DISTINCT recieved_zelle_acc_name FROM payment_details "
@@ -173,41 +174,101 @@ def expenses_tab():
                     st.rerun()
 
         with tab2:
-            st.markdown("### Wallet Summary")
+            st.markdown("#### Cash Balance Overview")
             cursor.execute("SELECT recieved_zelle_acc_name, SUM(amount) FROM payment_details GROUP BY recieved_zelle_acc_name")
             payment_rows = cursor.fetchall()
-            # settlements sent_by sum
             cursor.execute("SELECT sent_by, COALESCE(SUM(amount),0) FROM settlements GROUP BY sent_by")
             settlement_rows = cursor.fetchall()
-            settlement_map = {row[0]: row[1] for row in settlement_rows}
+            settlement_map = {row[0]: float(row[1] or 0) for row in settlement_rows}
             wallet_summary = []
-            for row in payment_rows:
-                cash_collector = row[0]
-                total_received = row[1] or 0
-                total_settled = settlement_map.get(cash_collector, 0)
+            for cash_collector, received_amount in payment_rows:
                 if cash_collector and str(cash_collector).strip():
-                    available = total_received - total_settled
+                    total_received = float(received_amount or 0)
+                    total_settled = settlement_map.get(cash_collector, 0.0)
                     wallet_summary.append({
                         "Name": cash_collector,
-                        "Total Received Amount": total_received,
-                        "Total Available Amount (Received - Settled)": available
+                        "Received": total_received,
+                        "Settled": total_settled,
+                        "Available": total_received - total_settled,
                     })
-            wallet_df = pd.DataFrame(wallet_summary, columns=[
-                "Name",
-                "Total Received Amount",
-                "Total Available Amount (Received - Settled)"
-            ])
-            if not wallet_df.empty:
-                wallet_df = wallet_df.sort_values(by=["Name"]).reset_index(drop=True)
-                wallet_df.index = wallet_df.index + 1
-            st.dataframe(wallet_df, use_container_width=True)
-            total_received_all = wallet_df["Total Received Amount"].sum()
-            total_available_all = wallet_df["Total Available Amount (Received - Settled)"].sum()
-            st.markdown(f"<div style='text-align:right; font-size:1.1em; margin-top:0.5em;'><b>Total Received Amount(All):</b> <span style='color:#6A1B9A;'>${total_received_all:,.2f}</span></div>", unsafe_allow_html=True)
-            st.markdown(f"<div style='text-align:right; font-size:1.05em; margin-top:0.2em;'><b>Total Available Amount(All):</b> <span style='color:#388E3C;'>${total_available_all:,.2f}</span></div>", unsafe_allow_html=True)
-
-        with tab3:
-            st.markdown("### Settlements Summary")
+            wallet_summary.sort(key=lambda item: item["Name"])
+            wallet_rows_html = []
+            for row_number, wallet in enumerate(wallet_summary, start=1):
+                wallet_rows_html.append(
+                    f"""
+                    <tr class='wallet-summary-row'>
+                        <td class='wallet-row-number'>{row_number}</td>
+                        <td class='wallet-name'>{escape(str(wallet['Name']))}</td>
+                        <td class='wallet-received'>${wallet['Received']:,.2f}</td>
+                        <td class='wallet-settled'>${wallet['Settled']:,.2f}</td>
+                        <td class='wallet-calculation'>
+                            <span>${wallet['Received']:,.2f}</span>
+                            <b>-</b>
+                            <span>${wallet['Settled']:,.2f}</span>
+                            <b>=</b>
+                            <strong>${wallet['Available']:,.2f}</strong>
+                        </td>
+                    </tr>
+                    """
+                )
+            total_received_all = sum(item["Received"] for item in wallet_summary)
+            total_settled_all = sum(item["Settled"] for item in wallet_summary)
+            total_available_all = sum(item["Available"] for item in wallet_summary)
+            st.html(
+                textwrap.dedent(
+                    f"""
+                    <style>
+                    .wallet-summary-table {{
+                        width: 100%; border-collapse: separate; border-spacing: 0;
+                        border: 1px solid #ead8a9; border-radius: 10px; overflow: hidden;
+                        background: #fffdf8; color: #3f3028;
+                        box-shadow: 0 3px 12px rgba(93, 64, 55, 0.08);
+                    }}
+                    .wallet-summary-table th, .wallet-summary-table td {{
+                        padding: 0.7rem 0.85rem; text-align: left; vertical-align: middle;
+                        border-bottom: 1px solid #eee3cf;
+                    }}
+                    .wallet-summary-table th {{
+                        background: linear-gradient(135deg, #6a1b1b, #8b1737);
+                        color: #fff; font-size: 0.78rem; font-weight: 800;
+                        letter-spacing: 0.02em; white-space: nowrap;
+                    }}
+                    .wallet-summary-row:nth-child(even) {{ background: #fff8e8; }}
+                    .wallet-summary-row:hover {{ background: #fff0c2; }}
+                    .wallet-summary-row:last-child td {{ border-bottom: 0; }}
+                    .wallet-row-number {{ width: 2.5rem; color: #8b6b35; font-weight: 800; }}
+                    .wallet-name {{ color: #6a1b1b; font-weight: 700; white-space: nowrap; }}
+                    .wallet-received {{ color: #1565c0; font-weight: 700; white-space: nowrap; }}
+                    .wallet-settled {{ color: #c62828; font-weight: 700; white-space: nowrap; }}
+                    .wallet-calculation {{ white-space: nowrap; color: #5d4037; }}
+                    .wallet-calculation b {{ padding: 0 0.35rem; color: #8b6b35; }}
+                    .wallet-calculation strong {{ color: #2e7d32; font-size: 1.02rem; }}
+                    .wallet-total-strip {{
+                        display: flex; flex-wrap: wrap; gap: 0.7rem; margin: 0.9rem 0 1.5rem;
+                    }}
+                    .wallet-total-card {{
+                        flex: 1 1 12rem; padding: 0.7rem 0.9rem; border-radius: 8px;
+                        border: 1px solid #ead8a9; background: #fff8e8;
+                    }}
+                    .wallet-total-label {{ display: block; color: #795548; font-size: 0.75rem; font-weight: 700; }}
+                    .wallet-total-value {{ display: block; margin-top: 0.15rem; font-size: 1.1rem; font-weight: 800; }}
+                    </style>
+                    <table class='wallet-summary-table'>
+                        <thead><tr>
+                            <th>#</th><th>Receiver</th><th>Total Received</th>
+                            <th>Total Settled</th><th>Received - Settled = Available</th>
+                        </tr></thead>
+                        <tbody>{''.join(wallet_rows_html)}</tbody>
+                    </table>
+                    <div class='wallet-total-strip'>
+                        <div class='wallet-total-card'><span class='wallet-total-label'>Total Received</span><span class='wallet-total-value' style='color:#1565c0;'>${total_received_all:,.2f}</span></div>
+                        <div class='wallet-total-card'><span class='wallet-total-label'>Total Settled</span><span class='wallet-total-value' style='color:#c62828;'>${total_settled_all:,.2f}</span></div>
+                        <div class='wallet-total-card'><span class='wallet-total-label'>Total Available</span><span class='wallet-total-value' style='color:#2e7d32;'>${total_available_all:,.2f}</span></div>
+                    </div>
+                    """
+                ).strip()
+            )
+            st.markdown("#### Settlement Details")
             cursor.execute("SELECT spent_by, SUM(amount) FROM expenses WHERE status='active' GROUP BY spent_by")
             spent_rows = cursor.fetchall()
             spent_dict = {row[0]: row[1] for row in spent_rows}
