@@ -133,6 +133,13 @@ def expenses_tab():
                 default_amount = float(default_amount)
             except Exception:
                 default_amount = 0.0
+            if (
+                st.session_state.get("settlement_last_name") != name
+                or st.session_state.get("settlement_last_default_amount") != default_amount
+            ):
+                st.session_state["settlement_amount"] = default_amount
+                st.session_state["settlement_last_name"] = name
+                st.session_state["settlement_last_default_amount"] = default_amount
             # Remove min_value to allow negative values
             amount = st.number_input("Amount", value=default_amount, format="%.2f", key="settlement_amount")
             payment_columns = pd.read_sql("SELECT * FROM payment_details LIMIT 0", conn).columns.str.lower()
