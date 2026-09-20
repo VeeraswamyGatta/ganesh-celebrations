@@ -38,8 +38,14 @@ def expenses_tab():
     blink_color = 'red' if wallet_amount < 500 else 'green'
 
     # Fetch expenses data
-    cursor.execute("SELECT id, category, sub_category, amount, date, spent_by, comments, receipt_path, receipt_blob FROM expenses WHERE status='active' ORDER BY category, sub_category")
-    rows = cursor.fetchall()
+    loading_message = (
+        "Settlement details are loading..."
+        if st.session_state.get("expenses_management_menu") == "Settlements"
+        else "Expense details are loading..."
+    )
+    with st.spinner(loading_message):
+        cursor.execute("SELECT id, category, sub_category, amount, date, spent_by, comments, receipt_path, receipt_blob FROM expenses WHERE status='active' ORDER BY category, sub_category")
+        rows = cursor.fetchall()
     columns = ["ID", "Category", "Sub Category", "Amount", "Date", "Spent By", "Comments", "Receipt", "Receipt Blob"]
     df = pd.DataFrame(rows, columns=columns)
     def format_comments(comments):
@@ -64,7 +70,7 @@ def expenses_tab():
         st.session_state["expenses_section"] = section_names[0]
         st.session_state["expense_inline_action"] = None
     selected_section = option_menu(
-        "Expenses Management",
+        "",
         section_names,
         icons=["list-ul", "wallet2"][:len(section_names)],
         menu_icon="cash-stack",
@@ -103,19 +109,109 @@ def expenses_tab():
     st.session_state["expenses_section"] = selected_section
     if selected_section != "Expenses":
         st.session_state["expense_inline_action"] = None
+    if selected_section != "Settlements":
+        st.session_state["show_settlement_form"] = False
     # Settlements Section (admin only)
     if is_admin and selected_section == "Settlements":
+        st.markdown(
+            """
+            <style>
+            .st-key-toggle_settlement_form button {
+                min-height: 2.7rem;
+                padding: 0.85rem 1.3rem;
+                border: 1px solid #ffb300;
+                border-radius: 14px;
+                background: linear-gradient(135deg, #ff8f00 0%, #ff5e00 45%, #d81b60 100%);
+                box-shadow: 0 8px 22px rgba(255, 94, 0, 0.28);
+                color: #ffffff;
+                font-size: 1rem;
+                font-weight: 800;
+                letter-spacing: 0.01em;
+                transition: transform 0.2s ease, box-shadow 0.2s ease;
+            }
+            .st-key-toggle_settlement_form button:hover {
+                background: linear-gradient(135deg, #ff8f00 0%, #ff5e00 45%, #d81b60 100%);
+                box-shadow: 0 10px 26px rgba(216, 27, 96, 0.28), 0 0 18px rgba(255, 170, 0, 0.55);
+                color: #ffffff;
+                transform: translateY(-1px) scale(1.01);
+            }
+            .st-key-toggle_settlement_form {
+                margin-top: 0.3rem;
+                margin-bottom: 1rem;
+            }
+            .settlement-section-title {
+                margin: 0.7rem 0 0.9rem;
+                padding: 0.45rem 0.75rem;
+                border-left: 4px solid #a51d3f;
+                border-bottom: 1px solid #ead8a9;
+                color: #6a1b1b;
+                font-size: 1rem;
+                font-weight: 800;
+                letter-spacing: 0.01em;
+                background: linear-gradient(90deg, #fff8e8 0%, rgba(255, 248, 232, 0) 100%);
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.markdown("<div class='settlement-section-title'>Cash Balance Overview</div>", unsafe_allow_html=True)
+        settlement_success_message = st.session_state.pop("settlement_success_message", None)
+        if settlement_success_message:
+            st.success(settlement_success_message)
+        show_settlement_form = st.session_state.get("show_settlement_form", False)
+        toggle_label = "Click here to show cash balance" if show_settlement_form else "Click here to add settlement"
+        if st.button(toggle_label, key="toggle_settlement_form"):
+            st.session_state["show_settlement_form"] = not show_settlement_form
+            st.rerun()
+        st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
 
-        tab1, tab2 = st.tabs(["Add Settlement", "Settlements Summary"])
-
-        with tab1:
-            st.markdown("### Add Settlement")
+        if show_settlement_form:
+            st.markdown(
+                """
+                <style>
+                .settlement-form-header {
+                    margin: 1rem 0 1.1rem;
+                    padding: 1rem 1.15rem;
+                    border: 1px solid #ead8a9;
+                    border-left: 5px solid #8b1737;
+                    border-radius: 10px;
+                    background: linear-gradient(135deg, #fffaf0 0%, #fff1d2 100%);
+                }
+                .settlement-form-title {
+                    margin: 0;
+                    color: #6a1b1b;
+                    font-size: 1.15rem;
+                    font-weight: 800;
+                }
+                .settlement-form-copy {
+                    margin: 0.3rem 0 0;
+                    color: #795548;
+                    font-size: 0.86rem;
+                }
+                .st-key-add_settlement_btn button {
+                    width: 100%;
+                    min-height: 2.7rem;
+                    border: 0;
+                    border-radius: 8px;
+                    background: linear-gradient(135deg, #6a1b1b 0%, #8b1737 100%);
+                    color: #ffffff;
+                    font-weight: 800;
+                }
+                </style>
+                <div class='settlement-form-header'>
+                    <p class='settlement-form-title'>Add Settlement</p>
+                    <p class='settlement-form-copy'>Record a payment and keep the cash balance up to date.</p>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
             # Get total expense and settlement amount for each person
-            cursor.execute("SELECT spent_by, SUM(amount) FROM expenses WHERE status='active' GROUP BY spent_by")
-            expense_rows = cursor.fetchall()
-            expense_map = {row[0]: float(row[1]) for row in expense_rows if row[0] and row[1]}
-            cursor.execute("SELECT name, SUM(amount) FROM settlements GROUP BY name")
-            settlement_rows = cursor.fetchall()
+            with st.spinner("Loading settlement data..."):
+                cursor.execute("SELECT spent_by, SUM(amount) FROM expenses WHERE status='active' GROUP BY spent_by")
+                expense_rows = cursor.fetchall()
+                expense_map = {row[0]: float(row[1]) for row in expense_rows if row[0] and row[1]}
+                cursor.execute("SELECT name, SUM(amount) FROM settlements GROUP BY name")
+                settlement_rows = cursor.fetchall()
             settlement_map = {row[0]: float(row[1]) for row in settlement_rows if row[0] and row[1]}
             # Only show names with (total expense - total settlement) > 0
             expense_names = []
@@ -143,18 +239,19 @@ def expenses_tab():
                 st.session_state["settlement_last_default_amount"] = default_amount
             # Remove min_value to allow negative values
             amount = st.number_input("Amount", format="%.2f", key="settlement_amount")
-            cursor.execute("SELECT * FROM payment_details LIMIT 0")
-            payment_columns = [column[0].lower() for column in cursor.description]
-            if "recieved_zelle_acc_name" in payment_columns:
-                cursor.execute(
-                    "SELECT DISTINCT recieved_zelle_acc_name FROM payment_details "
-                    "WHERE recieved_zelle_acc_name IS NOT NULL "
-                    "AND TRIM(recieved_zelle_acc_name) <> '' "
-                    "ORDER BY recieved_zelle_acc_name"
-                )
-                sent_by_options = [row[0] for row in cursor.fetchall()]
-            else:
-                sent_by_options = []
+            with st.spinner("Loading cash collectors..."):
+                cursor.execute("SELECT * FROM payment_details LIMIT 0")
+                payment_columns = [column[0].lower() for column in cursor.description]
+                if "recieved_zelle_acc_name" in payment_columns:
+                    cursor.execute(
+                        "SELECT DISTINCT recieved_zelle_acc_name FROM payment_details "
+                        "WHERE recieved_zelle_acc_name IS NOT NULL "
+                        "AND TRIM(recieved_zelle_acc_name) <> '' "
+                        "ORDER BY recieved_zelle_acc_name"
+                    )
+                    sent_by_options = [row[0] for row in cursor.fetchall()]
+                else:
+                    sent_by_options = []
             if not sent_by_options:
                 sent_by_options = ["-- No Cash Collectors Available --"]
             sent_by = st.selectbox("Sent By", sent_by_options, key="settlement_sent_by")
@@ -164,21 +261,22 @@ def expenses_tab():
                     st.warning("Add a cash payment with a collector before adding a settlement.")
                 else:
                     st.session_state["settlement_submission_in_progress"] = True
-                    st.info("Adding settlement is in progress...")
-                    cursor.execute("INSERT INTO settlements (name, amount, sent_by, comments) VALUES (%s, %s, %s, %s)", (name, amount, sent_by, comments))
-                    conn.commit()
+                    with st.spinner("Adding settlement..."):
+                        cursor.execute("INSERT INTO settlements (name, amount, sent_by, comments) VALUES (%s, %s, %s, %s)", (name, amount, sent_by, comments))
+                        conn.commit()
                     st.session_state["settlement_submission_in_progress"] = False
-                    st.success("✅ Settlement added!")
+                    st.session_state["show_settlement_form"] = False
+                    st.session_state["settlement_success_message"] = "Settlement added successfully."
                     # Clear form fields
                     # Do not clear widget keys after instantiation to avoid StreamlitAPIException
                     st.rerun()
 
-        with tab2:
-            st.markdown("#### Cash Balance Overview")
-            cursor.execute("SELECT recieved_zelle_acc_name, SUM(amount) FROM payment_details GROUP BY recieved_zelle_acc_name")
-            payment_rows = cursor.fetchall()
-            cursor.execute("SELECT sent_by, COALESCE(SUM(amount),0) FROM settlements GROUP BY sent_by")
-            settlement_rows = cursor.fetchall()
+        else:
+            with st.spinner("Loading settlement data..."):
+                cursor.execute("SELECT recieved_zelle_acc_name, SUM(amount) FROM payment_details GROUP BY recieved_zelle_acc_name")
+                payment_rows = cursor.fetchall()
+                cursor.execute("SELECT sent_by, COALESCE(SUM(amount),0) FROM settlements GROUP BY sent_by")
+                settlement_rows = cursor.fetchall()
             settlement_map = {row[0]: float(row[1] or 0) for row in settlement_rows}
             wallet_summary = []
             for cash_collector, received_amount in payment_rows:
@@ -219,28 +317,42 @@ def expenses_tab():
                     f"""
                     <style>
                     .wallet-summary-table {{
-                        width: 100%; border-collapse: separate; border-spacing: 0;
+                        width: 100%; margin-top: 1rem; border-collapse: separate; border-spacing: 0;
+                        min-width: 0; table-layout: fixed;
                         border: 1px solid #ead8a9; border-radius: 10px; overflow: hidden;
                         background: #fffdf8; color: #3f3028;
                         box-shadow: 0 3px 12px rgba(93, 64, 55, 0.08);
                     }}
                     .wallet-summary-table th, .wallet-summary-table td {{
-                        padding: 0.7rem 0.85rem; text-align: left; vertical-align: middle;
+                        padding: 0.55rem 0.6rem; text-align: left; vertical-align: middle;
                         border-bottom: 1px solid #eee3cf;
+                        border-right: 1px solid #f0e4cf;
                     }}
+                    .wallet-summary-table th:last-child, .wallet-summary-table td:last-child {{ border-right: 0; }}
                     .wallet-summary-table th {{
                         background: linear-gradient(135deg, #6a1b1b, #8b1737);
                         color: #fff; font-size: 0.78rem; font-weight: 800;
-                        letter-spacing: 0.02em; white-space: nowrap;
+                        letter-spacing: 0.02em;
                     }}
                     .wallet-summary-row:nth-child(even) {{ background: #fff8e8; }}
                     .wallet-summary-row:hover {{ background: #fff0c2; }}
                     .wallet-summary-row:last-child td {{ border-bottom: 0; }}
                     .wallet-row-number {{ width: 2.5rem; color: #8b6b35; font-weight: 800; }}
-                    .wallet-name {{ color: #6a1b1b; font-weight: 700; white-space: nowrap; }}
+                    .wallet-summary-table th:nth-child(1), .wallet-summary-table td:nth-child(1) {{ width: 6%; }}
+                    .wallet-summary-table th:nth-child(2), .wallet-summary-table td:nth-child(2) {{ width: 28%; }}
+                    .wallet-summary-table th:nth-child(3), .wallet-summary-table td:nth-child(3) {{ width: 17%; }}
+                    .wallet-summary-table th:nth-child(4), .wallet-summary-table td:nth-child(4) {{ width: 17%; }}
+                    .wallet-summary-table th:nth-child(5), .wallet-summary-table td:nth-child(5) {{ width: 32%; }}
+                    .wallet-name {{
+                        color: #6a1b1b;
+                        font-size: 0.9rem;
+                        font-weight: 700;
+                        white-space: normal;
+                        overflow-wrap: anywhere;
+                    }}
                     .wallet-received {{ color: #1565c0; font-weight: 700; white-space: nowrap; }}
                     .wallet-settled {{ color: #c62828; font-weight: 700; white-space: nowrap; }}
-                    .wallet-calculation {{ white-space: nowrap; color: #5d4037; }}
+                    .wallet-calculation {{ color: #5d4037; overflow-wrap: anywhere; }}
                     .wallet-calculation b {{ padding: 0 0.35rem; color: #8b6b35; }}
                     .wallet-calculation strong {{ color: #2e7d32; font-size: 1.02rem; }}
                     .wallet-total-strip {{
@@ -268,12 +380,13 @@ def expenses_tab():
                     """
                 ).strip()
             )
-            st.markdown("#### Settlement Details")
-            cursor.execute("SELECT spent_by, SUM(amount) FROM expenses WHERE status='active' GROUP BY spent_by")
-            spent_rows = cursor.fetchall()
-            spent_dict = {row[0]: row[1] for row in spent_rows}
-            cursor.execute("SELECT name, amount, comments FROM settlements ORDER BY name, id")
-            settlement_rows = cursor.fetchall()
+            st.markdown("<div class='settlement-section-title'>Settlement Details</div>", unsafe_allow_html=True)
+            with st.spinner("Loading settlement details..."):
+                cursor.execute("SELECT spent_by, SUM(amount) FROM expenses WHERE status='active' GROUP BY spent_by")
+                spent_rows = cursor.fetchall()
+                spent_dict = {row[0]: row[1] for row in spent_rows}
+                cursor.execute("SELECT name, amount, comments FROM settlements ORDER BY name, id")
+                settlement_rows = cursor.fetchall()
             settlement_by_name = {}
             for settlement_name, settlement_amount, settlement_comment in settlement_rows:
                 settlement_by_name.setdefault(settlement_name, []).append(
@@ -340,6 +453,9 @@ def expenses_tab():
                 <style>
                 .settlements-summary-table {{
                     width: 100%;
+                    margin-top: 1rem;
+                    min-width: 0;
+                    table-layout: fixed;
                     border-collapse: separate;
                     border-spacing: 0;
                     overflow: hidden;
@@ -350,20 +466,22 @@ def expenses_tab():
                     box-shadow: 0 3px 12px rgba(93, 64, 55, 0.08);
                 }}
                 .settlements-summary-table th, .settlements-summary-table td {{
-                    padding: 0.7rem 0.85rem;
+                    padding: 0.55rem 0.6rem;
                     border-bottom: 1px solid #eee3cf;
+                    border-right: 1px solid #f0e4cf;
                     text-align: left;
                     vertical-align: top;
                 }}
+                .settlements-summary-table th:last-child, .settlements-summary-table td:last-child {{ border-right: 0; }}
                 .settlements-summary-table th {{
-                    padding-top: 0.8rem;
-                    padding-bottom: 0.8rem;
+                    padding-top: 0.65rem;
+                    padding-bottom: 0.65rem;
                     background: linear-gradient(135deg, #6a1b1b, #8b1737);
                     color: #ffffff;
-                    font-size: 0.78rem;
+                    font-size: 0.7rem;
                     font-weight: 800;
                     letter-spacing: 0.02em;
-                    white-space: nowrap;
+                    overflow-wrap: anywhere;
                 }}
                 .settlements-summary-table th:first-child {{ border-top-left-radius: 9px; }}
                 .settlements-summary-table th:last-child {{ border-top-right-radius: 9px; }}
@@ -371,34 +489,53 @@ def expenses_tab():
                 .settlement-summary-row:hover {{ background: #fff0c2; }}
                 .settlement-summary-row:last-child td {{ border-bottom: 0; }}
                 .settlement-row-number {{
-                    width: 2.5rem;
+                    width: 2rem;
                     color: #8b6b35;
                     font-weight: 800;
                 }}
-                .settlement-name {{ color: #6a1b1b; font-weight: 700; white-space: nowrap; }}
-                .settlement-amount {{ color: #5d4037; font-variant-numeric: tabular-nums; }}
+                .settlement-name {{
+                    color: #6a1b1b;
+                    font-size: 0.9rem;
+                    font-weight: 700;
+                    white-space: normal;
+                    overflow-wrap: anywhere;
+                }}
+                .settlement-amount {{
+                    color: #5d4037;
+                    font-size: 0.82rem;
+                    font-variant-numeric: tabular-nums;
+                    white-space: normal;
+                    overflow-wrap: anywhere;
+                }}
                 .settlement-received {{ color: #2e7d32; font-weight: 700; }}
                 .settlement-pending {{ color: #c62828; font-weight: 800; }}
+                .settlements-summary-table th:nth-child(1),
+                .settlements-summary-table td:nth-child(1) {{ width: 4%; }}
+                .settlements-summary-table th:nth-child(2),
+                .settlements-summary-table td:nth-child(2) {{ width: 20%; }}
+                .settlements-summary-table th:nth-child(3),
                 .settlements-summary-table td:nth-child(3),
+                .settlements-summary-table th:nth-child(4),
                 .settlements-summary-table td:nth-child(4),
-                .settlements-summary-table td:nth-child(5) {{ white-space: nowrap; }}
+                .settlements-summary-table th:nth-child(5),
+                .settlements-summary-table td:nth-child(5) {{ width: 14%; }}
                 .settlement-comments-cell {{
-                    min-width: 22rem;
+                    width: 34%;
                     color: #5d4037;
                     line-height: 1.45;
-                    white-space: nowrap;
+                    overflow-wrap: anywhere;
                 }}
                 .settlement-comment-line + .settlement-comment-line {{ margin-top: 0.25rem; }}
                 </style>
-                <div style='overflow-x:auto;'>
+                <div style='width:100%; overflow-x:auto;'>
                     <table class='settlements-summary-table'>
                         <thead>
                             <tr>
                                 <th>#</th>
                                 <th>Name</th>
-                                <th>Total Spent Amount</th>
-                                <th>Total Received Amount</th>
-                                <th>Pending Transaction Amount</th>
+                                <th>Total<br>Spent<br>Amount</th>
+                                <th>Total<br>Received<br>Amount</th>
+                                <th>Pending<br>Transaction<br>Amount</th>
                                 <th>Comments</th>
                             </tr>
                         </thead>
@@ -466,6 +603,9 @@ def expenses_tab():
             """,
             unsafe_allow_html=True,
         )
+        expense_success_message = st.session_state.pop("expense_success_message", None)
+        if expense_success_message:
+            st.success(expense_success_message)
         with st.container(key="expense_inline_actions"):
             action_columns = st.columns(3)
             if action_columns[0].button("➕ Add", key="expense_inline_add", use_container_width=True):
@@ -562,7 +702,7 @@ def expenses_tab():
                         send_email(subject, body, recipients)
                     st.session_state["expense_submission_in_progress"] = False
                     expense_status.update(label="Expense added", state="complete", expanded=False)
-                    st.success("✅ Expense added and notification email sent!")
+                    st.session_state["expense_success_message"] = "Expense added successfully and notification email sent."
                     # Set flag to clear input fields on next run
                     st.session_state["clear_expense_form"] = True
                     st.session_state["expense_inline_action"] = None
