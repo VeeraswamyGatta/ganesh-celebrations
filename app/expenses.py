@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import datetime
 import base64
+import textwrap
 from streamlit_option_menu import option_menu
 from .db import get_connection
 from html import escape
@@ -210,26 +211,33 @@ def expenses_tab():
             cursor.execute("SELECT spent_by, SUM(amount) FROM expenses WHERE status='active' GROUP BY spent_by")
             spent_rows = cursor.fetchall()
             spent_dict = {row[0]: row[1] for row in spent_rows}
-            if st.secrets.get("db_type", "postgres").lower() == "snowflake":
-                cursor.execute("SELECT name, SUM(amount), LISTAGG(comments, '\n') WITHIN GROUP (ORDER BY name) FROM settlements GROUP BY name")
-            else:
-                cursor.execute("SELECT name, SUM(amount), STRING_AGG(comments, '\n') FROM settlements GROUP BY name")
+            cursor.execute("SELECT name, amount, comments FROM settlements ORDER BY name, id")
             settlement_rows = cursor.fetchall()
+            settlement_by_name = {}
+            for settlement_name, settlement_amount, settlement_comment in settlement_rows:
+                settlement_by_name.setdefault(settlement_name, []).append(
+                    (settlement_amount or 0, settlement_comment or "")
+                )
             # Show all names, even if their net amount is zero or negative
-            all_names = set(spent_dict.keys()) | set(row[0] for row in settlement_rows)
+            all_names = set(spent_dict.keys()) | set(settlement_by_name.keys())
             summary = []
             for name in sorted(all_names):
-                total_spent = spent_dict.get(name, 0)
-                received_row = next((row for row in settlement_rows if row[0] == name), None)
-                total_received = received_row[1] if received_row else 0
-                received_comments = received_row[2] if received_row else ""
+                total_spent = float(spent_dict.get(name, 0) or 0)
+                settlement_details = settlement_by_name.get(name, [])
+                received_amounts = [float(amount) for amount, _ in settlement_details]
+                total_received = sum(received_amounts)
+                received_comments = "\n".join(
+                    f"{comment.strip()} (${amount:,.2f})" if comment.strip() else f"Settlement (${amount:,.2f})"
+                    for amount, comment in settlement_details
+                )
                 pending_amount = total_spent - total_received
                 summary.append({
                     "Name": name,
                     "Total Spent Amount": total_spent,
                     "Total Received Amount": total_received,
                     "Pending Transaction Amount": pending_amount,
-                    "Comments": received_comments
+                    "Comments": received_comments,
+                    "Received Amounts": received_amounts,
                 })
             cols = ["Name", "Total Spent Amount", "Total Received Amount", "Pending Transaction Amount", "Comments"]
             summary_df = pd.DataFrame(summary, columns=cols)
@@ -237,7 +245,108 @@ def expenses_tab():
                 summary_df.index = summary_df.index + 1
             # Reorder columns to show Pending Transaction Amount before Comments
             summary_df = summary_df[cols]
-            st.dataframe(summary_df, use_container_width=True)
+            summary_rows_html = []
+            for row_number, row in summary_df.iterrows():
+                comment_lines = str(row["Comments"] or "").splitlines() or [""]
+                received_amounts = next(
+                    (item["Received Amounts"] for item in summary if item["Name"] == row["Name"]),
+                    [],
+                )
+                if received_amounts:
+                    amount_breakdown = " + ".join(f"${amount:,.2f}" for amount in received_amounts)
+                    comment_lines.append(
+                        f"Total received: {amount_breakdown} = ${sum(received_amounts):,.2f}"
+                    )
+                comments_html = "".join(
+                    f"<div class='settlement-comment-line'>{escape(line)}</div>"
+                    for line in comment_lines
+                )
+                summary_rows_html.append(
+                    f"""
+                    <tr class='settlement-summary-row'>
+                        <td class='settlement-row-number'>{row_number}</td>
+                        <td class='settlement-name'>{escape(str(row['Name']))}</td>
+                        <td class='settlement-amount'>${float(row['Total Spent Amount']):,.2f}</td>
+                        <td class='settlement-amount settlement-received'>${float(row['Total Received Amount']):,.2f}</td>
+                        <td class='settlement-amount settlement-pending'>${float(row['Pending Transaction Amount']):,.2f}</td>
+                        <td class='settlement-comments-cell'>{comments_html}</td>
+                    </tr>
+                    """
+                )
+            st.html(
+                textwrap.dedent(
+                    f"""
+                <style>
+                .settlements-summary-table {{
+                    width: 100%;
+                    border-collapse: separate;
+                    border-spacing: 0;
+                    overflow: hidden;
+                    border: 1px solid #ead8a9;
+                    border-radius: 10px;
+                    background: #fffdf8;
+                    color: #3f3028;
+                    box-shadow: 0 3px 12px rgba(93, 64, 55, 0.08);
+                }}
+                .settlements-summary-table th, .settlements-summary-table td {{
+                    padding: 0.7rem 0.85rem;
+                    border-bottom: 1px solid #eee3cf;
+                    text-align: left;
+                    vertical-align: top;
+                }}
+                .settlements-summary-table th {{
+                    padding-top: 0.8rem;
+                    padding-bottom: 0.8rem;
+                    background: linear-gradient(135deg, #6a1b1b, #8b1737);
+                    color: #ffffff;
+                    font-size: 0.78rem;
+                    font-weight: 800;
+                    letter-spacing: 0.02em;
+                    white-space: nowrap;
+                }}
+                .settlements-summary-table th:first-child {{ border-top-left-radius: 9px; }}
+                .settlements-summary-table th:last-child {{ border-top-right-radius: 9px; }}
+                .settlement-summary-row:nth-child(even) {{ background: #fff8e8; }}
+                .settlement-summary-row:hover {{ background: #fff0c2; }}
+                .settlement-summary-row:last-child td {{ border-bottom: 0; }}
+                .settlement-row-number {{
+                    width: 2.5rem;
+                    color: #8b6b35;
+                    font-weight: 800;
+                }}
+                .settlement-name {{ color: #6a1b1b; font-weight: 700; white-space: nowrap; }}
+                .settlement-amount {{ color: #5d4037; font-variant-numeric: tabular-nums; }}
+                .settlement-received {{ color: #2e7d32; font-weight: 700; }}
+                .settlement-pending {{ color: #c62828; font-weight: 800; }}
+                .settlements-summary-table td:nth-child(3),
+                .settlements-summary-table td:nth-child(4),
+                .settlements-summary-table td:nth-child(5) {{ white-space: nowrap; }}
+                .settlement-comments-cell {{
+                    min-width: 22rem;
+                    color: #5d4037;
+                    line-height: 1.45;
+                    white-space: nowrap;
+                }}
+                .settlement-comment-line + .settlement-comment-line {{ margin-top: 0.25rem; }}
+                </style>
+                <div style='overflow-x:auto;'>
+                    <table class='settlements-summary-table'>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Name</th>
+                                <th>Total Spent Amount</th>
+                                <th>Total Received Amount</th>
+                                <th>Pending Transaction Amount</th>
+                                <th>Comments</th>
+                            </tr>
+                        </thead>
+                        <tbody>{''.join(summary_rows_html)}</tbody>
+                    </table>
+                </div>
+                    """
+                ).strip(),
+            )
 
     if is_admin and selected_section == "Expenses":
         st.markdown(
