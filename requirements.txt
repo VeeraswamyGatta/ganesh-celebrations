@@ -8,3 +8,6 @@ XlsxWriter
 requests
 beautifulsoup4
 Pillow
+google-auth-oauthlib
+google-auth-httplib2
+google-api-python-client

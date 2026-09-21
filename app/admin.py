@@ -757,6 +757,7 @@ def admin_tab(menu="Sponsorship Items"):
             with st.form("add_committee_member_form"):
                 new_member_name = st.text_input("Member Name")
                 new_member_apartment = st.text_input("Apartment Number")
+                new_member_email = st.text_input("Email Address (for receiving reports)", placeholder="member@example.com")
                 new_member_cash_enable = st.checkbox("Enable for cash collection", value=False)
                 new_member_zelle_enable = st.checkbox("Enable for Zelle collection", value=False)
                 if st.form_submit_button("Add Member"):
@@ -764,9 +765,16 @@ def admin_tab(menu="Sponsorship Items"):
                         st.warning("Member name and apartment number are required.")
                     else:
                         try:
+                            # Ensure email column exists
+                            try:
+                                cursor.execute("ALTER TABLE committee_members ADD COLUMN email TEXT")
+                                conn.commit()
+                            except Exception:
+                                pass  # Column might already exist
+                            
                             cursor.execute(
-                                "INSERT INTO committee_members (name, apartment, recieve_cash_enable, zelle_enable) VALUES (%s, %s, %s, %s)",
-                                (new_member_name.strip(), new_member_apartment.strip(), new_member_cash_enable, new_member_zelle_enable)
+                                "INSERT INTO committee_members (name, apartment, email, recieve_cash_enable, zelle_enable) VALUES (%s, %s, %s, %s, %s)",
+                                (new_member_name.strip(), new_member_apartment.strip(), new_member_email.strip() if new_member_email else None, new_member_cash_enable, new_member_zelle_enable)
                             )
                             conn.commit()
                             st.success("✅ Committee member added!")
@@ -776,13 +784,34 @@ def admin_tab(menu="Sponsorship Items"):
                             st.error(f"❌ Failed to add committee member: {e}")
 
         with member_tabs[0]:
-            display_members = df_members.rename(columns={
-                "name": "Name",
-                "apartment": "Apartment Number",
-                "recieve_cash_enable": "Cash Collection Enabled",
-                "zelle_enable": "Zelle Collection Enabled"
-            })
-            display_members = display_members.drop(columns=["id"])
+            # Load and display members including email if it exists
+            try:
+                cursor.execute("SELECT * FROM committee_members LIMIT 0")
+                member_cols = [column[0].lower() for column in cursor.description]
+                if "email" in member_cols:
+                    display_members = df_members.rename(columns={
+                        "name": "Name",
+                        "apartment": "Apartment Number",
+                        "email": "Email",
+                        "recieve_cash_enable": "Cash Collection Enabled",
+                        "zelle_enable": "Zelle Collection Enabled"
+                    })
+                else:
+                    display_members = df_members.rename(columns={
+                        "name": "Name",
+                        "apartment": "Apartment Number",
+                        "recieve_cash_enable": "Cash Collection Enabled",
+                        "zelle_enable": "Zelle Collection Enabled"
+                    })
+            except Exception:
+                display_members = df_members.rename(columns={
+                    "name": "Name",
+                    "apartment": "Apartment Number",
+                    "recieve_cash_enable": "Cash Collection Enabled",
+                    "zelle_enable": "Zelle Collection Enabled"
+                })
+            
+            display_members = display_members.drop(columns=["id"], errors="ignore")
             display_members.index = display_members.index + 1
             st.dataframe(display_members, use_container_width=True)
 
@@ -797,6 +826,8 @@ def admin_tab(menu="Sponsorship Items"):
                     st.session_state["edit_committee_member_name"] = updated_member
                     updated_row = df_members[df_members["name"] == updated_member].iloc[0]
                     st.session_state["edit_committee_member_apartment"] = str(updated_row["apartment"] or "")
+                    if "email" in df_members.columns:
+                        st.session_state["edit_committee_member_email"] = str(updated_row.get("email") or "")
                     st.session_state["edit_committee_member_cash_enable"] = bool(updated_row["recieve_cash_enable"])
                     st.session_state["edit_committee_member_zelle_enable"] = bool(updated_row["zelle_enable"])
 
@@ -805,6 +836,8 @@ def admin_tab(menu="Sponsorship Items"):
                     selected_row = df_members[df_members["name"] == selected_name].iloc[0]
                     st.session_state["edit_committee_member_name"] = selected_name
                     st.session_state["edit_committee_member_apartment"] = str(selected_row["apartment"] or "")
+                    if "email" in df_members.columns:
+                        st.session_state["edit_committee_member_email"] = str(selected_row.get("email") or "")
                     st.session_state["edit_committee_member_cash_enable"] = bool(selected_row["recieve_cash_enable"])
                     st.session_state["edit_committee_member_zelle_enable"] = bool(selected_row["zelle_enable"])
                     st.session_state["edit_committee_member_last_selection"] = selected_name
@@ -819,11 +852,14 @@ def admin_tab(menu="Sponsorship Items"):
                 if st.session_state.get("edit_committee_member_last_selection") != selected_member:
                     st.session_state["edit_committee_member_name"] = member_row["name"]
                     st.session_state["edit_committee_member_apartment"] = str(member_row["apartment"] or "")
+                    if "email" in df_members.columns:
+                        st.session_state["edit_committee_member_email"] = str(member_row.get("email") or "")
                     st.session_state["edit_committee_member_cash_enable"] = bool(member_row["recieve_cash_enable"])
                     st.session_state["edit_committee_member_zelle_enable"] = bool(member_row["zelle_enable"])
                     st.session_state["edit_committee_member_last_selection"] = selected_member
                 member_name = st.text_input("Member Name", key="edit_committee_member_name")
                 member_apartment = st.text_input("Apartment Number", key="edit_committee_member_apartment")
+                member_email = st.text_input("Email Address (for receiving reports)", key="edit_committee_member_email", placeholder="member@example.com")
                 member_cash_enable = st.checkbox("Enable for cash collection", key="edit_committee_member_cash_enable")
                 member_zelle_enable = st.checkbox("Enable for Zelle collection", key="edit_committee_member_zelle_enable")
                 if st.button("Update Committee Member"):
@@ -831,9 +867,16 @@ def admin_tab(menu="Sponsorship Items"):
                         st.warning("Member name and apartment number are required.")
                     else:
                         try:
+                            # Ensure email column exists
+                            try:
+                                cursor.execute("ALTER TABLE committee_members ADD COLUMN email TEXT")
+                                conn.commit()
+                            except Exception:
+                                pass  # Column might already exist
+                            
                             cursor.execute(
-                                "UPDATE committee_members SET name=%s, apartment=%s, recieve_cash_enable=%s, zelle_enable=%s WHERE id=%s",
-                                (member_name.strip(), member_apartment.strip(), member_cash_enable, member_zelle_enable, int(member_row["id"]))
+                                "UPDATE committee_members SET name=%s, apartment=%s, email=%s, recieve_cash_enable=%s, zelle_enable=%s WHERE id=%s",
+                                (member_name.strip(), member_apartment.strip(), member_email.strip() if member_email else None, member_cash_enable, member_zelle_enable, int(member_row["id"]))
                             )
                             conn.commit()
                             st.session_state["updated_committee_member"] = member_name.strip()
@@ -885,6 +928,73 @@ def admin_tab(menu="Sponsorship Items"):
                         conn.rollback()
                         st.error(f"❌ Failed to add notification email: {e}")
 
+            if menu == "Sync with Drive":
+                st.markdown("<h2 style='color: #6A1B9A;'>☁️ Sync Data with Google Drive</h2>", unsafe_allow_html=True)
+        
+                st.info(
+                    "📤 This will export all records (sponsors, expenses, settlements, committee members, "
+                    "sponsorship items, payments) and upload them to Google Drive.\n\n"
+                    "**Folder Structure:** ganesh_celebrations/[YEAR]/\n\n"
+                    "**Note:** Files from the same year will be automatically deleted before syncing new data."
+                )
+        
+                # Year selector
+                current_year = datetime.datetime.now().year
+                year = st.number_input("Select Year to Sync", min_value=2020, max_value=current_year, value=current_year, step=1)
+        
+                col1, col2 = st.columns(2)
+        
+                with col1:
+                    if st.button("☁️ Sync to Google Drive", use_container_width=True):
+                        from .drive_utils import sync_data_to_drive
+                
+                        with st.spinner(f"Syncing {year} data to Google Drive..."):
+                            success = sync_data_to_drive(conn, year)
+                            if success:
+                                st.balloons()
+        
+                with col2:
+                    if st.button("ℹ️ Verify Credentials", use_container_width=True):
+                        try:
+                            from .drive_utils import get_drive_service
+                            service = get_drive_service()
+                            if service:
+                                # Try to list files to verify credentials work
+                                about = service.about().get(fields='user').execute()
+                                user_email = about['user'].get('emailAddress', 'Unknown')
+                                st.success(f"✅ Connected as: {user_email}")
+                            else:
+                                st.error("❌ Failed to connect to Google Drive")
+                        except Exception as e:
+                            st.error(f"❌ Verification failed: {e}")
+        
+                st.markdown("---")
+                st.markdown("### 🔐 Setup Instructions")
+                st.markdown("""
+                1. **Create Google Service Account:**
+                   - Go to [Google Cloud Console](https://console.cloud.google.com/)
+                   - Create a new project for Ganesh Celebrations
+                   - Enable Google Drive API
+                   - Create a Service Account with Drive access
+                   - Download the JSON key file
+        
+                2. **Add to Streamlit Secrets:**
+                   - Copy the entire JSON content from the downloaded key file
+                   - In `.streamlit/secrets.toml`, add:
+                   ```
+                   google_drive_credentials = '''
+                   {
+                     "type": "service_account",
+                     "project_id": "your-project-id",
+                     ...
+                   }
+                   '''
+                   ```
+        
+                3. **Share Google Drive Folder (Optional):**
+                   - If you want to access files from your personal Google account,
+                   - Share the folder with your email address after first sync
+                """)
         with tab_list:
             st.markdown("<h3 style='color: #6A1B9A;'>📋 Notification Emails List</h3>", unsafe_allow_html=True)
             display_emails = df_emails.drop(columns=["id"])
