@@ -106,6 +106,7 @@ CREATE TABLE IF NOT EXISTS ganesh_pooja_seating (
 -- Create table for Laddu Auction Winners in PostgreSQL
 CREATE TABLE laddu_winners (
     id SERIAL PRIMARY KEY,
+    year INTEGER NOT NULL,
     laddu_number INTEGER NOT NULL,
     winner_name VARCHAR(255) NOT NULL,
     amount INTEGER NOT NULL

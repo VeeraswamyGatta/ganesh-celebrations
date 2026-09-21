@@ -158,10 +158,11 @@ TABLES = {
         """,
     },
     "laddu_winners": {
-        "columns": ["laddu_number", "winner_name", "amount"],
+        "columns": ["year", "laddu_number", "winner_name", "amount"],
         "ddl": """
             CREATE TABLE IF NOT EXISTS {schema}.laddu_winners (
                 id SERIAL PRIMARY KEY,
+                year INTEGER NOT NULL,
                 laddu_number INTEGER NOT NULL,
                 winner_name VARCHAR(255) NOT NULL,
                 amount INTEGER NOT NULL

@@ -14,11 +14,13 @@ def _create_connection():
             user=st.secrets["postgres_user"],
             password=st.secrets["postgres_password"]
         )
+        # Page reads must not leave the shared cached connection idle in a
+        # transaction while holding AccessShareLock on application tables.
+        conn.autocommit = True
         schema = st.secrets.get("postgres_schema", "ganesh_schema")
         with conn.cursor() as cur:
             cur.execute(f"SET search_path TO {schema}, public")
             cur.execute("SET TIME ZONE 'America/Chicago'")
-        conn.commit()
         return conn
     elif db_type == "snowflake":
         return snowflake.connector.connect(
