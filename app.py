@@ -836,7 +836,7 @@ if not st.session_state.user_logged_in and not st.session_state.admin_logged_in:
             if open_events
             else "Cultural Event"
             if open_cultural_event
-            else "Login"
+            else "Prasad Seva"
         )
     selected_landing_navigation = st.session_state.landing_navigation
 
@@ -845,8 +845,8 @@ if not st.session_state.user_logged_in and not st.session_state.admin_logged_in:
         with st.container(key="landing_navigation"):
             nav_cols = st.columns(4)
             nav_items = [
-                ("Login", "landing_nav_login"),
                 ("Prasad Seva", "landing_nav_prasad_seva"),
+                ("Login", "landing_nav_login"),
                 ("Cultural Event", "landing_nav_cultural_event"),
                 ("Events", "landing_nav_events"),
             ]

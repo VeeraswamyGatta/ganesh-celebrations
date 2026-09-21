@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import datetime
+import html
 import re
 import textwrap
 import pytz
@@ -193,21 +194,31 @@ def prasad_seva_tab():
     laddu_winners_option = "Laddu Auction Winners"
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT laddu_number, winner_name, amount FROM laddu_winners ORDER BY laddu_number ASC LIMIT 3")
+    cursor.execute(
+        """
+        SELECT year, laddu_number, winner_name, amount
+        FROM laddu_winners
+        ORDER BY year DESC, laddu_number ASC
+        """
+    )
     laddu_winners = [
-        {"laddu": row[0], "name": row[1], "amount": row[2]} for row in cursor.fetchall()
+        {"year": row[0], "laddu": row[1], "name": row[2], "amount": row[3]}
+        for row in cursor.fetchall()
     ]
+    # Release the read transaction so this cached connection does not hold a
+    # lock on laddu_winners while the rest of the page is being rendered.
+    conn.commit()
     is_admin = st.session_state.get("admin_logged_in", False)
     # Define tab_names for all users by default
     tab_names = [
+        laddu_winners_option,
         "Prasad Seva",
         "Stats",
-        laddu_winners_option,
     ]
     if st.session_state.get("prasad_tab") in ("Prasad Seva Stats", "Prasad Seva Summary", "Total Served by Name/Group"):
         st.session_state["prasad_tab"] = "Stats"
     if "prasad_tab" not in st.session_state or st.session_state["prasad_tab"] not in tab_names:
-        st.session_state["prasad_tab"] = "Prasad Seva"
+        st.session_state["prasad_tab"] = laddu_winners_option
     selected_tab = option_menu(
         "Prasad Seva Management",
         tab_names,
@@ -250,43 +261,128 @@ def prasad_seva_tab():
     if selected_tab == laddu_winners_option:
         st.markdown(
             """
-            <div style='max-width:520px;margin:0 auto 18px auto;background:#FFFDE7;border-radius:18px;box-shadow:0 2px 12px #FFD18033;padding:28px 18px;'>
-                <div style='font-size:1.15em;font-weight:600;color:#BF360C;text-align:center;margin-bottom:12px;'>
-                    Welcome to Ganesh Celebrations 2026! We are delighted to celebrate another year together with our wonderful community.<br>
+            <style>
+            .laddu-welcome {
+                position:relative;
+                max-width:920px;
+                margin:0 auto 1.6rem;
+                padding:2.2rem 2.5rem 2rem;
+                overflow:hidden;
+                border:1px solid #D6A84F;
+                border-radius:22px;
+                background:linear-gradient(135deg,#3B1018 0%,#641C2A 52%,#8B3A28 100%);
+                box-shadow:0 14px 32px rgba(59,16,24,.24), inset 0 1px 0 rgba(255,231,164,.35);
+                color:#FFF8E7;
+                text-align:center;
+            }
+            .laddu-welcome::before,
+            .laddu-welcome::after {
+                position:absolute;
+                color:rgba(246,202,103,.72);
+                content:"✦";
+                font-size:2.5rem;
+                line-height:1;
+            }
+            .laddu-welcome::before { top:.65rem; left:1rem; }
+            .laddu-welcome::after { right:1rem; bottom:.6rem; }
+            .laddu-welcome-kicker {
+                color:#F6CA67;
+                font-size:.76rem;
+                font-weight:900;
+                letter-spacing:.2em;
+                text-transform:uppercase;
+            }
+            .laddu-welcome-title {
+                margin:.65rem auto .75rem;
+                color:#FFF8E7;
+                font-family:Georgia,"Times New Roman",serif;
+                font-size:clamp(1.55rem,3.5vw,2.35rem);
+                font-weight:700;
+                line-height:1.12;
+            }
+            .laddu-welcome-rule {
+                width:72px;
+                height:2px;
+                margin:0 auto 1rem;
+                background:#F6CA67;
+            }
+            .laddu-welcome-copy {
+                max-width:700px;
+                margin:0 auto;
+                color:#FFECC1;
+                font-size:1rem;
+                font-weight:600;
+                line-height:1.65;
+            }
+            .laddu-welcome-note {
+                display:inline-block;
+                margin-top:1rem;
+                padding:.55rem 1rem;
+                border:1px solid rgba(246,202,103,.55);
+                border-radius:999px;
+                color:#FFF8E7;
+                font-size:.86rem;
+                font-weight:800;
+                letter-spacing:.02em;
+            }
+            @media (max-width:560px) {
+                .laddu-welcome { padding:1.7rem 1.25rem 1.5rem; border-radius:17px; }
+                .laddu-welcome-copy { font-size:.9rem; line-height:1.55; }
+                .laddu-welcome::before { left:.55rem; }
+                .laddu-welcome::after { right:.55rem; }
+            }
+            </style>
+            <section class='laddu-welcome'>
+                <div class='laddu-welcome-kicker'>Ganesh Celebrations 2026</div>
+                <div class='laddu-welcome-title'>A celebration of devotion, community, and tradition</div>
+                <div class='laddu-welcome-rule'></div>
+                <div class='laddu-welcome-copy'>
+                    Welcome to another year together with our wonderful community.<br>
                     Thank you for your continued support, enthusiasm, and teamwork in making these celebrations special.<br>
-                    Please see below the Laddu Auction winners from our memorable 2025 celebrations.<br>
-                    Congratulations to all who took part, and special wishes to the winners!
+                    Please see below the Laddu Auction winners from our memorable celebrations.
                 </div>
-            </div>
+                <div class='laddu-welcome-note'>Congratulations to all who took part, and special wishes to the winners.</div>
+            </section>
             """,
             unsafe_allow_html=True
         )
-        # Winners Table
-        # Improved table design: Rank, Winner(s), Amount (admin only)
-        table_html = """
-        <style>
-        .laddu-table { width:100%; border-collapse:separate; border-spacing:0 8px; margin-top:10px; }
-        .laddu-table th { background:#FFD180; color:#6D4C41; font-weight:700; padding:10px 16px; border-radius:8px 8px 0 0; font-size:1.08em; }
-        .laddu-table td { background:#FFFDE7; padding:10px 16px; border-radius:0 0 8px 8px; font-size:1.05em; }
-        .laddu-rank { font-weight:700; color:#D84315; text-align:center; }
-        .laddu-winner { font-weight:500; color:#4E342E; }
-        .laddu-amount { font-weight:700; color:#388E3C; text-align:right; }
-        </style>
-        <table class='laddu-table'>
-            <tr>
-                <th>Laddu</th>
-                <th>Winner(s)</th>
-"""
-        table_html += "                <th>Amount</th>\n"
-        table_html += "            </tr>\n"
+        winners_by_year = {}
         for winner in laddu_winners:
-            table_html += "            <tr>\n"
-            table_html += f"                <td class='laddu-rank'>{winner['laddu']}</td>\n"
-            table_html += f"                <td class='laddu-winner'>{winner['name']}</td>\n"
-            table_html += f"                <td class='laddu-amount'>{winner['amount']}</td>\n"
-            table_html += "            </tr>\n"
-        table_html += "        </table>\n"
-        st.markdown(table_html, unsafe_allow_html=True)
+            winners_by_year.setdefault(winner["year"], []).append(winner)
+
+        winners_html = """
+        <style>
+        .laddu-year-section { margin:1.25rem 0 1.6rem; padding:1rem; border:1px solid #EADCC6; border-radius:18px; background:linear-gradient(135deg,#FFFDF8 0%,#FFF7E8 100%); box-shadow:0 8px 20px rgba(105,76,52,.1); }
+        .laddu-year-heading { display:flex; align-items:center; gap:.75rem; margin-bottom:.8rem; color:#6A1B1B; }
+        .laddu-year-badge { display:inline-flex; align-items:center; justify-content:center; min-width:5.7rem; padding:.5rem .9rem; border-radius:999px; background:linear-gradient(135deg,#6A1B1B,#A32A43); color:#FFF8E1; font-size:1.08rem; font-weight:900; box-shadow:0 5px 12px rgba(106,27,27,.2); }
+        .laddu-year-label { color:#8B6F61; font-size:.84rem; font-weight:800; letter-spacing:.04em; }
+        .laddu-winner-list { display:flex; flex-direction:column; gap:.45rem; }
+        .laddu-winner-row { display:grid; grid-template-columns:5.5rem minmax(0,1fr) auto; align-items:center; gap:.9rem; min-height:3.6rem; padding:.65rem .85rem; border:1px solid #F0E2CC; border-left:4px solid #E65100; border-radius:11px; background:#FFFFFF; box-shadow:0 3px 8px rgba(105,76,52,.07); transition:transform .18s ease,box-shadow .18s ease; }
+        .laddu-winner-row:hover { transform:translateX(3px); box-shadow:0 6px 14px rgba(105,76,52,.13); }
+        .laddu-card-rank { color:#BF360C; font-size:.74rem; font-weight:900; letter-spacing:.04em; }
+        .laddu-card-name { color:#4E342E; font-size:1rem; font-weight:800; line-height:1.3; }
+        .laddu-card-amount { color:#2E7D32; font-size:1.2rem; font-weight:900; white-space:nowrap; }
+        @media (max-width: 560px) { .laddu-year-section { padding:.75rem; } .laddu-winner-row { grid-template-columns:4.5rem minmax(0,1fr) auto; gap:.55rem; padding:.6rem .65rem; } .laddu-card-name { font-size:.9rem; } .laddu-card-amount { font-size:1.05rem; } }
+        </style>
+        """
+        for year, year_winners in winners_by_year.items():
+            winners_html += "<section class='laddu-year-section'>"
+            winners_html += (
+                f"<div class='laddu-year-heading'><span class='laddu-year-badge'>"
+                f"{html.escape(str(year))}</span><span class='laddu-year-label'>"
+                "Laddu Auction Winners</span></div>"
+            )
+            winners_html += "<div class='laddu-winner-list'>"
+            for winner in year_winners:
+                winners_html += (
+                    "<article class='laddu-winner-row'>"
+                    f"<div class='laddu-card-rank'>Laddu {html.escape(str(winner['laddu']))}</div>"
+                    f"<div class='laddu-card-name'>{html.escape(str(winner['name']))}</div>"
+                    f"<div class='laddu-card-amount'>${int(winner['amount']):,}</div>"
+                    "</article>"
+                )
+            winners_html += "</div></section>"
+        st.markdown(winners_html, unsafe_allow_html=True)
         return
     # --- Clear Add Prasad Seva form fields if needed ---
     if st.session_state.get("clear_prasad_form", False):
