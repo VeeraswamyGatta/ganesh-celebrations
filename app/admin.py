@@ -19,6 +19,8 @@ st.markdown('''
 ''', unsafe_allow_html=True)
 import pandas as pd
 import datetime
+import io
+import zipfile
 from .db import get_connection
 from .email_utils import send_email
 from .login_audit import ensure_login_audit_table, is_user_login_tracking_enabled
@@ -189,34 +191,33 @@ def admin_tab(menu="Sponsorship Items"):
                 }
             }
         )
-        
         st.session_state.payment_menu = payment_menu
-        
-        # Display content based on selected menu item
+
         if payment_menu == "Add Payment Detail":
-            # Add Payment Detail tab
             df_pay_names = pd.read_sql("SELECT name FROM payment_details", conn)
             df_pay_names.columns = [c.lower() for c in df_pay_names.columns]
             paid_names_set = set(df_pay_names["name"].tolist())
-            unpaid_names = [n for n in sponsor_names if n not in paid_names_set]
+            unpaid_names = [name for name in sponsor_names if name not in paid_names_set]
             name_options = ["-- Select Name --"] + unpaid_names if unpaid_names else ["-- No Names Available --"]
-            if 'add_pay_selected_name' not in st.session_state or st.session_state['add_pay_selected_name'] not in name_options:
-                st.session_state['add_pay_selected_name'] = name_options[0]
+            if "add_pay_selected_name" not in st.session_state or st.session_state["add_pay_selected_name"] not in name_options:
+                st.session_state["add_pay_selected_name"] = name_options[0]
+
             def update_amount():
-                name = st.session_state['add_pay_selected_name']
-                amt = float(sponsor_df[sponsor_df["name"] == name]["total_amount"].values[0]) if name in sponsor_names else 0.0
-                st.session_state['add_pay_amount_input'] = amt
-            if 'add_pay_last_selected_name' not in st.session_state:
-                st.session_state['add_pay_last_selected_name'] = st.session_state['add_pay_selected_name']
-            if 'add_pay_amount_input' not in st.session_state:
+                selected_name = st.session_state["add_pay_selected_name"]
+                amount = float(sponsor_df[sponsor_df["name"] == selected_name]["total_amount"].values[0]) if selected_name in sponsor_names else 0.0
+                st.session_state["add_pay_amount_input"] = amount
+
+            if "add_pay_last_selected_name" not in st.session_state:
+                st.session_state["add_pay_last_selected_name"] = st.session_state["add_pay_selected_name"]
+            if "add_pay_amount_input" not in st.session_state:
                 update_amount()
             name = st.selectbox("Name", name_options, key="add_pay_selected_name")
             payment_type = "Cash"
-            if st.session_state['add_pay_last_selected_name'] != st.session_state['add_pay_selected_name']:
+            if st.session_state["add_pay_last_selected_name"] != st.session_state["add_pay_selected_name"]:
                 update_amount()
-                st.session_state['add_pay_zelle_acc_name'] = ""
-                st.session_state['add_pay_last_selected_name'] = st.session_state['add_pay_selected_name']
-            default_amount = st.session_state.get('add_pay_amount_input', 0.0)
+                st.session_state["add_pay_zelle_acc_name"] = ""
+                st.session_state["add_pay_last_selected_name"] = st.session_state["add_pay_selected_name"]
+            default_amount = st.session_state.get("add_pay_amount_input", 0.0)
             import pytz
             with st.form("add_payment_detail_form"):
                 col1, col2 = st.columns(2)
@@ -241,10 +242,9 @@ def admin_tab(menu="Sponsorship Items"):
                         st.warning("Please select the committee member who received the payment.")
                     else:
                         try:
-                            tz = pytz.timezone('America/Chicago')
+                            tz = pytz.timezone("America/Chicago")
                             dt_naive = datetime.datetime.combine(date, datetime.time.min)
-                            dt_cst = tz.localize(dt_naive)
-                            date_cst = dt_cst.date()
+                            date_cst = tz.localize(dt_naive).date()
                             payment_columns = set(pd.read_sql("SELECT * FROM payment_details LIMIT 0", conn).columns.str.lower())
                             if "recieved_zelle_acc_name" in payment_columns:
                                 cursor.execute(
@@ -455,6 +455,203 @@ def admin_tab(menu="Sponsorship Items"):
                         conn.rollback()
                         st.error(f"❌ Failed to add item: {e}")
 
+    if menu == "Email Event Details":
+        st.info("Send event data and stored receipts to every address enabled under Manage Notification Emails.")
+
+        cursor.execute("SELECT email FROM notification_emails WHERE email IS NOT NULL AND email != '' ORDER BY email")
+        notification_addresses = [row[0] for row in cursor.fetchall()]
+        recipient_names = {}
+        try:
+            cursor.execute("SELECT name, email FROM committee_members WHERE email IS NOT NULL AND email != ''")
+            recipient_names.update({email: name for name, email in cursor.fetchall()})
+        except Exception:
+            pass
+        try:
+            cursor.execute("SELECT name, email FROM sponsors WHERE email IS NOT NULL AND email != ''")
+            for name, email in cursor.fetchall():
+                recipient_names.setdefault(email, name)
+        except Exception:
+            pass
+
+        event_tables = [
+            "sponsors",
+            "expenses",
+            "settlements",
+            "payment_details",
+            "committee_members",
+            "sponsorship_items",
+            "events",
+            "prasad_seva",
+            "ganesh_pooja_seating",
+            "laddu_winners",
+        ]
+        try:
+            cursor.execute("SELECT COUNT(*) FROM expenses WHERE receipt_blob IS NOT NULL")
+            receipt_count = cursor.fetchone()[0] or 0
+        except Exception:
+            receipt_count = 0
+        content_labels = {table_name: table_name.replace("_", " ").title() for table_name in event_tables}
+        if receipt_count:
+            content_labels["expense_receipts"] = f"Expense Receipts ({receipt_count})"
+        content_options = list(content_labels)
+        st.markdown("**Content to send**")
+        content_select_col, content_clear_col = st.columns(2)
+        with content_select_col:
+            if st.button("☑️ Select All Content", use_container_width=True, key="select_all_event_content"):
+                st.session_state["event_email_content"] = content_options
+                st.rerun()
+        with content_clear_col:
+            if st.button("☐ Clear All Content", use_container_width=True, key="clear_all_event_content"):
+                st.session_state["event_email_content"] = []
+                st.rerun()
+        if "event_email_content" not in st.session_state:
+            st.session_state["event_email_content"] = content_options.copy()
+        selected_content = st.multiselect(
+            "Select content",
+            options=content_options,
+            default=content_options,
+            format_func=lambda item: content_labels[item],
+            key="event_email_content",
+        )
+
+        if notification_addresses:
+            recipient_labels = {
+                email: f"{recipient_names.get(email, 'Name not available')} | {email}"
+                for email in notification_addresses
+            }
+            st.markdown("**Recipients**")
+            recipient_table = pd.DataFrame([
+                {"Name": recipient_names.get(email, "Name not available"), "Email": email}
+                for email in notification_addresses
+            ])
+            st.dataframe(recipient_table, hide_index=True, use_container_width=True)
+            select_col, clear_col = st.columns(2)
+            with select_col:
+                if st.button("☑️ Select All", use_container_width=True, key="select_all_event_emails"):
+                    st.session_state["event_email_recipients"] = notification_addresses
+                    st.rerun()
+            with clear_col:
+                if st.button("☐ Clear All", use_container_width=True, key="clear_all_event_emails"):
+                    st.session_state["event_email_recipients"] = []
+                    st.rerun()
+            if "event_email_recipients" not in st.session_state:
+                st.session_state["event_email_recipients"] = notification_addresses.copy()
+            selected_recipients = st.multiselect(
+                "Select recipients",
+                options=notification_addresses,
+                format_func=lambda email: recipient_labels[email],
+                key="event_email_recipients",
+            )
+        else:
+            selected_recipients = []
+            st.warning("No notification emails are enabled. Add an address under Manage Notification Emails first.")
+
+        selected_content_names = [content_labels[item] for item in selected_content]
+        content_summary = ", ".join(selected_content_names) if selected_content_names else "No content selected"
+        st.markdown(
+            f"""
+            <div style="
+                margin: 1rem 0 0.75rem;
+                padding: 1rem 1.25rem;
+                border: 1px solid #d7c2e8;
+                border-left: 5px solid #6a1b9a;
+                border-radius: 12px;
+                background: linear-gradient(100deg, #fbf7ff 0%, #f1e8f8 100%);
+                box-shadow: 0 3px 12px rgba(106, 27, 154, 0.12);
+            ">
+                <div style="color:#6a1b9a; font-size:0.82rem; font-weight:800; text-transform:uppercase; letter-spacing:0.04em;">Ready to send</div>
+                <div style="color:#34203f; font-size:1.15rem; font-weight:700; margin-top:0.2rem;">{len(selected_recipients)} recipient(s) · {len(selected_content)} content item(s)</div>
+                <div style="color:#67556f; font-size:0.85rem; margin-top:0.35rem;">{content_summary}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        if st.button("📧  Send Selected Event Details", type="primary", use_container_width=True, key="send_selected_event_details"):
+            recipients = selected_recipients
+            if not recipients:
+                st.warning("Select at least one recipient before sending.")
+            else:
+                attachments = []
+                exported_tables = []
+                csv_files = []
+                image_files = []
+                for table_name in event_tables:
+                    if table_name not in selected_content:
+                        continue
+                    try:
+                        table_df = pd.read_sql(f"SELECT * FROM {table_name}", conn)
+                        binary_columns = [
+                            column for column in table_df.columns
+                            if column.lower().endswith(("_blob", "_image"))
+                        ]
+                        if binary_columns:
+                            table_df = table_df.drop(columns=binary_columns)
+                        csv_bytes = table_df.to_csv(index=False).encode("utf-8")
+                        attachments.append((
+                            csv_bytes,
+                            f"{table_name}.csv",
+                            "text/csv",
+                        ))
+                        csv_files.append((f"{table_name}.csv", csv_bytes))
+                        exported_tables.append(table_name)
+                    except Exception:
+                        continue
+
+                if "expense_receipts" in selected_content:
+                    try:
+                        cursor.execute(
+                            "SELECT id, receipt_path, receipt_blob FROM expenses "
+                            "WHERE receipt_blob IS NOT NULL ORDER BY id"
+                        )
+                        for expense_id, receipt_path, receipt_blob in cursor.fetchall():
+                            if isinstance(receipt_blob, memoryview):
+                                receipt_bytes = receipt_blob.tobytes()
+                            elif isinstance(receipt_blob, bytearray):
+                                receipt_bytes = bytes(receipt_blob)
+                            else:
+                                receipt_bytes = receipt_blob
+                            if not receipt_bytes:
+                                continue
+                            receipt_name = str(receipt_path or f"receipt_{expense_id}.bin").split("/")[-1]
+                            attachments.append((
+                                receipt_bytes,
+                                f"receipt_{expense_id}_{receipt_name}",
+                                "application/octet-stream",
+                            ))
+                            image_files.append((f"receipt_{expense_id}_{receipt_name}", receipt_bytes))
+                    except Exception:
+                        pass
+
+                if csv_files or image_files:
+                    zip_buffer = io.BytesIO()
+                    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+                        for filename, file_bytes in csv_files:
+                            archive.writestr(f"csv/{filename}", file_bytes)
+                        for filename, file_bytes in image_files:
+                            archive.writestr(f"images/{filename}", file_bytes)
+                    attachments.append((
+                        zip_buffer.getvalue(),
+                        "ganesh_event_details.zip",
+                        "application/zip",
+                    ))
+
+                if not attachments:
+                    st.warning("No event data was available to attach.")
+                else:
+                    send_email(
+                        "Ganesh Celebrations Event Details",
+                        "Attached are the current event data exports and stored expense receipts.",
+                        recipients,
+                        attachments=attachments,
+                    )
+                    st.success(
+                        f"Event details sent to {len(recipients)} recipient(s) "
+                        f"with {len(exported_tables)} CSV file(s), "
+                        f"{len(image_files)} image(s), and a combined ZIP archive."
+                    )
+
+    if menu == "Sponsorship Items":
         with tab_list:
             st.markdown("<h3 style='color: #6A1B9A;'>📋 Sponsorship Items List</h3>", unsafe_allow_html=True)
             df_display = df.copy()
@@ -928,73 +1125,6 @@ def admin_tab(menu="Sponsorship Items"):
                         conn.rollback()
                         st.error(f"❌ Failed to add notification email: {e}")
 
-            if menu == "Sync with Drive":
-                st.markdown("<h2 style='color: #6A1B9A;'>☁️ Sync Data with Google Drive</h2>", unsafe_allow_html=True)
-        
-                st.info(
-                    "📤 This will export all records (sponsors, expenses, settlements, committee members, "
-                    "sponsorship items, payments) and upload them to Google Drive.\n\n"
-                    "**Folder Structure:** ganesh_celebrations/[YEAR]/\n\n"
-                    "**Note:** Files from the same year will be automatically deleted before syncing new data."
-                )
-        
-                # Year selector
-                current_year = datetime.datetime.now().year
-                year = st.number_input("Select Year to Sync", min_value=2020, max_value=current_year, value=current_year, step=1)
-        
-                col1, col2 = st.columns(2)
-        
-                with col1:
-                    if st.button("☁️ Sync to Google Drive", use_container_width=True):
-                        from .drive_utils import sync_data_to_drive
-                
-                        with st.spinner(f"Syncing {year} data to Google Drive..."):
-                            success = sync_data_to_drive(conn, year)
-                            if success:
-                                st.balloons()
-        
-                with col2:
-                    if st.button("ℹ️ Verify Credentials", use_container_width=True):
-                        try:
-                            from .drive_utils import get_drive_service
-                            service = get_drive_service()
-                            if service:
-                                # Try to list files to verify credentials work
-                                about = service.about().get(fields='user').execute()
-                                user_email = about['user'].get('emailAddress', 'Unknown')
-                                st.success(f"✅ Connected as: {user_email}")
-                            else:
-                                st.error("❌ Failed to connect to Google Drive")
-                        except Exception as e:
-                            st.error(f"❌ Verification failed: {e}")
-        
-                st.markdown("---")
-                st.markdown("### 🔐 Setup Instructions")
-                st.markdown("""
-                1. **Create Google Service Account:**
-                   - Go to [Google Cloud Console](https://console.cloud.google.com/)
-                   - Create a new project for Ganesh Celebrations
-                   - Enable Google Drive API
-                   - Create a Service Account with Drive access
-                   - Download the JSON key file
-        
-                2. **Add to Streamlit Secrets:**
-                   - Copy the entire JSON content from the downloaded key file
-                   - In `.streamlit/secrets.toml`, add:
-                   ```
-                   google_drive_credentials = '''
-                   {
-                     "type": "service_account",
-                     "project_id": "your-project-id",
-                     ...
-                   }
-                   '''
-                   ```
-        
-                3. **Share Google Drive Folder (Optional):**
-                   - If you want to access files from your personal Google account,
-                   - Share the folder with your email address after first sync
-                """)
         with tab_list:
             st.markdown("<h3 style='color: #6A1B9A;'>📋 Notification Emails List</h3>", unsafe_allow_html=True)
             display_emails = df_emails.drop(columns=["id"])
