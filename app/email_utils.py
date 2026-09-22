@@ -31,20 +31,20 @@ from email.mime.multipart import MIMEMultipart
 import streamlit as st
 from .db import get_connection
 
-def send_email(subject, body, recipients):
+def send_email(subject, body, recipients, attachments=None):
     if not recipients:
         return
     EMAIL_SENDER = st.secrets["email_sender"]
     EMAIL_PASSWORD = st.secrets["email_password"]
     SMTP_SERVER = st.secrets["smtp_server"]
     SMTP_PORT = st.secrets["smtp_port"]
-    def send_with_attachment(recipient, subject, body, attachment=None, filename=None, mime_type=None):
+    def send_with_attachment(recipient, subject, body, attachments=None):
         msg = MIMEMultipart()
         msg['From'] = EMAIL_SENDER
         msg['To'] = recipient
         msg['Subject'] = subject
         msg.attach(MIMEText(body, 'html'))
-        if attachment and filename:
+        for attachment, filename, mime_type in attachments or []:
             from email.mime.base import MIMEBase
             from email import encoders
             part = MIMEBase('application', 'octet-stream')
@@ -61,6 +61,5 @@ def send_email(subject, body, recipients):
                 server.sendmail(EMAIL_SENDER, recipient, msg.as_string())
         except Exception as e:
             print(f"Failed to send email to {recipient}: {e}")
-    # Send to all recipients, only attach if attachment is provided (expenses)
     for recipient in recipients:
-        send_with_attachment(recipient, subject, body)
+        send_with_attachment(recipient, subject, body, attachments)

@@ -546,6 +546,106 @@ def expenses_tab():
                 ).strip(),
             )
 
+                # Send Settlements Report via Email button
+                if is_admin and st.button("📧 Send Settlements Report via Email", key="send_settlements_email"):
+                    try:
+                        # Ensure email column exists in committee_members
+                        try:
+                            cursor.execute("ALTER TABLE committee_members ADD COLUMN email TEXT")
+                            conn.commit()
+                        except Exception:
+                            pass
+                    
+                        # Get recipients from both notification_emails and committee_members
+                        cursor.execute("SELECT email FROM notification_emails WHERE email IS NOT NULL AND email != ''")
+                        recipients = [row[0] for row in cursor.fetchall()]
+                    
+                        try:
+                            cursor.execute("SELECT email FROM committee_members WHERE email IS NOT NULL AND email != ''")
+                            committee_emails = [row[0] for row in cursor.fetchall()]
+                            recipients.extend(committee_emails)
+                        except Exception:
+                            pass
+                    
+                        # Remove duplicates
+                        recipients = list(set(recipients))
+                    
+                        if not recipients:
+                            st.error("❌ No recipients found. Add emails to notification_emails or committee_members.")
+                        else:
+                            # Build HTML email body
+                            settlement_html = """
+                            <html>
+                            <body style="font-family: Arial, sans-serif; color: #333;">
+                                <h2 style="color: #6a1b1b;">📋 Settlements Report</h2>
+                                <p>Date: """ + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + """</p>
+                                <table border="1" cellpadding="10" cellspacing="0" style="width:100%; border-collapse: collapse; margin-top: 20px;">
+                                    <tr style="background-color: #6a1b1b; color: white;">
+                                        <th>Name</th>
+                                        <th>Total Spent</th>
+                                        <th>Total Received</th>
+                                        <th>Pending Amount</th>
+                                        <th>Comments</th>
+                                    </tr>
+                            """
+                        
+                            for _, row in summary_df.iterrows():
+                                settlement_html += f"""
+                                    <tr style="border-bottom: 1px solid #ddd;">
+                                        <td>{row['Name']}</td>
+                                        <td style="text-align: right;">${float(row['Total Spent Amount']):,.2f}</td>
+                                        <td style="text-align: right;">${float(row['Total Received Amount']):,.2f}</td>
+                                        <td style="text-align: right; color: {'green' if row['Pending Transaction Amount'] <= 0 else 'red'};">
+                                            ${abs(float(row['Pending Transaction Amount'])):,.2f}
+                                        </td>
+                                        <td>{row['Comments'].replace(chr(10), '<br>')}</td>
+                                    </tr>
+                                """
+                        
+                            settlement_html += """
+                                </table>
+                            </body>
+                            </html>
+                            """
+                        
+                            # Send emails to all recipients
+                            import smtplib
+                            from email.mime.multipart import MIMEMultipart
+                            from email.mime.text import MIMEText
+                        
+                            email_sender = st.secrets.get("email_sender")
+                            email_password = st.secrets.get("email_password")
+                            smtp_server = st.secrets.get("smtp_server", "smtp.gmail.com")
+                            smtp_port = st.secrets.get("smtp_port", 587)
+                        
+                            sent_count = 0
+                            failed_recipients = []
+                        
+                            for recipient in recipients:
+                                try:
+                                    msg = MIMEMultipart("alternative")
+                                    msg["Subject"] = f"Settlements Report - {datetime.now().strftime('%Y-%m-%d')}"
+                                    msg["From"] = email_sender
+                                    msg["To"] = recipient
+                                
+                                    msg.attach(MIMEText(settlement_html, "html"))
+                                
+                                    with smtplib.SMTP(smtp_server, smtp_port) as server:
+                                        server.starttls()
+                                        server.login(email_sender, email_password)
+                                        server.send_message(msg)
+                                
+                                    sent_count += 1
+                                except Exception as e:
+                                    failed_recipients.append(f"{recipient} ({str(e)})")
+                        
+                            if sent_count > 0:
+                                st.success(f"✅ Settlements report sent to {sent_count} recipient(s)!")
+                            if failed_recipients:
+                                st.warning(f"⚠️ Failed to send to: {', '.join(failed_recipients)}")
+                
+                    except Exception as e:
+                        st.error(f"❌ Failed to send settlements report: {e}")
     if is_admin and selected_section == "Expenses":
         st.markdown(
             """
@@ -919,6 +1019,121 @@ def expenses_tab():
 """,
                 unsafe_allow_html=True,
             )
+        
+        # Send Expenses Report via Email (admin only)
+        if is_admin and st.button("📧 Send Expenses Report via Email", key="send_expenses_email"):
+            # Ensure email column exists in committee_members
+            try:
+                cursor.execute("ALTER TABLE committee_members ADD COLUMN email TEXT")
+                conn.commit()
+            except Exception:
+                pass  # Column might already exist
+            
+            # Get notification email recipients
+            cursor.execute("SELECT email FROM notification_emails WHERE email IS NOT NULL AND email != ''")
+            recipients = [row[0] for row in cursor.fetchall()]
+            
+            # Add committee members emails if they have one
+            try:
+                cursor.execute("SELECT email FROM committee_members WHERE email IS NOT NULL AND email != ''")
+                committee_emails = [row[0] for row in cursor.fetchall()]
+                recipients.extend(committee_emails)
+            except Exception:
+                pass  # Email column might not exist
+            
+            recipients = list(set(recipients))  # Remove duplicates
+            
+            if not recipients:
+                st.warning("No notification emails found. Please add email addresses in Admin panel or Committee Members.")
+            else:
+                from app.email_utils import send_email, send_email_with_attachment
+                import smtplib
+                from email.mime.multipart import MIMEMultipart
+                from email.mime.text import MIMEText
+                from email.mime.base import MIMEBase
+                from email import encoders
+                
+                EMAIL_SENDER = st.secrets["email_sender"]
+                EMAIL_PASSWORD = st.secrets["email_password"]
+                SMTP_SERVER = st.secrets["smtp_server"]
+                SMTP_PORT = st.secrets["smtp_port"]
+                
+                admin_full_name = st.session_state.get("admin_full_name", "Admin")
+                
+                # Build email body with expense details
+                expense_details_html = "<table border='1' cellpadding='6' cellspacing='0' style='border-collapse:collapse; width:100%; margin-top:10px;'>"
+                expense_details_html += "<tr style='background:#6a1b1b; color:#fff; font-weight:bold;'><th>ID</th><th>Expense</th><th>Amount</th><th>Date</th><th>Spent By</th><th>Comments</th></tr>"
+                
+                for _, row in filtered_df.iterrows():
+                    spent_by = row.get("Spent By", "Unknown")
+                    comments_display = " | ".join(row["Comments"]) if isinstance(row["Comments"], list) else str(row.get("Comments", ""))
+                    expense_details_html += f"<tr><td>{row['ID']}</td><td>{escape(str(row['Category'])) + ' - ' + escape(str(row['Sub Category']))}</td><td>${float(row['Amount']):,.2f}</td><td>{row['Date']}</td><td>{escape(str(spent_by))}</td><td>{escape(comments_display)}</td></tr>"
+                
+                expense_details_html += "</table>"
+                
+                body = f"""
+                <b>Expense Report Summary</b><br><br>
+                <p>Total Expenses: <b>${float(filtered_df['Amount'].sum()):,.2f}</b></p>
+                <p>Number of Expenses: <b>{len(filtered_df)}</b></p>
+                <p>Date Generated: <b>{datetime.date.today()}</b></p>
+                <p>Generated by: <b>{admin_full_name}</b></p>
+                {expense_details_html}
+                """
+                
+                # Send email with attachments for each receipt
+                for recipient in recipients:
+                    msg = MIMEMultipart()
+                    msg['From'] = EMAIL_SENDER
+                    msg['To'] = recipient
+                    msg['Subject'] = f"Expense Report - {datetime.date.today()}"
+                    msg.attach(MIMEText(body, 'html'))
+                    
+                    # Add receipt images as attachments
+                    for _, row in filtered_df.iterrows():
+                        receipt_blob = row.get("Receipt Blob")
+                        receipt_path = row.get("ReceiptPath")
+                        
+                        if receipt_blob and isinstance(receipt_path, str) and receipt_path.strip():
+                            try:
+                                expense_id = row['ID']
+                                spent_by = row.get("Spent By", "Unknown")
+                                amount = float(row['Amount'])
+                                
+                                # Convert to bytes
+                                if isinstance(receipt_blob, memoryview):
+                                    receipt_bytes = receipt_blob.tobytes()
+                                elif isinstance(receipt_blob, bytearray):
+                                    receipt_bytes = bytes(receipt_blob)
+                                else:
+                                    receipt_bytes = receipt_blob
+                                
+                                # Create filename: id_name_amount.ext
+                                ext = receipt_path.rsplit(".", 1)[-1].lower() if "." in receipt_path else "jpg"
+                                filename = f"EXP_{expense_id:03d}_{spent_by.replace(' ', '_')}_{amount:.2f}.{ext}"
+                                
+                                # Determine MIME type
+                                mime_type = "image/jpeg" if ext in ["jpg", "jpeg"] else "image/png"
+                                
+                                # Attach image
+                                part = MIMEBase('application', 'octet-stream')
+                                part.set_payload(receipt_bytes)
+                                encoders.encode_base64(part)
+                                part.add_header('Content-Disposition', f'attachment; filename="{filename}"')
+                                part.add_header('Content-Type', mime_type)
+                                msg.attach(part)
+                            except Exception as e:
+                                st.warning(f"Could not attach receipt for expense {row['ID']}: {e}")
+                    
+                    # Send email
+                    try:
+                        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+                            server.starttls()
+                            server.login(EMAIL_SENDER, EMAIL_PASSWORD)
+                            server.sendmail(EMAIL_SENDER, recipient, msg.as_string())
+                    except Exception as e:
+                        st.error(f"Failed to send email to {recipient}: {e}")
+                
+                st.success("✅ Expense report sent to all notification emails and committee members!")
 
     # Expense Summary by Person Section (admin only)
     if is_admin and selected_section == "Expenses" and st.session_state.get("expense_inline_action") == "summary":

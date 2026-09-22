@@ -1117,8 +1117,9 @@ else:
                 "Sponsorship Items",
                 "Committee Members",
                 "Manage Notification Emails",
+                "Email Event Details",
             ]
-            admin_icons = ["pencil-square", "card-checklist", "people-fill", "envelope-paper-fill"]
+            admin_icons = ["pencil-square", "card-checklist", "people-fill", "envelope-paper-fill", "envelope-arrow-up"]
             if is_user_login_tracking_enabled():
                 admin_sections.insert(0, "User Login Activity")
                 admin_icons.insert(0, "bar-chart-fill")

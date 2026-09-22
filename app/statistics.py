@@ -246,6 +246,16 @@ def statistics_tab():
     else:
         records_view = None
     if statistics_view == "📋 Sponsored" and records_view == "Records":
+        # Build a mapping of sponsor names to their sponsorships to filter hundi/auction
+        sponsor_sponsorships = {}
+        for _, row in raw_df.iterrows():
+            name = row.get('name')
+            sponsorship = row.get('sponsorship')
+            if name and sponsorship and str(sponsorship).strip():
+                if name not in sponsor_sponsorships:
+                    sponsor_sponsorships[name] = []
+                sponsor_sponsorships[name].append(str(sponsorship))
+        
         if is_admin:
             st.metric("Total sponsors", total_sponsors)
             available_display_columns = ['Name', 'Apartment', 'Gothram', 'Amount']
@@ -261,6 +271,12 @@ def statistics_tab():
         table_df = df_display[display_columns].copy()
         table_df.index = range(1, len(table_df) + 1)
 
+        # Add Hundi/Auction filter
+        st.markdown("<div style='margin-top:0.5rem; margin-bottom:0.5rem;'><b style='color:#6a1b1b;'>Filter Sponsors by Type</b></div>", unsafe_allow_html=True)
+        filter_cols = st.columns([1, 1])
+        include_hundi = filter_cols[0].checkbox("Include Hundi", value=True, key="stats_include_hundi", help="Show sponsors who contributed to Hundi")
+        include_auction = filter_cols[1].checkbox("Include Auction", value=True, key="stats_include_auction", help="Show sponsors who contributed to Auction")
+
         with st.popover("🔍", help="Search sponsored records"):
             name_filter = st.text_input("Name", value="", key="stats_name_filter")
             if is_admin:
@@ -271,6 +287,32 @@ def statistics_tab():
                 gothram_filter = ""
 
         filtered_table = table_df.copy()
+        
+        # Apply Hundi/Auction filters
+        if not include_hundi or not include_auction:
+            filtered_names = []
+            for name in filtered_table['Name']:
+                sponsorships = sponsor_sponsorships.get(name, [])
+                has_hundi = any('hundi' in str(s).lower() for s in sponsorships)
+                has_auction = any('auction' in str(s).lower() for s in sponsorships)
+                
+                # Include if:
+                # - include_hundi and has_hundi, OR
+                # - include_auction and has_auction, OR
+                # - neither hundi nor auction
+                should_include = False
+                if has_hundi and include_hundi:
+                    should_include = True
+                elif has_auction and include_auction:
+                    should_include = True
+                elif not (has_hundi or has_auction):
+                    should_include = True
+                
+                if should_include:
+                    filtered_names.append(name)
+            
+            filtered_table = filtered_table[filtered_table['Name'].isin(filtered_names)]
+        
         if name_filter:
             filtered_table = filtered_table[filtered_table['Name'].astype(str).str.contains(name_filter, case=False, na=False)]
         if is_admin and apartment_filter:
@@ -334,6 +376,37 @@ def statistics_tab():
 """,
                 unsafe_allow_html=True,
             )
+            
+            # Send Sponsored Records Report button
+            if is_admin:
+                if st.button("Send Sponsored Records Report (CSV)", key="send_sponsored_report_btn"):
+                    audit_name = st.session_state.get('admin_full_name', '')
+                    
+                    # Build filename based on filter settings
+                    filter_desc = "all_sponsors"
+                    if not include_hundi and include_auction:
+                        filter_desc = "auction_only"
+                    elif include_hundi and not include_auction:
+                        filter_desc = "without_auction"
+                    elif not include_hundi and not include_auction:
+                        filter_desc = "without_hundi_auction"
+                    
+                    filename = f"sponsored_records_{filter_desc}_{datetime.date.today()}.csv"
+                    
+                    body = f"""
+        <b>Sponsored Records Report (CSV attached)</b><br><br>
+        Total records: {len(filtered_table)}<br>
+        Date: {datetime.date.today()}<br>
+        Filter: {filter_desc.replace('_', ' ').title()}<br>
+        Triggered Report by: <b>{audit_name}</b><br>
+        """
+                    send_csv_email(
+                        f"Ganesh Chaturthi Sponsorship - Sponsored Records CSV Report ({filter_desc})",
+                        body,
+                        filtered_table,
+                        filename
+                    )
+                    st.success("Sponsored records report sent!")
 
     if statistics_view == "📋 Sponsored" and records_view == "Chart":
         if df_display.empty:
@@ -386,23 +459,6 @@ def statistics_tab():
                     server.sendmail(EMAIL_SENDER, recipient, msg.as_string())
             except Exception as e:
                 st.error(f"Failed to send email to {recipient}: {e}")
-
-    if is_admin:
-        if st.button("Send Sponsored Records Report (CSV)"):
-            audit_name = st.session_state.get('admin_full_name', '')
-            body = f"""
-    <b>Sponsored Records Report (CSV attached)</b><br><br>
-    Total records: {len(df)}<br>
-    Date: {datetime.date.today()}<br>
-    Triggered Report by: <b>{audit_name}</b><br>
-    """
-            send_csv_email(
-                "Ganesh Chaturthi Sponsorship - Sponsored Records CSV Report",
-                body,
-                df,
-                f"sponsored_records_{datetime.date.today()}.csv"
-            )
-            st.success("Sponsored records report sent!")
 
     # Removed Bar Chart of Sponsorships as requested
     # Removed Bar Chart of Sponsorships as requested
