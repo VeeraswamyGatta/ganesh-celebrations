@@ -39,8 +39,8 @@ def expenses_tab():
 
     # Fetch expenses data
     loading_message = (
-        "Settlement details are loading..."
-        if st.session_state.get("expenses_management_menu") == "Settlements"
+        "Cash/Zelle transfer details are loading..."
+        if st.session_state.get("expenses_management_menu") == "Expense Reimbursements"
         else "Expense details are loading..."
     )
     with st.spinner(loading_message):
@@ -61,7 +61,7 @@ def expenses_tab():
     # Determine tabs to show based on user role
     is_admin = st.session_state.get("admin_logged_in", False)
     if is_admin:
-        section_names = ["Expenses", "Settlements"]
+        section_names = ["Expenses", "Expense Reimbursements"]
     else:
         section_names = ["Expenses"]
     if st.session_state.get("expenses_management_menu") not in section_names:
@@ -109,10 +109,10 @@ def expenses_tab():
     st.session_state["expenses_section"] = selected_section
     if selected_section != "Expenses":
         st.session_state["expense_inline_action"] = None
-    if selected_section != "Settlements":
+    if selected_section != "Expense Reimbursements":
         st.session_state["show_settlement_form"] = False
     # Settlements Section (admin only)
-    if is_admin and selected_section == "Settlements":
+    if is_admin and selected_section == "Expense Reimbursements":
         st.markdown(
             """
             <style>
@@ -154,7 +154,7 @@ def expenses_tab():
             """,
             unsafe_allow_html=True,
         )
-        st.markdown("<div class='settlement-section-title'>Cash Balance Overview</div>", unsafe_allow_html=True)
+        st.markdown("<div class='settlement-section-title'>Cash/Zelle Transfer Summary</div>", unsafe_allow_html=True)
         settlement_success_message = st.session_state.pop("settlement_success_message", None)
         if settlement_success_message:
             st.success(settlement_success_message)
@@ -277,7 +277,15 @@ def expenses_tab():
                 payment_rows = cursor.fetchall()
                 cursor.execute("SELECT sent_by, COALESCE(SUM(amount),0) FROM settlements GROUP BY sent_by")
                 settlement_rows = cursor.fetchall()
+                cursor.execute("SELECT sent_by, name, amount FROM settlements ORDER BY sent_by, name, id")
+                settlement_transfer_rows = cursor.fetchall()
             settlement_map = {row[0]: float(row[1] or 0) for row in settlement_rows}
+            transfers_by_collector = {}
+            for sent_by, recipient, amount in settlement_transfer_rows:
+                if sent_by:
+                    transfers_by_collector.setdefault(sent_by, []).append(
+                        (recipient or "Unknown", float(amount or 0))
+                    )
             wallet_summary = []
             for cash_collector, received_amount in payment_rows:
                 if cash_collector and str(cash_collector).strip():
@@ -288,43 +296,52 @@ def expenses_tab():
                         "Received": total_received,
                         "Settled": total_settled,
                         "Available": total_received - total_settled,
+                        "Transfers": transfers_by_collector.get(cash_collector, []),
                     })
-            wallet_summary.sort(key=lambda item: item["Name"])
+            wallet_summary.sort(key=lambda item: (item["Available"] <= 0, item["Name"]))
             wallet_rows_html = []
             for row_number, wallet in enumerate(wallet_summary, start=1):
+                balance_class = "wallet-positive" if wallet["Available"] > 0 else "wallet-zero-negative"
+                transfer_lines = wallet["Transfers"] or [("No recorded transfers", 0)]
+                transfers_html = "".join(
+                    f"<div class='wallet-transfer-line'>{escape(str(recipient))} (${amount:,.2f})</div>"
+                    for recipient, amount in transfer_lines
+                )
                 wallet_rows_html.append(
                     f"""
-                    <tr class='wallet-summary-row'>
+                    <tr class='wallet-summary-row {balance_class}'>
                         <td class='wallet-row-number'>{row_number}</td>
-                        <td class='wallet-name'>{escape(str(wallet['Name']))}</td>
+                        <td class='wallet-name'>
+                            {escape(str(wallet['Name']))}
+                            <div class='wallet-mobile-details'>
+                                <span>Received: ${wallet['Received']:,.2f}</span>
+                                <span>Settled: ${wallet['Settled']:,.2f}</span>
+                                <span>Transfers: {transfers_html}</span>
+                            </div>
+                        </td>
                         <td class='wallet-received'>${wallet['Received']:,.2f}</td>
                         <td class='wallet-settled'>${wallet['Settled']:,.2f}</td>
-                        <td class='wallet-calculation'>
-                            <span>${wallet['Received']:,.2f}</span>
-                            <b>-</b>
-                            <span>${wallet['Settled']:,.2f}</span>
-                            <b>=</b>
-                            <strong>${wallet['Available']:,.2f}</strong>
-                        </td>
+                        <td class='wallet-calculation'><strong>${wallet['Available']:,.2f}</strong></td>
+                        <td class='wallet-transfers'>{transfers_html}</td>
                     </tr>
                     """
                 )
             total_received_all = sum(item["Received"] for item in wallet_summary)
             total_settled_all = sum(item["Settled"] for item in wallet_summary)
             total_available_all = sum(item["Available"] for item in wallet_summary)
-            st.html(
+            st.markdown(
                 textwrap.dedent(
                     f"""
                     <style>
                     .wallet-summary-table {{
                         width: 100%; margin-top: 1rem; border-collapse: separate; border-spacing: 0;
-                        min-width: 0; table-layout: fixed;
+                        height: auto; min-height: 0; min-width: 0; table-layout: fixed;
                         border: 1px solid #ead8a9; border-radius: 10px; overflow: hidden;
                         background: #fffdf8; color: #3f3028;
                         box-shadow: 0 3px 12px rgba(93, 64, 55, 0.08);
                     }}
                     .wallet-summary-table th, .wallet-summary-table td {{
-                        padding: 0.55rem 0.6rem; text-align: left; vertical-align: middle;
+                        height: auto; padding: 0.55rem 0.6rem; text-align: left; vertical-align: middle;
                         border-bottom: 1px solid #eee3cf;
                         border-right: 1px solid #f0e4cf;
                     }}
@@ -335,14 +352,17 @@ def expenses_tab():
                         letter-spacing: 0.02em;
                     }}
                     .wallet-summary-row:nth-child(even) {{ background: #fff8e8; }}
+                    .wallet-summary-row.wallet-positive {{ background: #edf8ee; }}
+                    .wallet-summary-row.wallet-zero-negative {{ background: #fff0f0; }}
                     .wallet-summary-row:hover {{ background: #fff0c2; }}
                     .wallet-summary-row:last-child td {{ border-bottom: 0; }}
                     .wallet-row-number {{ width: 2.5rem; color: #8b6b35; font-weight: 800; }}
-                    .wallet-summary-table th:nth-child(1), .wallet-summary-table td:nth-child(1) {{ width: 6%; }}
-                    .wallet-summary-table th:nth-child(2), .wallet-summary-table td:nth-child(2) {{ width: 28%; }}
-                    .wallet-summary-table th:nth-child(3), .wallet-summary-table td:nth-child(3) {{ width: 17%; }}
-                    .wallet-summary-table th:nth-child(4), .wallet-summary-table td:nth-child(4) {{ width: 17%; }}
-                    .wallet-summary-table th:nth-child(5), .wallet-summary-table td:nth-child(5) {{ width: 32%; }}
+                    .wallet-summary-table th:nth-child(1), .wallet-summary-table td:nth-child(1) {{ width: 5%; }}
+                    .wallet-summary-table th:nth-child(2), .wallet-summary-table td:nth-child(2) {{ width: 20%; }}
+                    .wallet-summary-table th:nth-child(3), .wallet-summary-table td:nth-child(3) {{ width: 14%; }}
+                    .wallet-summary-table th:nth-child(4), .wallet-summary-table td:nth-child(4) {{ width: 14%; }}
+                    .wallet-summary-table th:nth-child(5), .wallet-summary-table td:nth-child(5) {{ width: 27%; }}
+                    .wallet-summary-table th:nth-child(6), .wallet-summary-table td:nth-child(6) {{ width: 20%; }}
                     .wallet-name {{
                         color: #6a1b1b;
                         font-size: 0.9rem;
@@ -355,6 +375,9 @@ def expenses_tab():
                     .wallet-calculation {{ color: #5d4037; overflow-wrap: anywhere; }}
                     .wallet-calculation b {{ padding: 0 0.35rem; color: #8b6b35; }}
                     .wallet-calculation strong {{ color: #2e7d32; font-size: 1.02rem; }}
+                    .wallet-transfers {{ color: #5d4037; font-size: 0.78rem; line-height: 1.4; overflow-wrap: anywhere; }}
+                    .wallet-transfer-line + .wallet-transfer-line {{ margin-top: 0.2rem; }}
+                    .wallet-mobile-details {{ display: none; }}
                     .wallet-total-strip {{
                         display: flex; flex-wrap: wrap; gap: 0.7rem; margin: 0.9rem 0 1.5rem;
                     }}
@@ -364,33 +387,49 @@ def expenses_tab():
                     }}
                     .wallet-total-label {{ display: block; color: #795548; font-size: 0.75rem; font-weight: 700; }}
                     .wallet-total-value {{ display: block; margin-top: 0.15rem; font-size: 1.1rem; font-weight: 800; }}
+                    @media (max-width: 640px) {{
+                        .wallet-table-scroll {{ overflow-x: visible; width: 100%; }}
+                        .wallet-summary-table {{ min-width: 0; width: 100%; table-layout: fixed; }}
+                        .wallet-summary-table th, .wallet-summary-table td {{ padding: 0.45rem 0.5rem; }}
+                        .wallet-summary-table th:nth-child(3), .wallet-summary-table td:nth-child(3),
+                        .wallet-summary-table th:nth-child(4), .wallet-summary-table td:nth-child(4),
+                        .wallet-summary-table th:nth-child(6), .wallet-summary-table td:nth-child(6) {{ display: none; }}
+                        .wallet-summary-table th:nth-child(1), .wallet-summary-table td:nth-child(1) {{ width: 9%; }}
+                        .wallet-summary-table th:nth-child(2), .wallet-summary-table td:nth-child(2) {{ width: 61%; }}
+                        .wallet-summary-table th:nth-child(5), .wallet-summary-table td:nth-child(5) {{ width: 30%; }}
+                        .wallet-mobile-details {{ display: block; margin-top: 0.25rem; color: #795548; font-size: 0.68rem; font-weight: 600; line-height: 1.4; }}
+                        .wallet-mobile-details > span {{ display: block; }}
+                    }}
                     </style>
-                    <table class='wallet-summary-table'>
-                        <thead><tr>
-                            <th>#</th><th>Receiver</th><th>Total Received</th>
-                            <th>Total Settled</th><th>Received - Settled = Available</th>
-                        </tr></thead>
-                        <tbody>{''.join(wallet_rows_html)}</tbody>
-                    </table>
+                    <div class='wallet-table-scroll'>
+                        <table class='wallet-summary-table'>
+                            <thead><tr>
+                                <th>#</th><th>Cash/Zelle Collector</th><th>Total Received</th>
+                                <th>Total Settled</th><th>Available Bal</th><th>Transferred To (Amount)</th>
+                            </tr></thead>
+                            <tbody>{''.join(wallet_rows_html)}</tbody>
+                        </table>
+                    </div>
                     <div class='wallet-total-strip'>
                         <div class='wallet-total-card'><span class='wallet-total-label'>Total Received</span><span class='wallet-total-value' style='color:#1565c0;'>${total_received_all:,.2f}</span></div>
                         <div class='wallet-total-card'><span class='wallet-total-label'>Total Settled</span><span class='wallet-total-value' style='color:#c62828;'>${total_settled_all:,.2f}</span></div>
                         <div class='wallet-total-card'><span class='wallet-total-label'>Total Available</span><span class='wallet-total-value' style='color:#2e7d32;'>${total_available_all:,.2f}</span></div>
                     </div>
                     """
-                ).strip()
+                ).strip(),
+                unsafe_allow_html=True,
             )
-            st.markdown("<div class='settlement-section-title'>Settlement Details</div>", unsafe_allow_html=True)
-            with st.spinner("Loading settlement details..."):
+            st.markdown("<div class='settlement-section-title'>Expense Reimbursement Details</div>", unsafe_allow_html=True)
+            with st.spinner("Loading Cash/Zelle transfer details..."):
                 cursor.execute("SELECT spent_by, SUM(amount) FROM expenses WHERE status='active' GROUP BY spent_by")
                 spent_rows = cursor.fetchall()
                 spent_dict = {row[0]: row[1] for row in spent_rows}
-                cursor.execute("SELECT name, amount, comments FROM settlements ORDER BY name, id")
+                cursor.execute("SELECT name, amount, sent_by, comments FROM settlements ORDER BY name, id")
                 settlement_rows = cursor.fetchall()
             settlement_by_name = {}
-            for settlement_name, settlement_amount, settlement_comment in settlement_rows:
+            for settlement_name, settlement_amount, settlement_sent_by, settlement_comment in settlement_rows:
                 settlement_by_name.setdefault(settlement_name, []).append(
-                    (settlement_amount or 0, settlement_comment or "")
+                    (settlement_amount or 0, settlement_sent_by or "", settlement_comment or "")
                 )
             # Show all names, even if their net amount is zero or negative
             all_names = set(spent_dict.keys()) | set(settlement_by_name.keys())
@@ -398,11 +437,13 @@ def expenses_tab():
             for name in sorted(all_names):
                 total_spent = float(spent_dict.get(name, 0) or 0)
                 settlement_details = settlement_by_name.get(name, [])
-                received_amounts = [float(amount) for amount, _ in settlement_details]
+                received_amounts = [float(amount) for amount, _, _ in settlement_details]
                 total_received = sum(received_amounts)
                 received_comments = "\n".join(
-                    f"{comment.strip()} (${amount:,.2f})" if comment.strip() else f"Settlement (${amount:,.2f})"
-                    for amount, comment in settlement_details
+                    f"Transferred by {sent_by}: {comment.strip()} (${amount:,.2f})"
+                    if comment.strip()
+                    else f"Transferred by {sent_by} (${amount:,.2f})"
+                    for amount, sent_by, comment in settlement_details
                 )
                 pending_amount = total_spent - total_received
                 summary.append({
@@ -420,7 +461,12 @@ def expenses_tab():
             # Reorder columns to show Pending Transaction Amount before Comments
             summary_df = summary_df[cols]
             summary_rows_html = []
-            for row_number, row in summary_df.iterrows():
+            summary_df = summary_df.sort_values(
+                by="Pending Transaction Amount",
+                key=lambda values: values.le(0),
+                kind="stable",
+            )
+            for row_number, row in enumerate(summary_df.to_dict("records"), start=1):
                 comment_lines = str(row["Comments"] or "").splitlines() or [""]
                 received_amounts = next(
                     (item["Received Amounts"] for item in summary if item["Name"] == row["Name"]),
@@ -435,9 +481,10 @@ def expenses_tab():
                     f"<div class='settlement-comment-line'>{escape(line)}</div>"
                     for line in comment_lines
                 )
+                balance_class = "settlement-positive" if row["Pending Transaction Amount"] > 0 else "settlement-zero-negative"
                 summary_rows_html.append(
                     f"""
-                    <tr class='settlement-summary-row'>
+                    <tr class='settlement-summary-row {balance_class}'>
                         <td class='settlement-row-number'>{row_number}</td>
                         <td class='settlement-name'>{escape(str(row['Name']))}</td>
                         <td class='settlement-amount'>${float(row['Total Spent Amount']):,.2f}</td>
@@ -486,6 +533,8 @@ def expenses_tab():
                 .settlements-summary-table th:first-child {{ border-top-left-radius: 9px; }}
                 .settlements-summary-table th:last-child {{ border-top-right-radius: 9px; }}
                 .settlement-summary-row:nth-child(even) {{ background: #fff8e8; }}
+                .settlement-summary-row.settlement-positive {{ background: #edf8ee; }}
+                .settlement-summary-row.settlement-zero-negative {{ background: #fff0f0; }}
                 .settlement-summary-row:hover {{ background: #fff0c2; }}
                 .settlement-summary-row:last-child td {{ border-bottom: 0; }}
                 .settlement-row-number {{
@@ -532,11 +581,11 @@ def expenses_tab():
                         <thead>
                             <tr>
                                 <th>#</th>
-                                <th>Name</th>
-                                <th>Total<br>Spent<br>Amount</th>
-                                <th>Total<br>Received<br>Amount</th>
-                                <th>Pending<br>Transaction<br>Amount</th>
-                                <th>Comments</th>
+                                <th>Spent By</th>
+                                <th>Total<br>Spent</th>
+                                <th>Cash/Zelle<br>Reimbursed</th>
+                                <th>Balance<br>Due</th>
+                                <th>Cash/Zelle<br>Details</th>
                             </tr>
                         </thead>
                         <tbody>{''.join(summary_rows_html)}</tbody>
