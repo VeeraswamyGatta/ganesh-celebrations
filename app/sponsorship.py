@@ -5,7 +5,7 @@ import re
 import base64
 import pytz
 from html import escape
-from .db import get_connection
+from .db import get_connection, get_pandas_connectable
 from .email_utils import send_email
 from .notification_utils import get_notification_emails
 import altair as alt
@@ -67,7 +67,7 @@ def sponsorship_tab(dashboard_only=False):
     # Helper to get total approved expense amount
     def get_total_expense_amount(conn):
         try:
-            df = pd.read_sql("SELECT amount FROM expenses WHERE status = 'active'", conn)
+            df = pd.read_sql("SELECT amount FROM expenses WHERE status = 'active'", get_pandas_connectable())
             df.columns = [c.lower() for c in df.columns]
             if not df.empty:
                 return df["amount"].astype(float).sum()
@@ -392,14 +392,14 @@ def sponsorship_tab(dashboard_only=False):
     paypal_amount = 0.0
     zelle_amount = 0.0
     try:
-        paypal_df = pd.read_sql("SELECT amount FROM payment_details WHERE payment_type = 'PayPal'", conn)
+        paypal_df = pd.read_sql("SELECT amount FROM payment_details WHERE payment_type = 'PayPal'", get_pandas_connectable())
         paypal_df.columns = [c.lower() for c in paypal_df.columns]
         if not paypal_df.empty:
             paypal_amount = paypal_df["amount"].astype(float).sum()
     except Exception:
         paypal_amount = 0.0
     try:
-        cash_df = pd.read_sql("SELECT amount FROM payment_details WHERE payment_type = 'Cash'", conn)
+        cash_df = pd.read_sql("SELECT amount FROM payment_details WHERE payment_type = 'Cash'", get_pandas_connectable())
         cash_df.columns = [c.lower() for c in cash_df.columns]
         if not cash_df.empty:
             zelle_amount = cash_df["amount"].astype(float).sum()
