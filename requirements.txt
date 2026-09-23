@@ -4,6 +4,7 @@ streamlit-option-menu
 pandas
 pytz
 psycopg2-binary
+SQLAlchemy
 XlsxWriter
 requests
 beautifulsoup4

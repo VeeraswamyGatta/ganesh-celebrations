@@ -65,3 +65,31 @@ def get_connection():
         conn = _get_cached_connection()
     return conn
 
+
+@st.cache_resource(show_spinner=False)
+def _get_postgres_engine():
+    from sqlalchemy import URL, create_engine
+
+    schema = st.secrets.get("postgres_schema", "ganesh_schema")
+    url = URL.create(
+        "postgresql+psycopg2",
+        username=st.secrets["postgres_user"],
+        password=st.secrets["postgres_password"],
+        host=st.secrets["postgres_host"],
+        port=st.secrets["postgres_port"],
+        database=st.secrets["postgres_dbname"],
+    )
+    return create_engine(
+        url,
+        connect_args={
+            "options": f"-c search_path={schema},public -c timezone=America/Chicago"
+        },
+    )
+
+
+def get_pandas_connectable():
+    """Return a pandas-supported connectable for the configured database."""
+    if st.secrets.get("db_type", "postgres").lower() == "postgres":
+        return _get_postgres_engine()
+    return get_connection()
+
