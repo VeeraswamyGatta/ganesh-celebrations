@@ -546,9 +546,9 @@ def expenses_tab():
                 ).strip(),
             )
 
-                # Send Settlements Report via Email button
-                if is_admin and st.button("📧 Send Settlements Report via Email", key="send_settlements_email"):
-                    try:
+            # Send Settlements Report via Email button
+            if is_admin and st.button("📧 Send Settlements Report via Email", key="send_settlements_email"):
+                try:
                         # Ensure email column exists in committee_members
                         try:
                             cursor.execute("ALTER TABLE committee_members ADD COLUMN email TEXT")
@@ -644,8 +644,8 @@ def expenses_tab():
                             if failed_recipients:
                                 st.warning(f"⚠️ Failed to send to: {', '.join(failed_recipients)}")
                 
-                    except Exception as e:
-                        st.error(f"❌ Failed to send settlements report: {e}")
+                except Exception as e:
+                    st.error(f"❌ Failed to send settlements report: {e}")
     if is_admin and selected_section == "Expenses":
         st.markdown(
             """

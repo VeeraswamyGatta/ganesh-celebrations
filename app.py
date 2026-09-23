@@ -66,6 +66,14 @@ st.markdown("""
     div[data-testid="stVerticalBlock"].st-key-dashboard_content {
         margin-top: -1rem !important;
     }
+    @media (min-width: 641px) {
+        div.st-key-main_menu_wrapper {
+            margin-bottom: 0 !important;
+        }
+        div[class*="st-key-landing_navigation"] {
+            margin-bottom: 0 !important;
+        }
+    }
     div[class*="st-key-landing_navigation"] {
         margin-bottom: -1rem !important;
     }
