@@ -9,6 +9,7 @@ from streamlit_option_menu import option_menu
 from datetime import datetime as dt, time as dttime
 from .db import get_connection
 from .email_utils import send_email
+from .notification_utils import get_notification_emails
 
 SPONSOR_TABLE_CSS = """
 <style>
@@ -1176,8 +1177,7 @@ def prasad_seva_tab():
                         )
                         if st.session_state.get('admin_logged_in', False):
                             if st.button(f"Send Prasad Seva Details to Email ({label})"):
-                                cursor.execute("SELECT email FROM notification_emails")
-                                notification_emails = [row[0] for row in cursor.fetchall() if row[0]]
+                                notification_emails = get_notification_emails(cursor)
                                 html_table = filtered_df_tab.drop(columns=["ID", "Created By", "Apartemnt Number"], errors="ignore").to_html(index=False, border=1, justify='center')
                                 send_email(
                                     f"Prasad Seva Sponsors List ({label})",

@@ -5,6 +5,7 @@ import base64
 import textwrap
 from streamlit_option_menu import option_menu
 from .db import get_connection
+from .notification_utils import get_notification_emails
 from html import escape
 import io
 
@@ -40,7 +41,7 @@ def expenses_tab():
     # Fetch expenses data
     loading_message = (
         "Cash/Zelle transfer details are loading..."
-        if st.session_state.get("expenses_management_menu") == "Expense Reimbursements"
+        if st.session_state.get("expenses_management_menu") == "Reimbursements"
         else "Expense details are loading..."
     )
     with st.spinner(loading_message):
@@ -61,9 +62,19 @@ def expenses_tab():
     # Determine tabs to show based on user role
     is_admin = st.session_state.get("admin_logged_in", False)
     if is_admin:
-        section_names = ["Expenses", "Expense Reimbursements"]
+        can_record_pay = (
+            st.session_state.get("admin_login_role") != "admin_email"
+            or st.session_state.get("admin_cash_enabled", False)
+            or st.session_state.get("admin_zelle_enabled", False)
+        )
+        section_names = ["Payment Records", "Expenses", "Reimbursements"] if can_record_pay else ["Expenses", "Reimbursements"]
     else:
         section_names = ["Expenses"]
+    section_icons = {
+        "Payment Records": "credit-card",
+        "Expenses": "list-ul",
+        "Reimbursements": "wallet2",
+    }
     if st.session_state.get("expenses_management_menu") not in section_names:
         st.session_state.pop("expenses_management_menu", None)
     if "expenses_section" not in st.session_state or st.session_state["expenses_section"] not in section_names:
@@ -72,7 +83,7 @@ def expenses_tab():
     selected_section = option_menu(
         "",
         section_names,
-        icons=["list-ul", "wallet2"][:len(section_names)],
+        icons=[section_icons[section] for section in section_names],
         menu_icon="cash-stack",
         default_index=section_names.index(st.session_state["expenses_section"]),
         orientation="horizontal",
@@ -109,61 +120,64 @@ def expenses_tab():
     st.session_state["expenses_section"] = selected_section
     if selected_section != "Expenses":
         st.session_state["expense_inline_action"] = None
-    if selected_section != "Expense Reimbursements":
+    if selected_section != "Reimbursements":
         st.session_state["show_settlement_form"] = False
+        st.session_state["settlement_table_view"] = "Collector Balances"
+    if selected_section == "Payment Records":
+        from .admin import admin_tab
+        admin_tab(menu="Sponsorship Payment Details")
+        return
     # Settlements Section (admin only)
-    if is_admin and selected_section == "Expense Reimbursements":
+    if is_admin and selected_section == "Reimbursements":
         st.markdown(
             """
             <style>
-            .st-key-toggle_settlement_form button {
-                min-height: 2.7rem;
-                padding: 0.85rem 1.3rem;
-                border: 1px solid #ffb300;
-                border-radius: 14px;
-                background: linear-gradient(135deg, #ff8f00 0%, #ff5e00 45%, #d81b60 100%);
-                box-shadow: 0 8px 22px rgba(255, 94, 0, 0.28);
-                color: #ffffff;
-                font-size: 1rem;
-                font-weight: 800;
-                letter-spacing: 0.01em;
-                transition: transform 0.2s ease, box-shadow 0.2s ease;
-            }
-            .st-key-toggle_settlement_form button:hover {
-                background: linear-gradient(135deg, #ff8f00 0%, #ff5e00 45%, #d81b60 100%);
-                box-shadow: 0 10px 26px rgba(216, 27, 96, 0.28), 0 0 18px rgba(255, 170, 0, 0.55);
-                color: #ffffff;
-                transform: translateY(-1px) scale(1.01);
-            }
-            .st-key-toggle_settlement_form {
-                margin-top: 0.3rem;
-                margin-bottom: 1rem;
-            }
-            .settlement-section-title {
-                margin: 0.7rem 0 0.9rem;
-                padding: 0.45rem 0.75rem;
-                border-left: 4px solid #a51d3f;
-                border-bottom: 1px solid #ead8a9;
-                color: #6a1b1b;
-                font-size: 1rem;
-                font-weight: 800;
-                letter-spacing: 0.01em;
-                background: linear-gradient(90deg, #fff8e8 0%, rgba(255, 248, 232, 0) 100%);
-            }
             </style>
             """,
             unsafe_allow_html=True,
         )
-        st.markdown("<div class='settlement-section-title'>Cash/Zelle Transfer Summary</div>", unsafe_allow_html=True)
         settlement_success_message = st.session_state.pop("settlement_success_message", None)
         if settlement_success_message:
             st.success(settlement_success_message)
         show_settlement_form = st.session_state.get("show_settlement_form", False)
-        toggle_label = "Click here to show cash balance" if show_settlement_form else "Click here to add settlement"
-        if st.button(toggle_label, key="toggle_settlement_form"):
-            st.session_state["show_settlement_form"] = not show_settlement_form
-            st.rerun()
-        st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
+        settlement_table_view = st.session_state.get("settlement_table_view", "Collector Balances")
+        if settlement_table_view not in ("Collector Balances", "Reimbursement Summary"):
+            settlement_table_view = "Collector Balances"
+            st.session_state["settlement_table_view"] = settlement_table_view
+        view_heading = "New Reimbursement" if show_settlement_form else settlement_table_view
+        st.markdown(
+            f"<div class='settlement-view-heading'><div class='settlement-view-kicker'>FINANCE</div><div class='settlement-view-title'>{view_heading}</div><div class='settlement-view-copy'>Track collector balances and reimbursement activity.</div></div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            """
+            <style>
+            .settlement-view-heading { margin: 0.2rem 0 0.75rem; padding: 0.2rem 0 0.65rem; border-bottom: 1px solid #e5dccf; }
+            .settlement-view-kicker { color: #a65332; font-size: 0.64rem; font-weight: 800; }
+            .settlement-view-title { color: #315b48; font-size: 1.15rem; font-weight: 800; }
+            .settlement-view-copy { margin-top: 0.15rem; color: #706860; font-size: 0.8rem; }
+            .st-key-settlement_actions [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 0.6rem !important; }
+            .st-key-settlement_actions [data-testid="stColumn"] { min-width: 0 !important; flex: 1 1 0 !important; }
+            .st-key-settlement_actions button { min-height: 2.5rem !important; padding: 0.45rem 0.7rem !important; border: 1px solid #c89549 !important; border-radius: 8px !important; background: linear-gradient(110deg, #244f3a, #386e50) !important; color: #fff !important; font-size: 0.8rem !important; font-weight: 800 !important; white-space: nowrap !important; box-shadow: 0 3px 9px rgba(36,79,58,0.17) !important; }
+            .st-key-settlement_actions button:hover { background: linear-gradient(110deg, #1b412f, #2f6044) !important; border-color: #a87730 !important; transform: translateY(-1px); }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+        with st.container(key="settlement_actions"):
+            settlement_action_columns = st.columns(2)
+            add_button_label = "Cancel Add" if show_settlement_form else "＋ Add Reimbursement"
+            if settlement_action_columns[0].button(add_button_label, key="settlement_add_toggle", use_container_width=True):
+                st.session_state["show_settlement_form"] = not show_settlement_form
+                st.session_state["settlement_table_view"] = "Collector Balances"
+                st.rerun()
+            summary_button_label = "Collector Balances" if settlement_table_view == "Reimbursement Summary" else "Reimbursement Summary"
+            if settlement_action_columns[1].button(summary_button_label, key="settlement_view_toggle", use_container_width=True):
+                st.session_state["settlement_table_view"] = (
+                    "Collector Balances" if settlement_table_view == "Reimbursement Summary" else "Reimbursement Summary"
+                )
+                st.session_state["show_settlement_form"] = False
+                st.rerun()
 
         if show_settlement_form:
             st.markdown(
@@ -199,7 +213,7 @@ def expenses_tab():
                 }
                 </style>
                 <div class='settlement-form-header'>
-                    <p class='settlement-form-title'>Add Settlement</p>
+                    <p class='settlement-form-title'>Add Reimbursement</p>
                     <p class='settlement-form-copy'>Record a payment and keep the cash balance up to date.</p>
                 </div>
                 """,
@@ -256,7 +270,7 @@ def expenses_tab():
                 sent_by_options = ["-- No Cash Collectors Available --"]
             sent_by = st.selectbox("Sent By", sent_by_options, key="settlement_sent_by")
             comments = st.text_area("Comments", key="settlement_comments")
-            if st.button("Add Settlement", key="add_settlement_btn"):
+            if st.button("Save Reimbursement", key="add_settlement_btn"):
                 if sent_by == "-- No Cash Collectors Available --":
                     st.warning("Add a cash payment with a collector before adding a settlement.")
                 else:
@@ -266,7 +280,7 @@ def expenses_tab():
                         conn.commit()
                     st.session_state["settlement_submission_in_progress"] = False
                     st.session_state["show_settlement_form"] = False
-                    st.session_state["settlement_success_message"] = "Settlement added successfully."
+                    st.session_state["settlement_success_message"] = "Reimbursement added successfully."
                     # Clear form fields
                     # Do not clear widget keys after instantiation to avoid StreamlitAPIException
                     st.rerun()
@@ -329,8 +343,7 @@ def expenses_tab():
             total_received_all = sum(item["Received"] for item in wallet_summary)
             total_settled_all = sum(item["Settled"] for item in wallet_summary)
             total_available_all = sum(item["Available"] for item in wallet_summary)
-            st.markdown(
-                textwrap.dedent(
+            wallet_summary_html = textwrap.dedent(
                     f"""
                     <style>
                     .wallet-summary-table {{
@@ -416,10 +429,9 @@ def expenses_tab():
                         <div class='wallet-total-card'><span class='wallet-total-label'>Total Available</span><span class='wallet-total-value' style='color:#2e7d32;'>${total_available_all:,.2f}</span></div>
                     </div>
                     """
-                ).strip(),
-                unsafe_allow_html=True,
-            )
-            st.markdown("<div class='settlement-section-title'>Expense Reimbursement Details</div>", unsafe_allow_html=True)
+                ).strip()
+            if settlement_table_view == "Collector Balances":
+                st.markdown(wallet_summary_html, unsafe_allow_html=True)
             with st.spinner("Loading Cash/Zelle transfer details..."):
                 cursor.execute("SELECT spent_by, SUM(amount) FROM expenses WHERE status='active' GROUP BY spent_by")
                 spent_rows = cursor.fetchall()
@@ -494,8 +506,7 @@ def expenses_tab():
                     </tr>
                     """
                 )
-            st.html(
-                textwrap.dedent(
+            reimbursement_summary_html = textwrap.dedent(
                     f"""
                 <style>
                 .settlements-summary-table {{
@@ -592,35 +603,17 @@ def expenses_tab():
                     </table>
                 </div>
                     """
-                ).strip(),
-            )
+                ).strip()
+            if settlement_table_view == "Reimbursement Summary":
+                st.html(reimbursement_summary_html)
 
             # Send Settlements Report via Email button
-            if is_admin and st.button("📧 Send Settlements Report via Email", key="send_settlements_email"):
+            if is_admin and settlement_table_view == "Reimbursement Summary" and st.button("📧 Send Settlements Report via Email", key="send_settlements_email"):
                 try:
-                        # Ensure email column exists in committee_members
-                        try:
-                            cursor.execute("ALTER TABLE committee_members ADD COLUMN email TEXT")
-                            conn.commit()
-                        except Exception:
-                            pass
-                    
-                        # Get recipients from both notification_emails and committee_members
-                        cursor.execute("SELECT email FROM notification_emails WHERE email IS NOT NULL AND email != ''")
-                        recipients = [row[0] for row in cursor.fetchall()]
-                    
-                        try:
-                            cursor.execute("SELECT email FROM committee_members WHERE email IS NOT NULL AND email != ''")
-                            committee_emails = [row[0] for row in cursor.fetchall()]
-                            recipients.extend(committee_emails)
-                        except Exception:
-                            pass
-                    
-                        # Remove duplicates
-                        recipients = list(set(recipients))
+                        recipients = get_notification_emails(cursor)
                     
                         if not recipients:
-                            st.error("❌ No recipients found. Add emails to notification_emails or committee_members.")
+                            st.error("❌ No recipients found. Add email addresses to Committee Members.")
                         else:
                             # Build HTML email body
                             settlement_html = """
@@ -823,9 +816,7 @@ def expenses_tab():
                     else:
                         cursor.execute("INSERT INTO expenses (category, sub_category, amount, date, spent_by, comments, receipt_path, receipt_blob, status) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'active')", (category, sub_category, amount, date, spent_by, comments, receipt_path, receipt_bytes))
                     conn.commit()
-                    # Fetch notification email recipients
-                    cursor.execute("SELECT email FROM notification_emails")
-                    recipients = [row[0] for row in cursor.fetchall()]
+                    recipients = get_notification_emails(cursor)
                     # Prepare email subject and body
                     subject = f"New Expense Added: {category} - {sub_category}"
                     with open("app/html/expense/expense_added_table.html", "r") as f:
@@ -1071,29 +1062,10 @@ def expenses_tab():
         
         # Send Expenses Report via Email (admin only)
         if is_admin and st.button("📧 Send Expenses Report via Email", key="send_expenses_email"):
-            # Ensure email column exists in committee_members
-            try:
-                cursor.execute("ALTER TABLE committee_members ADD COLUMN email TEXT")
-                conn.commit()
-            except Exception:
-                pass  # Column might already exist
-            
-            # Get notification email recipients
-            cursor.execute("SELECT email FROM notification_emails WHERE email IS NOT NULL AND email != ''")
-            recipients = [row[0] for row in cursor.fetchall()]
-            
-            # Add committee members emails if they have one
-            try:
-                cursor.execute("SELECT email FROM committee_members WHERE email IS NOT NULL AND email != ''")
-                committee_emails = [row[0] for row in cursor.fetchall()]
-                recipients.extend(committee_emails)
-            except Exception:
-                pass  # Email column might not exist
-            
-            recipients = list(set(recipients))  # Remove duplicates
+            recipients = get_notification_emails(cursor)
             
             if not recipients:
-                st.warning("No notification emails found. Please add email addresses in Admin panel or Committee Members.")
+                st.warning("No committee member emails found. Add email addresses in Committee Members.")
             else:
                 from app.email_utils import send_email, send_email_with_attachment
                 import smtplib
@@ -1182,7 +1154,7 @@ def expenses_tab():
                     except Exception as e:
                         st.error(f"Failed to send email to {recipient}: {e}")
                 
-                st.success("✅ Expense report sent to all notification emails and committee members!")
+                st.success("✅ Expense report sent to committee members with email addresses!")
 
     # Expense Summary by Person Section (admin only)
     if is_admin and selected_section == "Expenses" and st.session_state.get("expense_inline_action") == "summary":
@@ -1357,8 +1329,7 @@ def expenses_tab():
                                     spent_by=entry['Spent By'],
                                     comments=entry['Comments']
                                 )
-                                cursor.execute("SELECT email FROM notification_emails")
-                                recipients = [row[0] for row in cursor.fetchall()]
+                                recipients = get_notification_emails(cursor)
                                 from app.email_utils import send_email
                                 send_email(subject, body, recipients)
                                 st.success("🗑️ Deleted and notification email sent!")

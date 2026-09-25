@@ -18,11 +18,15 @@ CREATE TABLE IF NOT EXISTS committee_members (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
     apartment TEXT NOT NULL,
+    email TEXT,
+    email_notification_enabled BOOLEAN NOT NULL DEFAULT FALSE,
     recieve_cash_enable BOOLEAN NOT NULL DEFAULT FALSE,
     zelle_enable BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 ALTER TABLE committee_members ADD COLUMN IF NOT EXISTS apartment TEXT;
+ALTER TABLE committee_members ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE committee_members ADD COLUMN IF NOT EXISTS email_notification_enabled BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE committee_members ADD COLUMN IF NOT EXISTS recieve_cash_enable BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE committee_members ADD COLUMN IF NOT EXISTS zelle_enable BOOLEAN NOT NULL DEFAULT FALSE;
 

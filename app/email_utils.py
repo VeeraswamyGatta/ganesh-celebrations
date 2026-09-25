@@ -33,7 +33,7 @@ from .db import get_connection
 
 def send_email(subject, body, recipients, attachments=None):
     if not recipients:
-        return
+        return False
     EMAIL_SENDER = st.secrets["email_sender"]
     EMAIL_PASSWORD = st.secrets["email_password"]
     SMTP_SERVER = st.secrets["smtp_server"]
@@ -59,7 +59,11 @@ def send_email(subject, body, recipients, attachments=None):
                 server.starttls()
                 server.login(EMAIL_SENDER, EMAIL_PASSWORD)
                 server.sendmail(EMAIL_SENDER, recipient, msg.as_string())
+            return True
         except Exception as e:
             print(f"Failed to send email to {recipient}: {e}")
+            return False
+    sent_to_all = True
     for recipient in recipients:
-        send_with_attachment(recipient, subject, body, attachments)
+        sent_to_all = send_with_attachment(recipient, subject, body, attachments) and sent_to_all
+    return sent_to_all
