@@ -1295,6 +1295,9 @@ else:
                         }
                         if menu_item != previous_main_navigation:
                             st.session_state.page_loading_message = loading_messages[menu_item]
+                            if previous_main_navigation == "Finance" and menu_item != "Finance":
+                                st.session_state["show_settlement_form"] = False
+                                st.session_state["settlement_table_view"] = "Collector Balances"
                         st.session_state.scroll_to_top = True
                         st.rerun()
 

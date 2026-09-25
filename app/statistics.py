@@ -75,6 +75,18 @@ st.markdown('''
     div.st-key-stats_view [data-testid="stRadio"] {
         overflow-x: auto;
     }
+    .st-key-stats_sponsor_type_filters [data-testid="stHorizontalBlock"] {
+        flex-wrap: nowrap !important;
+        gap: 0.5rem !important;
+    }
+    .st-key-stats_sponsor_type_filters [data-testid="stColumn"] {
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+        width: auto !important;
+    }
+    .st-key-stats_sponsor_type_filters [data-testid="stCheckbox"] label {
+        white-space: nowrap !important;
+    }
     @media (max-width: 640px) {
         div[data-testid="stTabs"] [data-baseweb="tab"] {
             padding: 0.5rem 0.7rem;
@@ -132,6 +144,17 @@ def statistics_tab():
                 if submitted_dt.tzinfo is not None:
                     submitted_dt = submitted_dt.tz_localize(None)
                 submission_date = submitted_dt.date()
+        classification_text = " ".join(
+            str(value).strip().lower()
+            for value in (row['name'], row['sponsorship'])
+            if pd.notna(value) and str(value).strip()
+        )
+        if 'hundi' in classification_text:
+            sponsor_type = 'Hundi'
+        elif 'auction' in classification_text:
+            sponsor_type = 'Auction'
+        else:
+            sponsor_type = 'Other'
         if has_sponsorship:
             amt, limit = item_amt_map.get(row['sponsorship'], (0, 1))
             per_item_amt = float(round(amt / limit, 2) if limit else amt)
@@ -139,7 +162,8 @@ def statistics_tab():
                 'Name': row['name'],
                 'Apartment': row['apartment'],
                 'Gothram': row['gothram'],
-                'Amount': per_item_amt
+                'Amount': per_item_amt,
+                'Sponsor Type': sponsor_type,
             })
             if submission_date:
                 daily_records.append({'Date': submission_date, 'Amount': per_item_amt})
@@ -149,13 +173,12 @@ def statistics_tab():
                 'Name': row['name'],
                 'Apartment': row['apartment'],
                 'Gothram': row['gothram'],
-                'Amount': donation_amt
+                'Amount': donation_amt,
+                'Sponsor Type': sponsor_type,
             })
             if submission_date:
                 daily_records.append({'Date': submission_date, 'Amount': donation_amt})
-    df = pd.DataFrame(records)
-    sponsor_names = raw_df['name'].dropna().astype(str).str.strip()
-    total_sponsors = sponsor_names[sponsor_names != ''].nunique()
+    df = pd.DataFrame(records, columns=['Name', 'Apartment', 'Gothram', 'Amount', 'Sponsor Type'])
     aggregation = {'Amount': 'sum'}
     if is_admin:
         aggregation.update({'Apartment': 'first', 'Gothram': 'first'})
@@ -247,18 +270,7 @@ def statistics_tab():
     else:
         records_view = None
     if statistics_view == "📋 Sponsored" and records_view == "Records":
-        # Build a mapping of sponsor names to their sponsorships to filter hundi/auction
-        sponsor_sponsorships = {}
-        for _, row in raw_df.iterrows():
-            name = row.get('name')
-            sponsorship = row.get('sponsorship')
-            if name and sponsorship and str(sponsorship).strip():
-                if name not in sponsor_sponsorships:
-                    sponsor_sponsorships[name] = []
-                sponsor_sponsorships[name].append(str(sponsorship))
-        
         if is_admin:
-            st.metric("Total sponsors", total_sponsors)
             available_display_columns = ['Name', 'Apartment', 'Gothram', 'Amount']
             selected_display_columns = st.multiselect(
                 "Columns to display",
@@ -269,14 +281,13 @@ def statistics_tab():
             display_columns = selected_display_columns
         else:
             display_columns = ['Name', 'Amount']
-        table_df = df_display[display_columns].copy()
-        table_df.index = range(1, len(table_df) + 1)
 
         # Add Hundi/Auction filter
         st.markdown("<div style='margin-top:0.5rem; margin-bottom:0.5rem;'><b style='color:#6a1b1b;'>Filter Sponsors by Type</b></div>", unsafe_allow_html=True)
-        filter_cols = st.columns([1, 1])
-        include_hundi = filter_cols[0].checkbox("Include Hundi", value=True, key="stats_include_hundi", help="Show sponsors who contributed to Hundi")
-        include_auction = filter_cols[1].checkbox("Include Auction", value=True, key="stats_include_auction", help="Show sponsors who contributed to Auction")
+        with st.container(key="stats_sponsor_type_filters"):
+            filter_cols = st.columns([1, 1], gap="small")
+            include_hundi = filter_cols[0].checkbox("Include Hundi", value=True, key="stats_include_hundi", help="Show sponsors who contributed to Hundi")
+            include_auction = filter_cols[1].checkbox("Include Auction", value=True, key="stats_include_auction", help="Show sponsors who contributed to Auction")
 
         with st.popover("🔍", help="Search sponsored records"):
             name_filter = st.text_input("Name", value="", key="stats_name_filter")
@@ -287,32 +298,13 @@ def statistics_tab():
                 apartment_filter = ""
                 gothram_filter = ""
 
-        filtered_table = table_df.copy()
-        
-        # Apply Hundi/Auction filters
-        if not include_hundi or not include_auction:
-            filtered_names = []
-            for name in filtered_table['Name']:
-                sponsorships = sponsor_sponsorships.get(name, [])
-                has_hundi = any('hundi' in str(s).lower() for s in sponsorships)
-                has_auction = any('auction' in str(s).lower() for s in sponsorships)
-                
-                # Include if:
-                # - include_hundi and has_hundi, OR
-                # - include_auction and has_auction, OR
-                # - neither hundi nor auction
-                should_include = False
-                if has_hundi and include_hundi:
-                    should_include = True
-                elif has_auction and include_auction:
-                    should_include = True
-                elif not (has_hundi or has_auction):
-                    should_include = True
-                
-                if should_include:
-                    filtered_names.append(name)
-            
-            filtered_table = filtered_table[filtered_table['Name'].isin(filtered_names)]
+        filtered_records = df.copy()
+        if not include_hundi:
+            filtered_records = filtered_records[filtered_records['Sponsor Type'] != 'Hundi']
+        if not include_auction:
+            filtered_records = filtered_records[filtered_records['Sponsor Type'] != 'Auction']
+        filtered_table = filtered_records.groupby('Name', as_index=False, sort=True).agg(aggregation)
+        filtered_table['Amount'] = filtered_table['Amount'].astype(float).round(2)
         
         if name_filter:
             filtered_table = filtered_table[filtered_table['Name'].astype(str).str.contains(name_filter, case=False, na=False)]
@@ -321,6 +313,11 @@ def statistics_tab():
         if is_admin and gothram_filter:
             filtered_table = filtered_table[filtered_table['Gothram'].astype(str).str.contains(gothram_filter, case=False, na=False)]
 
+        if is_admin:
+            sponsor_count = filtered_table['Name'].dropna().astype(str).str.strip()
+            st.metric("Total sponsors", sponsor_count[sponsor_count != ''].nunique())
+
+        filtered_table = filtered_table[display_columns].copy()
         filtered_table = filtered_table.reset_index(drop=True)
         filtered_table.index = range(1, len(filtered_table) + 1)
         if is_admin:
