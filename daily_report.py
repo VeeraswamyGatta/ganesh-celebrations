@@ -25,8 +25,18 @@ def get_connection():
 
 def get_notification_emails(conn):
     with conn.cursor() as cursor:
-        cursor.execute("SELECT email FROM notification_emails")
-        return [row[0] for row in cursor.fetchall()]
+        cursor.execute("ALTER TABLE committee_members ADD COLUMN IF NOT EXISTS email TEXT")
+        cursor.execute(
+            "ALTER TABLE committee_members ADD COLUMN IF NOT EXISTS "
+            "email_notification_enabled BOOLEAN NOT NULL DEFAULT FALSE"
+        )
+        cursor.execute("ALTER TABLE committee_members ALTER COLUMN email_notification_enabled SET DEFAULT FALSE")
+        cursor.execute(
+            "SELECT email FROM committee_members "
+            "WHERE email IS NOT NULL AND email != '' "
+            "AND email_notification_enabled = TRUE ORDER BY email"
+        )
+        return list(dict.fromkeys(row[0].strip() for row in cursor.fetchall() if row[0] and row[0].strip()))
 
 def send_email(subject, body, recipients):
     for recipient in recipients:

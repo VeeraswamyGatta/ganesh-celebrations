@@ -1,5 +1,6 @@
 import streamlit as st
 from io import BytesIO
+from .notification_utils import get_notification_emails
 
 # Custom button styles for statistics section
 st.markdown('''
@@ -422,8 +423,7 @@ def statistics_tab():
             st.altair_chart(chart, use_container_width=True)
     def send_csv_email(subject, body, df_csv, filename):
         import io
-        cursor.execute("SELECT email FROM notification_emails WHERE email IS NOT NULL AND email != ''")
-        recipients = list({row[0].strip() for row in cursor.fetchall() if row[0]})
+        recipients = get_notification_emails(cursor)
         if not recipients:
             st.warning("No notification emails found.")
             return
