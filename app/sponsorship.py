@@ -5,7 +5,7 @@ import re
 import base64
 import pytz
 from html import escape
-from .db import get_connection, get_pandas_connectable
+from .db import get_connection
 from .email_utils import send_email
 from .notification_utils import get_notification_emails
 import altair as alt
@@ -66,14 +66,12 @@ def get_sponsorship_item_image(item_name, image_blob=None, image_filename=None):
 def sponsorship_tab(dashboard_only=False):
     # Helper to get total approved expense amount
     def get_total_expense_amount(conn):
+        cursor = conn.cursor()
         try:
-            df = pd.read_sql("SELECT amount FROM expenses WHERE status = 'active'", get_pandas_connectable())
-            df.columns = [c.lower() for c in df.columns]
-            if not df.empty:
-                return df["amount"].astype(float).sum()
-        except Exception:
-            pass
-        return 0.0
+            cursor.execute("SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE status = 'active'")
+            return float(cursor.fetchone()[0] or 0)
+        finally:
+            cursor.close()
     st.session_state['active_tab'] = 'Sponsorship'
     conn = get_connection()
     cursor = conn.cursor()
@@ -388,24 +386,15 @@ def sponsorship_tab(dashboard_only=False):
     )
 
     # --- Combined PayPal + Cash Total ---
-    # Get PayPal and Cash totals from payment_details table
-    paypal_amount = 0.0
-    zelle_amount = 0.0
-    try:
-        paypal_df = pd.read_sql("SELECT amount FROM payment_details WHERE payment_type = 'PayPal'", get_pandas_connectable())
-        paypal_df.columns = [c.lower() for c in paypal_df.columns]
-        if not paypal_df.empty:
-            paypal_amount = paypal_df["amount"].astype(float).sum()
-    except Exception:
-        paypal_amount = 0.0
-    try:
-        cash_df = pd.read_sql("SELECT amount FROM payment_details WHERE payment_type = 'Cash'", get_pandas_connectable())
-        cash_df.columns = [c.lower() for c in cash_df.columns]
-        if not cash_df.empty:
-            zelle_amount = cash_df["amount"].astype(float).sum()
-    except Exception:
-        zelle_amount = 0.0
-    combined_total = paypal_amount + zelle_amount
+    cursor.execute(
+        "SELECT payment_type, COALESCE(SUM(amount), 0) "
+        "FROM payment_details WHERE payment_type IN ('PayPal', 'Cash') "
+        "GROUP BY payment_type"
+    )
+    received_by_type = {payment_type: float(amount or 0) for payment_type, amount in cursor.fetchall()}
+    paypal_amount = received_by_type.get("PayPal", 0.0)
+    cash_amount = received_by_type.get("Cash", 0.0)
+    combined_total = paypal_amount + cash_amount
 
     
     # --- High-level statistics ---

@@ -20,10 +20,12 @@ st.markdown('''
 import pandas as pd
 import datetime
 import io
+import re
 import zipfile
 from .db import get_connection
 from .email_utils import send_email
 from .login_audit import ensure_login_audit_table, is_user_login_tracking_enabled
+from .notification_utils import get_notification_emails
 
 
 def ensure_sponsorship_item_image_columns(cursor):
@@ -31,8 +33,9 @@ def ensure_sponsorship_item_image_columns(cursor):
     cursor.execute(f"ALTER TABLE sponsorship_items ADD COLUMN IF NOT EXISTS image_blob {blob_type}")
     cursor.execute("ALTER TABLE sponsorship_items ADD COLUMN IF NOT EXISTS image_filename TEXT")
 
+
 def admin_tab(menu="Sponsorship Items"):
-    st.session_state['active_tab'] = 'Admin'
+    st.session_state['active_tab'] = 'Expenses' if menu == "Sponsorship Payment Details" else 'Admin'
     conn = get_connection()
     cursor = conn.cursor()
     if menu == "User Login Activity":
@@ -102,7 +105,7 @@ def admin_tab(menu="Sponsorship Items"):
         st.dataframe(audit_df, use_container_width=True)
         return
 
-    # Always show Payment Details by default and display its tabs first
+    # Show payment records with Received as the default view.
     if menu == "Sponsorship Payment Details" or menu is None:
         from streamlit_option_menu import option_menu
         
@@ -137,61 +140,82 @@ def admin_tab(menu="Sponsorship Items"):
         sponsor_df = get_sponsor_df()
         sponsor_names = sorted(sponsor_df["name"].tolist())
         
-        # Initialize payment menu state
-        if "payment_menu" not in st.session_state:
-            st.session_state.payment_menu = "Add Payment Detail"
-        
-        # Create horizontal menu bar using option_menu
-        payment_menu = option_menu(
-            "Payment Management",
-            ["Add Payment Detail", "Received", "Not Received", "Mismatch Records", "Delete Payment Detail"],
-            icons=["plus-circle", "check-circle", "x-circle", "exclamation-triangle", "trash"],
-            menu_icon="credit-card",
-            default_index=0 if st.session_state.payment_menu == "Add Payment Detail" else (
-                1 if st.session_state.payment_menu == "Received" else (
-                2 if st.session_state.payment_menu == "Not Received" else (
-                3 if st.session_state.payment_menu == "Mismatch Records" else 4
-            ))),
-            orientation="horizontal",
-            key="payment_management_menu",
-            styles={
-                "container": {
-                    "padding": "0.5rem 0.75rem",
-                    "background": "linear-gradient(135deg, #ffffff 0%, #fffbf0 100%)",
-                    "border": "1.5px solid #e4ddd7",
-                    "border-radius": "16px",
-                    "box-shadow": "0 4px 16px rgba(80, 38, 28, 0.1)",
-                    "margin-bottom": "1.4rem",
-                },
-                "icon": {
-                    "color": "#8b1737",
-                    "font-size": "1rem"
-                },
-                "nav-link": {
-                    "font-size": "0.85rem",
-                    "font-weight": "600",
-                    "text-align": "center",
-                    "margin": "0 4px",
-                    "padding": "0.55rem 0.85rem",
-                    "border-radius": "12px",
-                    "color": "#5d4037",
-                    "--hover-color": "#f5efe6"
-                },
-                "nav-link-selected": {
-                    "background": "linear-gradient(135deg, #6a1b1b 0%, #8b1737 100%)",
-                    "color": "#ffffff",
-                    "font-weight": "700",
-                    "box-shadow": "0 4px 12px rgba(106, 27, 27, 0.3)"
-                },
-                "menu-title": {
-                    "color": "#5d4037",
-                    "font-weight": "800",
-                    "font-size": "0.95rem",
-                    "margin-right": "1rem"
+        payment_action_key = "payment_action"
+        if st.session_state.get(payment_action_key) not in (None, "add", "not_received", "delete"):
+            st.session_state[payment_action_key] = None
+        payment_notice = st.session_state.pop("payment_notice", None)
+        if payment_notice:
+            st.success(payment_notice)
+        st.markdown(
+            """
+            <style>
+            .st-key-payment_inline_actions [data-testid="stHorizontalBlock"] {
+                flex-wrap: nowrap !important;
+                gap: 0.45rem !important;
+            }
+            .st-key-payment_inline_actions [data-testid="stColumn"] {
+                min-width: 0 !important;
+                flex: 1 1 0 !important;
+            }
+            .st-key-payment_inline_actions button {
+                min-height: 2.4rem !important;
+                padding: 0.4rem 0.35rem !important;
+                border: 1px solid #d8b15a !important;
+                border-radius: 9px !important;
+                background: #ffffff !important;
+                color: #6a1b1b !important;
+                font-size: 0.76rem !important;
+                font-weight: 800 !important;
+                white-space: nowrap !important;
+                box-shadow: 0 2px 6px rgba(106, 27, 27, 0.1) !important;
+            }
+            .st-key-payment_inline_actions button:hover {
+                border-color: #8b1737 !important;
+                background: #fff8e1 !important;
+                transform: translateY(-1px);
+            }
+            @media (max-width: 640px) {
+                .st-key-payment_inline_actions [data-testid="stHorizontalBlock"] {
+                    flex-wrap: nowrap !important;
+                }
+                .st-key-payment_inline_actions button {
+                    padding: 0.35rem 0.2rem !important;
+                    font-size: 0.66rem !important;
                 }
             }
+            </style>
+            """,
+            unsafe_allow_html=True,
         )
-        st.session_state.payment_menu = payment_menu
+        with st.container(key="payment_inline_actions"):
+            payment_action_columns = st.columns(3)
+            if payment_action_columns[0].button("➕ Add", key="payment_inline_add", use_container_width=True):
+                if st.session_state.get(payment_action_key) == "add":
+                    st.session_state[payment_action_key] = None
+                    for key in (
+                        "add_pay_amount_input",
+                        "add_pay_last_selected_name",
+                        "add_pay_selected_name",
+                        "add_pay_zelle_acc_name",
+                        "add_pay_date",
+                        "add_pay_comments",
+                    ):
+                        st.session_state.pop(key, None)
+                else:
+                    st.session_state[payment_action_key] = "add"
+                st.rerun()
+            if payment_action_columns[1].button("Not Received", key="payment_inline_not_received", use_container_width=True):
+                st.session_state[payment_action_key] = "not_received"
+                st.rerun()
+            if payment_action_columns[2].button("🗑️ Delete", key="payment_inline_delete", use_container_width=True):
+                st.session_state[payment_action_key] = "delete"
+                st.rerun()
+
+        payment_menu = {
+            "add": "Add Payment Detail",
+            "not_received": "Not Received",
+            "delete": "Delete Payment Detail",
+        }.get(st.session_state.get(payment_action_key), "Received")
 
         if payment_menu == "Add Payment Detail":
             df_pay_names = pd.read_sql("SELECT name FROM payment_details", conn)
@@ -226,13 +250,17 @@ def admin_tab(menu="Sponsorship Items"):
                     amount = st.number_input("Amount (editable)", min_value=0.0, value=default_amount, step=1.0, format="%.2f", key="add_pay_amount_input")
                 with col2:
                     date = st.date_input("Date", key="add_pay_date")
-                    try:
-                        cursor.execute("SELECT name, apartment FROM committee_members WHERE recieve_cash_enable = TRUE OR zelle_enable = TRUE ORDER BY name")
-                        member_names = [row[0] for row in cursor.fetchall() if row[0]]
-                    except Exception:
-                        member_names = []
-                    cash_collector_options = ["-- Select Received By --"] + member_names
-                    recieved_zelle_acc_name = st.selectbox("Received By", cash_collector_options, key="add_pay_zelle_acc_name")
+                    if st.session_state.get("admin_login_role") == "admin_email":
+                        recieved_zelle_acc_name = st.session_state.get("admin_committee_member_name", "")
+                        st.write(f"Cash/Zelle collected by: **{recieved_zelle_acc_name}**")
+                    else:
+                        try:
+                            cursor.execute("SELECT name, apartment FROM committee_members WHERE recieve_cash_enable = TRUE OR zelle_enable = TRUE ORDER BY name")
+                            member_names = [row[0] for row in cursor.fetchall() if row[0]]
+                        except Exception:
+                            member_names = []
+                        cash_collector_options = ["-- Select Received By --"] + member_names
+                        recieved_zelle_acc_name = st.selectbox("Received By", cash_collector_options, key="add_pay_zelle_acc_name")
                     comments = st.text_input("Comments", key="add_pay_comments")
                 submit = st.form_submit_button("Add Payment Detail")
                 if submit:
@@ -257,7 +285,12 @@ def admin_tab(menu="Sponsorship Items"):
                                     (name, amount, date_cst, comments, payment_type)
                                 )
                             conn.commit()
-                            st.success("✅ Payment detail added!")
+                            st.session_state[payment_action_key] = None
+                            st.session_state["payment_notice"] = "Payment detail added."
+                            st.session_state.pop("add_pay_amount_input", None)
+                            st.session_state.pop("add_pay_last_selected_name", None)
+                            st.session_state.pop("add_pay_selected_name", None)
+                            st.rerun()
                         except Exception as e:
                             conn.rollback()
                             st.error(f"❌ Failed to add payment detail: {e}")
@@ -288,33 +321,26 @@ def admin_tab(menu="Sponsorship Items"):
                     "amount": "Amount",
                     "date": "Date",
                     "payment_type": "Payment Type",
-                    "recieved_zelle_acc_name": "Cash Received By",
+                    "recieved_zelle_acc_name": "Cash/Zelle Received By",
                     "comments": "Comments"
                 })
                 display_df.index = display_df.index + 1
-                table_tab, chart_tab = st.tabs(["Payments Table", "Received By"])
-                with table_tab:
-                    with download_col:
-                        st.download_button("⬇️", data=display_df.to_csv(index=False), file_name="received_payments.csv", mime="text/csv", key="download_received_payments", help="Download received payments")
-                    st.dataframe(display_df, use_container_width=True)
-                    st.markdown(f"<div style='text-align:right; font-size:1.1em; margin-top:0.5em;'><b>Total Amount:</b> <span style='color:#6A1B9A;'>${total_amount:,.2f}</span></div>", unsafe_allow_html=True)
-                with chart_tab:
-                    if "recieved_zelle_acc_name" in filtered_df.columns:
-                        chart_df = filtered_df.copy()
-                        chart_df["recieved_zelle_acc_name"] = (
-                            chart_df["recieved_zelle_acc_name"]
-                            .fillna("Not specified")
-                            .astype(str)
-                            .str.strip()
-                            .replace("", "Not specified")
-                        )
-                        chart_data = chart_df.groupby("recieved_zelle_acc_name")["amount"].sum().sort_values(ascending=False)
-                        st.caption(f"Total received: ${chart_data.sum():,.2f}")
-                        st.bar_chart(chart_data.rename("Total Amount"))
-                        receiver_summary = chart_data.rename_axis("Received By").rename("Total Amount").reset_index()
-                        st.dataframe(receiver_summary, hide_index=True, use_container_width=True)
-                    else:
-                        st.info("Receiver details are not available in the payment table.")
+                with download_col:
+                    st.download_button("⬇️", data=display_df.to_csv(index=False), file_name="received_payments.csv", mime="text/csv", key="download_received_payments", help="Download received payments")
+                st.dataframe(display_df, use_container_width=True)
+                st.markdown(f"<div style='text-align:right; font-size:1.1em; margin-top:0.5em;'><b>Total Amount:</b> <span style='color:#6A1B9A;'>${total_amount:,.2f}</span></div>", unsafe_allow_html=True)
+                if "recieved_zelle_acc_name" in filtered_df.columns:
+                    chart_df = filtered_df.copy()
+                    chart_df["recieved_zelle_acc_name"] = (
+                        chart_df["recieved_zelle_acc_name"]
+                        .fillna("Not specified")
+                        .astype(str)
+                        .str.strip()
+                        .replace("", "Not specified")
+                    )
+                    chart_data = chart_df.groupby("recieved_zelle_acc_name")["amount"].sum().sort_values(ascending=False)
+                    st.caption(f"Total received by collector: ${chart_data.sum():,.2f}")
+                    st.bar_chart(chart_data.rename("Total Amount"))
             else:
                 st.info("No payment details found.")
 
@@ -324,51 +350,61 @@ def admin_tab(menu="Sponsorship Items"):
             paid_names = set(df_pay["name"].tolist())
             not_received_df = sponsor_df[~sponsor_df["name"].isin(paid_names)][
                 ["name", "total_amount", "apartment", "mobile", "email"]
-            ]
-            not_received_df = not_received_df.rename(columns={
+            ].rename(columns={
                 "name": "Name",
                 "total_amount": "Amount",
-                "apartment": "Apartment Number",
+                "apartment": "Apartment",
                 "mobile": "Mobile",
                 "email": "Email",
-            })
-            not_received_df = not_received_df.sort_values(by=["Name"]).reset_index(drop=True)
-            not_received_df.index = not_received_df.index + 1
-            if 'id' in not_received_df.columns:
-                not_received_df = not_received_df.drop(columns=["id"])
-            _, search_col, download_col = st.columns([6, 2.5, 1])
-            with search_col:
-                not_received_search = st.text_input("🔍 Search", value="", key="not_received_search", label_visibility="collapsed", placeholder="Search unpaid sponsors")
-            filtered_not_received_df = not_received_df.copy()
-            if not_received_search:
-                matches = filtered_not_received_df.astype(str).apply(
-                    lambda column: column.str.contains(not_received_search, case=False, na=False, regex=False)
+            }).sort_values(by="Name").reset_index(drop=True)
+            if sponsor_df.empty:
+                st.info("No sponsor records are available yet.")
+            elif not_received_df.empty:
+                received_total = float(sponsor_df["total_amount"].sum())
+                st.markdown(
+                    f"""
+                    <div style="display:flex;align-items:center;gap:1rem;margin:0.5rem 0 1rem;padding:1.1rem 1.25rem;border:1px solid #a9c9a9;border-left:6px solid #2e7d50;border-radius:10px;background:linear-gradient(110deg,#f0f8ef 0%,#fff8e8 100%);box-shadow:0 5px 16px rgba(38,91,57,0.12);">
+                        <div style="display:flex;align-items:center;justify-content:center;flex:0 0 2.5rem;height:2.5rem;border-radius:50%;background:#2e7d50;color:#ffffff;font-size:1.25rem;font-weight:800;">✓</div>
+                        <div>
+                            <div style="color:#245b3d;font-size:1rem;font-weight:800;">All sponsor payments are received and recorded</div>
+                            <div style="margin-top:0.25rem;color:#586b5c;font-size:0.85rem;">All {len(sponsor_df)} sponsor record(s) are accounted for · ${received_total:,.2f} recorded</div>
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
                 )
-                filtered_not_received_df = filtered_not_received_df[matches.any(axis=1)]
-            with download_col:
-                st.download_button("⬇️", data=filtered_not_received_df.to_csv(index=False), file_name="not_received_payments.csv", mime="text/csv", key="download_not_received_payments", help="Download not received payments")
-            st.dataframe(filtered_not_received_df, use_container_width=True)
-            st.markdown(f"<div style='text-align:right; font-size:1.1em; margin-top:0.5em;'><b>Total Not Received:</b> <span style='color:#6A1B9A;'>${filtered_not_received_df['Amount'].sum():,.2f}</span></div>", unsafe_allow_html=True)
-
-        elif payment_menu == "Mismatch Records":
-            df_pay = pd.read_sql("SELECT name, amount FROM payment_details", conn)
-            df_pay.columns = [c.lower() for c in df_pay.columns]
-            mismatch_rows = []
-            for _, row in df_pay.iterrows():
-                name = row["name"]
-                sent_amount = float(row["amount"])
-                sponsor_row = sponsor_df[sponsor_df["name"] == name]
-                if not sponsor_row.empty:
-                    submitted_amount = float(sponsor_row["total_amount"].values[0])
-                    if abs(sent_amount - submitted_amount) > 0.01:
-                        mismatch_rows.append({"Name": name, "Submitted Amount": submitted_amount, "Sent Amount": sent_amount})
-            if mismatch_rows:
-                mismatch_df = pd.DataFrame(mismatch_rows)
-                mismatch_df = mismatch_df.sort_values(by=["Name"]).reset_index(drop=True)
-                mismatch_df.index = mismatch_df.index + 1
-                st.dataframe(mismatch_df, use_container_width=True)
             else:
-                st.info("No mismatch records found.")
+                _, search_col, download_col = st.columns([6, 2.5, 1])
+                with search_col:
+                    search_value = st.text_input(
+                        "Search unpaid sponsors",
+                        key="not_received_search",
+                        label_visibility="collapsed",
+                        placeholder="Search unpaid sponsors",
+                    )
+                filtered_not_received_df = not_received_df.copy()
+                if search_value:
+                    matches = filtered_not_received_df.astype(str).apply(
+                        lambda column: column.str.contains(search_value, case=False, na=False, regex=False)
+                    )
+                    filtered_not_received_df = filtered_not_received_df[matches.any(axis=1)]
+                if filtered_not_received_df.empty:
+                    st.info("No unpaid sponsor records match this search.")
+                else:
+                    with download_col:
+                        st.download_button(
+                            "⬇️",
+                            data=filtered_not_received_df.to_csv(index=False),
+                            file_name="not_received_payments.csv",
+                            mime="text/csv",
+                            key="download_not_received_payments",
+                            help="Download not received payments",
+                        )
+                    st.dataframe(filtered_not_received_df, hide_index=True, use_container_width=True)
+                    st.markdown(
+                        f"<div style='text-align:right; font-size:1.1em; margin-top:0.5em;'><b>Total Not Received:</b> <span style='color:#6A1B9A;'>${filtered_not_received_df['Amount'].sum():,.2f}</span></div>",
+                        unsafe_allow_html=True,
+                    )
 
         elif payment_menu == "Delete Payment Detail":
             df_pay = pd.read_sql("SELECT id, name, amount, date, comments FROM payment_details ORDER BY name ASC, id DESC", conn)
@@ -398,7 +434,8 @@ def admin_tab(menu="Sponsorship Items"):
                             try:
                                 cursor.execute("DELETE FROM payment_details WHERE id=%s", (pay_id,))
                                 conn.commit()
-                                st.success("🗑️ Payment detail deleted!")
+                                st.session_state[payment_action_key] = None
+                                st.session_state["payment_notice"] = "Payment detail deleted."
                                 st.rerun()
                             except Exception as e:
                                 conn.rollback()
@@ -410,7 +447,6 @@ def admin_tab(menu="Sponsorship Items"):
         return
 
     if menu == "Sponsorship Items":
-        st.markdown("<h2 style='color: #6A1B9A;'>Sponsorship Items</h2>", unsafe_allow_html=True)
         try:
             ensure_sponsorship_item_image_columns(cursor)
             conn.commit()
@@ -420,46 +456,92 @@ def admin_tab(menu="Sponsorship Items"):
             return
         df = pd.read_sql("SELECT * FROM sponsorship_items ORDER BY id", conn)
         df.columns = [c.lower() for c in df.columns]
-        tabs = ["Add Sponsorship Item", "Sponsorship Items List", "Edit Sponsorship Item", "Delete Sponsorship Item"]
-        tab_add, tab_list, tab_edit, tab_delete = st.tabs(tabs)
+        action_key = "sponsorship_item_action"
+        if st.session_state.get(action_key) not in (None, "add", "edit", "delete"):
+            st.session_state[action_key] = None
+        item_notice = st.session_state.pop("sponsorship_item_notice", None)
+        if item_notice:
+            st.success(item_notice)
+        st.markdown(
+            """
+            <style>
+            .st-key-sponsorship_item_actions [data-testid="stHorizontalBlock"] { display:grid !important; grid-template-columns:repeat(3,minmax(0,1fr)) !important; gap:0.5rem !important; width:100% !important; }
+            .st-key-sponsorship_item_actions [data-testid="column"], .st-key-sponsorship_item_actions [data-testid="stColumn"] { min-width:0 !important; width:auto !important; flex:initial !important; }
+            .st-key-sponsorship_item_actions button { min-height:2.6rem !important; width:100% !important; padding:0.4rem 0.3rem !important; border:1px solid transparent !important; border-radius:8px !important; color:#fff !important; font-size:0.78rem !important; font-weight:800 !important; white-space:nowrap !important; box-shadow:0 4px 10px rgba(44,58,48,0.15) !important; }
+            .st-key-sponsorship_item_add button { background:linear-gradient(110deg,#225b40,#347a55) !important; border-color:#b38a43 !important; }
+            .st-key-sponsorship_item_edit button { background:linear-gradient(110deg,#176c70,#268b83) !important; border-color:#8bb7a8 !important; }
+            .st-key-sponsorship_item_delete button { background:linear-gradient(110deg,#803b52,#a84d5e) !important; border-color:#c79782 !important; }
+            @media (max-width:520px) { .st-key-sponsorship_item_actions button { min-height:2.4rem !important; padding:0.3rem 0.15rem !important; font-size:0.68rem !important; } }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+        with st.container(key="sponsorship_item_actions"):
+            action_columns = st.columns(3)
+            if action_columns[0].button("➕ Add", key="sponsorship_item_add", use_container_width=True):
+                st.session_state[action_key] = "add"
+                st.rerun()
+            if action_columns[1].button("✏️ Edit", key="sponsorship_item_edit", disabled=df.empty, use_container_width=True):
+                st.session_state[action_key] = "edit"
+                st.session_state.pop("sponsorship_item_edit_loaded_id", None)
+                st.rerun()
+            if action_columns[2].button("🗑️ Delete", key="sponsorship_item_delete", disabled=df.empty, use_container_width=True):
+                st.session_state[action_key] = "delete"
+                st.rerun()
 
-        with tab_add:
-            st.markdown("<h3 style='color: #6A1B9A;'>➕ Add New Sponsorship Item</h3>", unsafe_allow_html=True)
+        item_action = st.session_state.get(action_key)
+        if item_action is None:
+            if df.empty:
+                st.info("No sponsorship items found.")
+            else:
+                display_items = df.drop(columns=["id", "image_blob", "image_filename"], errors="ignore")
+                if "image_blob" in df.columns:
+                    display_items["Image Uploaded"] = df["image_blob"].notna().map({True: "Yes", False: "No"})
+                display_items.index = range(1, len(display_items) + 1)
+                st.dataframe(display_items, hide_index=True, use_container_width=True)
+
+        elif item_action == "add":
+            st.subheader("Add Sponsorship Item")
             with st.form("add_item_form"):
-                new_name = st.text_input("New Item Name")
-                new_amt = st.number_input("Amount", min_value=0)
+                new_name = st.text_input("Item Name")
+                new_amt = st.number_input("Amount", min_value=0.0, format="%.2f")
                 new_lim = st.number_input("Limit", min_value=1, value=3)
                 new_image = st.file_uploader(
                     "Upload Item Image (JPG/PNG, max 10MB)",
                     type=["jpg", "jpeg", "png"],
                     key="new_sponsorship_item_image",
                 )
-                if st.form_submit_button("Add Item"):
+                add_item = st.form_submit_button("Add Item", use_container_width=True)
+            if add_item:
+                if not new_name.strip():
+                    st.error("Item name is required.")
+                elif new_image is not None and new_image.size > 10 * 1024 * 1024:
+                    st.error("Image file size should not exceed 10 MB.")
+                elif new_image is not None and new_image.type not in ["image/jpeg", "image/png"]:
+                    st.error("Only JPG and PNG files are allowed.")
+                else:
                     try:
-                        if not new_name.strip():
-                            st.error("Item name is required.")
-                        elif new_image is not None and new_image.size > 10 * 1024 * 1024:
-                            st.error("Image file size should not exceed 10 MB.")
-                        elif new_image is not None and new_image.type not in ["image/jpeg", "image/png"]:
-                            st.error("Only JPG and PNG files are allowed.")
-                        else:
-                            image_bytes = new_image.getvalue() if new_image is not None else None
-                            image_filename = new_image.name if new_image is not None else None
-                            cursor.execute(
-                                "INSERT INTO sponsorship_items (item, amount, sponsor_limit, image_blob, image_filename) VALUES (%s, %s, %s, %s, %s)",
-                                (new_name.strip(), float(new_amt), int(new_lim), image_bytes, image_filename),
-                            )
-                            conn.commit()
-                            st.success("✅ New item added!")
+                        image_bytes = new_image.getvalue() if new_image is not None else None
+                        image_filename = new_image.name if new_image is not None else None
+                        cursor.execute(
+                            "INSERT INTO sponsorship_items (item, amount, sponsor_limit, image_blob, image_filename) VALUES (%s, %s, %s, %s, %s)",
+                            (new_name.strip(), float(new_amt), int(new_lim), image_bytes, image_filename),
+                        )
+                        conn.commit()
+                        st.session_state[action_key] = None
+                        st.session_state["sponsorship_item_notice"] = "Sponsorship item added."
+                        st.rerun()
                     except Exception as e:
                         conn.rollback()
-                        st.error(f"❌ Failed to add item: {e}")
+                        st.error(f"Failed to add sponsorship item: {e}")
+            if st.button("Cancel", key="sponsorship_item_cancel_add"):
+                st.session_state[action_key] = None
+                st.rerun()
 
     if menu == "Email Event Details":
-        st.info("Send event data and stored receipts to every address enabled under Manage Notification Emails.")
+        st.info("Send event data and stored receipts to committee members with an email address.")
 
-        cursor.execute("SELECT email FROM notification_emails WHERE email IS NOT NULL AND email != '' ORDER BY email")
-        notification_addresses = [row[0] for row in cursor.fetchall()]
+        notification_addresses = get_notification_emails(cursor)
         recipient_names = {}
         try:
             cursor.execute("SELECT name, email FROM committee_members WHERE email IS NOT NULL AND email != ''")
@@ -544,7 +626,7 @@ def admin_tab(menu="Sponsorship Items"):
             )
         else:
             selected_recipients = []
-            st.warning("No notification emails are enabled. Add an address under Manage Notification Emails first.")
+            st.warning("No committee member email addresses are configured. Add an email in Committee Members.")
 
         selected_content_names = [content_labels[item] for item in selected_content]
         content_summary = ", ".join(selected_content_names) if selected_content_names else "No content selected"
@@ -651,51 +733,42 @@ def admin_tab(menu="Sponsorship Items"):
                         f"{len(image_files)} image(s), and a combined ZIP archive."
                     )
 
-    if menu == "Sponsorship Items":
-        with tab_list:
-            st.markdown("<h3 style='color: #6A1B9A;'>📋 Sponsorship Items List</h3>", unsafe_allow_html=True)
-            df_display = df.copy()
-            if "image_blob" in df_display.columns:
-                df_display["Image Uploaded"] = df_display["image_blob"].notna().map({True: "Yes", False: "No"})
-                df_display = df_display.drop(columns=["image_blob", "image_filename"])
-            if 'id' in df_display.columns:
-                df_display = df_display.drop(columns=["id"])
-            df_display.index = df_display.index + 1
-            st.dataframe(df_display)
-
-        with tab_edit:
-            st.markdown("<h3 style='color: #6A1B9A;'>✏️ Edit Sponsorship Item</h3>", unsafe_allow_html=True)
-            item_names = df["item"].tolist()
-            selected_item_name = st.selectbox("Select Item Name", item_names)
-            item_row = df[df["item"] == selected_item_name].iloc[0]
-            new_item_name = st.text_input("Item Name", value=item_row["item"])
-            new_amount = st.number_input(
-                "Amount",
-                min_value=0.0,
-                value=float(item_row["amount"]),
-                step=1.0,
-                format="%.2f",
-                key=f"edit_sponsorship_amount_{item_row['id']}",
+    if menu == "Sponsorship Items" and item_action == "edit":
+        if df.empty:
+            st.info("No sponsorship items found.")
+        else:
+            st.subheader("Edit Sponsorship Item")
+            selected_item_id = st.selectbox(
+                "Select Item",
+                df["id"].tolist(),
+                format_func=lambda item_id: df.loc[df["id"] == item_id, "item"].iloc[0],
+                key="sponsorship_item_edit_id",
             )
-            new_limit = st.number_input(
-                "Limit",
-                min_value=1,
-                value=int(item_row["sponsor_limit"]),
-                step=1,
-                key=f"edit_sponsorship_limit_{item_row['id']}",
-            )
-            edit_image = st.file_uploader(
-                "Replace Item Image (JPG/PNG, max 10MB)",
-                type=["jpg", "jpeg", "png"],
-                key=f"edit_sponsorship_item_image_{item_row['id']}",
-            )
-            if st.button("Update Item"):
-                try:
-                    if edit_image is not None and edit_image.size > 10 * 1024 * 1024:
-                        st.error("Image file size should not exceed 10 MB.")
-                    elif edit_image is not None and edit_image.type not in ["image/jpeg", "image/png"]:
-                        st.error("Only JPG and PNG files are allowed.")
-                    else:
+            item_row = df[df["id"] == selected_item_id].iloc[0]
+            if st.session_state.get("sponsorship_item_edit_loaded_id") != selected_item_id:
+                st.session_state["sponsorship_item_edit_name"] = str(item_row["item"] or "")
+                st.session_state["sponsorship_item_edit_amount"] = float(item_row["amount"] or 0)
+                st.session_state["sponsorship_item_edit_limit"] = int(item_row["sponsor_limit"] or 1)
+                st.session_state["sponsorship_item_edit_loaded_id"] = selected_item_id
+            with st.form("edit_sponsorship_item_form"):
+                new_item_name = st.text_input("Item Name", key="sponsorship_item_edit_name")
+                new_amount = st.number_input("Amount", min_value=0.0, step=1.0, format="%.2f", key="sponsorship_item_edit_amount")
+                new_limit = st.number_input("Limit", min_value=1, step=1, key="sponsorship_item_edit_limit")
+                edit_image = st.file_uploader(
+                    "Replace Item Image (JPG/PNG, max 10MB)",
+                    type=["jpg", "jpeg", "png"],
+                    key=f"sponsorship_item_edit_image_{selected_item_id}",
+                )
+                update_item = st.form_submit_button("Update Item", use_container_width=True)
+            if update_item:
+                if not new_item_name.strip():
+                    st.warning("Item name is required.")
+                elif edit_image is not None and edit_image.size > 10 * 1024 * 1024:
+                    st.error("Image file size should not exceed 10 MB.")
+                elif edit_image is not None and edit_image.type not in ["image/jpeg", "image/png"]:
+                    st.error("Only JPG and PNG files are allowed.")
+                else:
+                    try:
                         image_sql = ""
                         image_values = []
                         if edit_image is not None:
@@ -706,239 +779,327 @@ def admin_tab(menu="Sponsorship Items"):
                             (new_item_name.strip(), float(new_amount), int(new_limit), *image_values, int(item_row["id"])),
                         )
                         conn.commit()
-                        st.success("✅ Item updated successfully!")
-                except Exception as e:
-                    conn.rollback()
-                    st.error(f"❌ Failed to update: {e}")
+                        st.session_state[action_key] = None
+                        st.session_state.pop("sponsorship_item_edit_loaded_id", None)
+                        st.session_state["sponsorship_item_notice"] = "Sponsorship item updated."
+                        st.rerun()
+                    except Exception as e:
+                        conn.rollback()
+                        st.error(f"Failed to update sponsorship item: {e}")
+            if st.button("Cancel", key="sponsorship_item_cancel_edit"):
+                st.session_state[action_key] = None
+                st.session_state.pop("sponsorship_item_edit_loaded_id", None)
+                st.rerun()
 
-        with tab_delete:
-            st.markdown("<h3 style='color: #6A1B9A;'>🗑️ Delete Sponsorship Item</h3>", unsafe_allow_html=True)
-            item_names = df["item"].tolist()
-            selected_item_name = st.selectbox("Select Item to Delete", item_names)
-            item_row = df[df["item"] == selected_item_name].iloc[0]
-            st.write(f"Item: {item_row['item']}")
-            st.write(f"Amount: ${float(item_row['amount']):,.2f}")
-            st.write(f"Limit: {int(item_row['sponsor_limit'])}")
-            if st.button("Delete Item"):
+    if menu == "Sponsorship Items" and item_action == "delete":
+        if df.empty:
+            st.info("No sponsorship items found.")
+        else:
+            st.subheader("Delete Sponsorship Item")
+            selected_item_id = st.selectbox(
+                "Select Item",
+                df["id"].tolist(),
+                format_func=lambda item_id: df.loc[df["id"] == item_id, "item"].iloc[0],
+                key="sponsorship_item_delete_id",
+            )
+            item_row = df[df["id"] == selected_item_id].iloc[0]
+            st.write(f"Item: **{item_row['item']}**")
+            st.write(f"Amount: **${float(item_row['amount']):,.2f}**")
+            st.write(f"Limit: **{int(item_row['sponsor_limit'])}**")
+            delete_col, cancel_col = st.columns(2)
+            if delete_col.button("Delete Item", key="sponsorship_item_confirm_delete", type="primary"):
                 try:
-                    cursor.execute("DELETE FROM sponsorship_items WHERE id=%s", (item_row["id"],))
+                    cursor.execute("DELETE FROM sponsorship_items WHERE id=%s", (int(item_row["id"]),))
                     conn.commit()
-                    st.success("🗑️ Sponsorship item deleted!")
+                    st.session_state[action_key] = None
+                    st.session_state["sponsorship_item_notice"] = "Sponsorship item deleted."
+                    st.rerun()
                 except Exception as e:
                     conn.rollback()
-                    st.error(f"❌ Failed to delete item: {e}")
+                    st.error(f"Failed to delete sponsorship item: {e}")
+            if cancel_col.button("Cancel", key="sponsorship_item_cancel_delete"):
+                st.session_state[action_key] = None
+                st.rerun()
 
     if menu == "Sponsorship Record":
-        st.markdown("<h2 style='color: #6A1B9A;'>✏️ Edit Sponsorship Record</h2>", unsafe_allow_html=True)
         df_sponsors = pd.read_sql("SELECT * FROM sponsors ORDER BY id", conn)
         df_sponsors.columns = [c.lower() for c in df_sponsors.columns]
-        if not df_sponsors.empty:
-            display_df = df_sponsors.copy()
-            def get_type(row):
-                has_sponsorship = (
-                    pd.notna(row['sponsorship'])
-                    and bool(str(row['sponsorship']).strip())
-                )
-                donation_amount = float(row['donation']) if pd.notna(row['donation']) else 0
-                if has_sponsorship:
-                    return 'Sponsorship'
-                elif donation_amount > 0:
-                    return 'Donation'
-                else:
-                    return ''
-            display_df['Type'] = display_df.apply(get_type, axis=1)
-            # Pre-fetch sponsorship item amounts into a dict
+        if df_sponsors.empty:
+            display_df_display = pd.DataFrame(columns=[
+                "Name", "Email", "Mobile", "Apartment", "Gothram",
+                "Sponsorship Item", "Type", "Donation/Sponsorship Amount",
+            ])
+        else:
             cursor.execute("SELECT item, amount, sponsor_limit FROM sponsorship_items")
             item_amounts = {}
-            for row in cursor.fetchall():
-                item, amount, sponsor_limit = row
+            for item, amount, sponsor_limit in cursor.fetchall():
                 try:
-                    per_sponsor = float(amount) / int(sponsor_limit) if sponsor_limit else float(amount)
+                    item_amounts[item] = float(amount) / int(sponsor_limit) if sponsor_limit else float(amount)
                 except Exception:
-                    per_sponsor = float(amount)
-                item_amounts[item] = per_sponsor
-            # Compute a single amount column
-            def get_amount(row):
-                if row['Type'] == 'Sponsorship':
-                    return item_amounts.get(row['sponsorship'], 0.0)
-                if row['Type'] == 'Donation':
-                    return float(row['donation']) if pd.notna(row['donation']) else 0.0
-                return 0.0
+                    item_amounts[item] = float(amount or 0)
 
-            display_df['Donation/Sponsorship Amount'] = display_df.apply(get_amount, axis=1)
-            display_df = display_df.drop(columns=['donation', 'id'])
-            # Reorder columns
-            col_order = ['name', 'email', 'mobile', 'apartment', 'gothram', 'sponsorship', 'Type', 'Donation/Sponsorship Amount']
-            display_df = display_df[[c for c in col_order if c in display_df.columns]]
-            display_df = display_df.rename(columns={col: col.replace('_', ' ').title() for col in display_df.columns})
-            display_df = display_df.rename(columns={'Sponsorship': 'Sponsorship Item'})
-            # Show table with index starting from 1 and sorted by Name, keep id column
-            display_df_display = display_df.copy()
-            if 'Name' in display_df_display.columns:
-                display_df_display = display_df_display.sort_values(by=["Name"])
-            elif 'name' in display_df_display.columns:
-                display_df_display = display_df_display.sort_values(by=["name"])
+            display_df = df_sponsors.copy()
+            display_df["Type"] = display_df.apply(
+                lambda row: "Sponsorship" if pd.notna(row["sponsorship"]) and str(row["sponsorship"]).strip()
+                else "Donation" if float(row["donation"] or 0) > 0 else "",
+                axis=1,
+            )
+            display_df["Donation/Sponsorship Amount"] = display_df.apply(
+                lambda row: item_amounts.get(row["sponsorship"], 0.0)
+                if row["Type"] == "Sponsorship" else float(row["donation"] or 0),
+                axis=1,
+            )
+            display_df = display_df.drop(columns=["donation", "id"])
+            columns = ["name", "email", "mobile", "apartment", "gothram", "sponsorship", "Type", "Donation/Sponsorship Amount"]
+            display_df = display_df[[column for column in columns if column in display_df.columns]]
+            display_df = display_df.rename(columns={column: column.replace("_", " ").title() for column in display_df.columns})
+            display_df = display_df.rename(columns={"Sponsorship": "Sponsorship Item"})
+            display_df_display = display_df.sort_values(by="Name").reset_index(drop=True)
             display_df_display.index = range(1, len(display_df_display) + 1)
-            st.dataframe(display_df_display, use_container_width=True)
-            # Sort sponsor names for selection
-            sponsor_names = sorted(df_sponsors["name"].tolist())
-            sponsor_name_options = ["-- Select a Name --"] + sponsor_names
-            selected_name = st.selectbox("Select Sponsorship Record (by Name)", sponsor_name_options)
-            if selected_name == "-- Select a Name --":
-                st.info("Please select a name to view or edit the sponsorship record.")
-                return
-            # Sort df_sponsors by name for consistent lookup
-            df_sponsors_sorted = df_sponsors.sort_values(by=["name"])
-            sponsor_row = df_sponsors_sorted[df_sponsors_sorted.name == selected_name].iloc[0]
-            sponsor_id = int(sponsor_row["id"])
-            # Move Edit/Delete selection to the top
-            action = st.radio("Choose Action", ["Edit Record", "Delete Record"], horizontal=True)
-            if action == "Edit Record":
-                edit_name = st.text_input("Name", value=sponsor_row["name"] or "", key=f"edit_name_{sponsor_id}")
-                st.write(f"Apartment Number: {sponsor_row['apartment']}")
-                # Editable Sponsorship Item field
-                cursor.execute("SELECT item FROM sponsorship_items ORDER BY id")
-                sponsorship_items_list = [row[0] for row in cursor.fetchall()]
-                current_item = sponsor_row['sponsorship'] if sponsor_row['sponsorship'] else ''
-                edit_sponsorship_item = st.selectbox(
-                    "Sponsorship Item (editable)",
-                    options=["N/A"] + sponsorship_items_list,
-                    index=(sponsorship_items_list.index(current_item) + 1) if current_item in sponsorship_items_list else 0,
-                    help="Select a sponsorship item or choose N/A for donation only."
-                )
-                edit_donation = st.number_input("Donation Amount (editable)", min_value=0.0, value=float(sponsor_row['donation'] or 0), step=1.0, format="%.2f", key=f"edit_donation_{sponsor_id}")
-                # Editable optional fields
-                edit_email = st.text_input("Email Address (optional)", value=sponsor_row["email"] or "", help="Enter Email to Subscribe the notifications to Your Email")
-                edit_gothram = st.text_input("Gothram (optional)", value=sponsor_row["gothram"] if "gothram" in sponsor_row and sponsor_row["gothram"] is not None else "", key=f"edit_gothram_{sponsor_id}")
-                edit_mobile = st.text_input("Mobile (optional, US format)", value=sponsor_row["mobile"] or "")
-                if st.button("Update Sponsorship Record"):
-                    errors = []
-                    edit_name = edit_name.strip()
-                    if not edit_name:
-                        errors.append("Name is required.")
-                    # Email validation
-                    if edit_email.strip():
-                        if '@' not in edit_email or not edit_email.strip().lower().endswith('.com'):
-                            errors.append("Please enter a valid email address (must contain '@' and end with .com)")
-                    # Mobile validation (optional, US format)
-                    import re
-                    def validate_us_phone(phone):
-                        digits = re.sub(r'\D', '', phone)
-                        if len(digits) == 10:
-                            return True, f"({digits[:3]}) {digits[3:6]}-{digits[6:]}"
-                        return False, phone
-                    phone_valid, phone_fmt = True, edit_mobile
-                    if edit_mobile.strip():
-                        phone_valid, phone_fmt = validate_us_phone(edit_mobile)
-                        if not phone_valid:
-                            errors.append("Please enter a valid 10-digit US phone number.")
-                    # Validate sponsorship item
-                    sponsorship_value = None if edit_sponsorship_item == "N/A" else edit_sponsorship_item
-                    # Validate donation
-                    if edit_donation < 0:
-                        errors.append("Donation amount cannot be negative.")
-                    if errors:
-                        for err in errors:
-                            st.error(err)
+
+        record_action_key = "sponsorship_record_action"
+        if st.session_state.get(record_action_key) not in (None, "add", "edit", "delete"):
+            st.session_state[record_action_key] = None
+        record_notice = st.session_state.pop("sponsorship_record_notice", None)
+        if record_notice:
+            st.success(record_notice)
+        st.markdown(
+            """
+            <style>
+            .st-key-sponsorship_record_actions [data-testid="stHorizontalBlock"] { display:grid !important; grid-template-columns:repeat(3,minmax(0,1fr)) !important; gap:0.5rem !important; width:100% !important; }
+            .st-key-sponsorship_record_actions [data-testid="column"], .st-key-sponsorship_record_actions [data-testid="stColumn"] { min-width:0 !important; width:auto !important; flex:initial !important; }
+            .st-key-sponsorship_record_actions button { min-height:2.6rem !important; width:100% !important; padding:0.4rem 0.3rem !important; border:1px solid transparent !important; border-radius:8px !important; color:#fff !important; font-size:0.78rem !important; font-weight:800 !important; white-space:nowrap !important; box-shadow:0 4px 10px rgba(44,58,48,0.15) !important; }
+            .st-key-sponsorship_record_add button { background:linear-gradient(110deg,#225b40,#347a55) !important; border-color:#b38a43 !important; }
+            .st-key-sponsorship_record_edit button { background:linear-gradient(110deg,#176c70,#268b83) !important; border-color:#8bb7a8 !important; }
+            .st-key-sponsorship_record_delete button { background:linear-gradient(110deg,#803b52,#a84d5e) !important; border-color:#c79782 !important; }
+            @media (max-width:520px) { .st-key-sponsorship_record_actions button { min-height:2.4rem !important; padding:0.3rem 0.15rem !important; font-size:0.68rem !important; } }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+        with st.container(key="sponsorship_record_actions"):
+            action_columns = st.columns(3)
+            if action_columns[0].button("➕ Add", key="sponsorship_record_add", use_container_width=True):
+                st.session_state[record_action_key] = "add"
+                st.rerun()
+            if action_columns[1].button("✏️ Edit", key="sponsorship_record_edit", disabled=df_sponsors.empty, use_container_width=True):
+                st.session_state[record_action_key] = "edit"
+                st.session_state.pop("sponsorship_record_edit_loaded_id", None)
+                st.rerun()
+            if action_columns[2].button("🗑️ Delete", key="sponsorship_record_delete", disabled=df_sponsors.empty, use_container_width=True):
+                st.session_state[record_action_key] = "delete"
+                st.rerun()
+
+        record_action = st.session_state.get(record_action_key)
+        if record_action is None:
+            if df_sponsors.empty:
+                st.info("No sponsorship records found.")
+            else:
+                st.dataframe(display_df_display, hide_index=True, use_container_width=True)
+
+        elif record_action == "add":
+            st.subheader("Add Sponsorship Record")
+            cursor.execute("SELECT item FROM sponsorship_items ORDER BY item")
+            item_options = [row[0] for row in cursor.fetchall()]
+            with st.form("add_sponsorship_record_form"):
+                add_name = st.text_input("Name")
+                add_email = st.text_input("Email Address (optional)")
+                add_mobile = st.text_input("Mobile (optional, US format)")
+                add_apartment = st.text_input("Apartment Number")
+                add_gothram = st.text_input("Gothram (optional)")
+                add_items = st.multiselect("Sponsorship Items", item_options)
+                add_donation = st.number_input("Donation Amount", min_value=0.0, step=1.0, format="%.2f")
+                save_record = st.form_submit_button("Add Record", use_container_width=True)
+            if save_record:
+                errors = []
+                normalized_name = add_name.strip()
+                normalized_apartment = add_apartment.strip()
+                normalized_email = add_email.strip()
+                phone_digits = re.sub(r"\D", "", add_mobile)
+                phone_value = add_mobile.strip()
+                if not normalized_name:
+                    errors.append("Name is required.")
+                if not normalized_apartment:
+                    errors.append("Apartment number is required.")
+                if not add_items and add_donation <= 0:
+                    errors.append("Select a sponsorship item or enter a donation amount.")
+                if normalized_email and ("@" not in normalized_email or not normalized_email.lower().endswith(".com")):
+                    errors.append("Please enter a valid email address ending in .com.")
+                if phone_value:
+                    if len(phone_digits) != 10:
+                        errors.append("Please enter a valid 10-digit US phone number.")
                     else:
-                        try:
+                        phone_value = f"({phone_digits[:3]}) {phone_digits[3:6]}-{phone_digits[6:]}"
+                if errors:
+                    for error in errors:
+                        st.error(error)
+                else:
+                    try:
+                        for item_name in add_items:
                             cursor.execute(
-                                "UPDATE sponsors SET name=%s, email=%s, mobile=%s, gothram=%s, sponsorship=%s, donation=%s WHERE id=%s",
-                                (edit_name, edit_email, phone_fmt.strip(), edit_gothram, sponsorship_value, edit_donation, sponsor_id)
+                                "INSERT INTO sponsors (name, email, gothram, mobile, apartment, sponsorship, donation, submitted_at) VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)",
+                                (normalized_name, normalized_email or None, add_gothram.strip() or None, phone_value or None, normalized_apartment, item_name, 0),
                             )
-                            conn.commit()
-                            st.success("✅ Sponsorship record updated!")
-                            # Send only to notification_emails
-                            cursor.execute("SELECT email FROM notification_emails")
-                            notification_emails = [row[0] for row in cursor.fetchall() if row[0]]
-                            admin_full_name = st.session_state.get('admin_full_name', 'Unknown')
-                            if notification_emails:
-                                send_email(
-                                    "Ganesh Chaturthi Sponsorship Record Updated",
-                                    f"""
-    <b>Sponsorship Record Updated</b><br><br>
-    <table border='1' cellpadding='6' cellspacing='0' style='border-collapse:collapse;'>
-            <tr><th style='{TABLE_HEADER_STYLE}'>Name</th><td>{edit_name}</td></tr>
-            <tr><th style='{TABLE_HEADER_STYLE}'>Email</th><td>{edit_email}</td></tr>
-            <tr><th style='{TABLE_HEADER_STYLE}'>Gothram</th><td>{edit_gothram}</td></tr>
-            <tr><th style='{TABLE_HEADER_STYLE}'>Mobile</th><td>{phone_fmt.strip()}</td></tr>
-            <tr><th style='{TABLE_HEADER_STYLE}'>Apartment</th><td>{sponsor_row['apartment']}</td></tr>
-            <tr><th style='{TABLE_HEADER_STYLE}'>Sponsorship Item</th><td>{sponsorship_value if sponsorship_value else 'N/A'}</td></tr>
-            <tr><th style='{TABLE_HEADER_STYLE}'>Donation</th><td>${float(edit_donation):,.2f}</td></tr>
-    </table>
-    <br><b>Modified By:</b> {admin_full_name}
-    """,
-                                    notification_emails
+                        if add_donation > 0:
+                            cursor.execute(
+                                "INSERT INTO sponsors (name, email, gothram, mobile, apartment, sponsorship, donation, submitted_at) VALUES (%s, %s, %s, %s, %s, NULL, %s, CURRENT_TIMESTAMP)",
+                                (normalized_name, normalized_email or None, add_gothram.strip() or None, phone_value or None, normalized_apartment, add_donation),
+                            )
+                        conn.commit()
+                        notification_emails = get_notification_emails(cursor)
+                        if notification_emails:
+                            send_email(
+                                "Sponsorship Record Added",
+                                f"A sponsorship record was added for {normalized_name} ({normalized_apartment}).",
+                                notification_emails,
+                            )
+                        st.session_state[record_action_key] = None
+                        st.session_state["sponsorship_record_notice"] = "Sponsorship record added."
+                        st.rerun()
+                    except Exception as e:
+                        conn.rollback()
+                        st.error(f"Failed to add sponsorship record: {e}")
+            if st.button("Cancel", key="sponsorship_record_cancel_add"):
+                st.session_state[record_action_key] = None
+                st.rerun()
+
+        elif record_action in ("edit", "delete"):
+            if df_sponsors.empty:
+                st.info("No sponsorship records found.")
+            else:
+                cursor.execute("SELECT item, amount, sponsor_limit FROM sponsorship_items")
+                item_amounts = {}
+                for item_name, item_amount, sponsor_limit in cursor.fetchall():
+                    try:
+                        item_amounts[item_name] = float(item_amount) / int(sponsor_limit) if sponsor_limit else float(item_amount)
+                    except Exception:
+                        item_amounts[item_name] = float(item_amount or 0)
+
+                def format_sponsor_record(sponsor_id):
+                    selected = df_sponsors[df_sponsors["id"] == sponsor_id].iloc[0]
+                    item_name = selected["sponsorship"] or "Donation"
+                    amount = item_amounts.get(item_name, 0.0) if selected["sponsorship"] else float(selected["donation"] or 0)
+                    return f"{selected['name']} · {item_name} · ${amount:,.2f} · #{sponsor_id}"
+
+                record_id = st.selectbox(
+                    "Select Sponsorship Record",
+                    df_sponsors["id"].tolist(),
+                    format_func=format_sponsor_record,
+                    key=f"sponsorship_record_{record_action}_id",
+                )
+                sponsor_row = df_sponsors[df_sponsors["id"] == record_id].iloc[0]
+
+                if record_action == "edit":
+                    if st.session_state.get("sponsorship_record_edit_loaded_id") != record_id:
+                        st.session_state["sponsorship_record_edit_name"] = str(sponsor_row["name"] or "")
+                        st.session_state["sponsorship_record_edit_email"] = str(sponsor_row["email"] or "")
+                        st.session_state["sponsorship_record_edit_mobile"] = str(sponsor_row["mobile"] or "")
+                        st.session_state["sponsorship_record_edit_apartment"] = str(sponsor_row["apartment"] or "")
+                        st.session_state["sponsorship_record_edit_gothram"] = str(sponsor_row["gothram"] or "")
+                        st.session_state["sponsorship_record_edit_item"] = sponsor_row["sponsorship"] or "N/A"
+                        st.session_state["sponsorship_record_edit_donation"] = float(sponsor_row["donation"] or 0)
+                        st.session_state["sponsorship_record_edit_loaded_id"] = record_id
+                    cursor.execute("SELECT item FROM sponsorship_items ORDER BY item")
+                    sponsorship_items_list = [row[0] for row in cursor.fetchall()]
+                    with st.form("edit_sponsorship_record_form"):
+                        edit_name = st.text_input("Name", key="sponsorship_record_edit_name")
+                        edit_email = st.text_input("Email Address (optional)", key="sponsorship_record_edit_email")
+                        edit_mobile = st.text_input("Mobile (optional, US format)", key="sponsorship_record_edit_mobile")
+                        edit_apartment = st.text_input("Apartment Number", key="sponsorship_record_edit_apartment")
+                        edit_gothram = st.text_input("Gothram (optional)", key="sponsorship_record_edit_gothram")
+                        edit_sponsorship_item = st.selectbox(
+                            "Sponsorship Item",
+                            ["N/A"] + sponsorship_items_list,
+                            key="sponsorship_record_edit_item",
+                        )
+                        edit_donation = st.number_input("Donation Amount", min_value=0.0, step=1.0, format="%.2f", key="sponsorship_record_edit_donation")
+                        update_record = st.form_submit_button("Update Record", use_container_width=True)
+                    if update_record:
+                        errors = []
+                        if not edit_name.strip():
+                            errors.append("Name is required.")
+                        if not edit_apartment.strip():
+                            errors.append("Apartment number is required.")
+                        if edit_email.strip() and ("@" not in edit_email or not edit_email.strip().lower().endswith(".com")):
+                            errors.append("Please enter a valid email address ending in .com.")
+                        phone_digits = re.sub(r"\D", "", edit_mobile)
+                        phone_value = edit_mobile.strip()
+                        if phone_value:
+                            if len(phone_digits) != 10:
+                                errors.append("Please enter a valid 10-digit US phone number.")
+                            else:
+                                phone_value = f"({phone_digits[:3]}) {phone_digits[3:6]}-{phone_digits[6:]}"
+                        if errors:
+                            for error in errors:
+                                st.error(error)
+                        else:
+                            sponsorship_value = None if edit_sponsorship_item == "N/A" else edit_sponsorship_item
+                            try:
+                                cursor.execute(
+                                    "UPDATE sponsors SET name=%s, email=%s, mobile=%s, apartment=%s, gothram=%s, sponsorship=%s, donation=%s WHERE id=%s",
+                                    (edit_name.strip(), edit_email.strip() or None, phone_value or None, edit_apartment.strip(), edit_gothram.strip() or None, sponsorship_value, edit_donation, int(record_id)),
                                 )
-                        except Exception as e:
-                            conn.rollback()
-                            st.error(f"❌ Failed to update sponsorship: {e}")
-            elif action == "Delete Record":
-                st.markdown("#### Delete this sponsorship record?")
-                # Handle donation display: show $0.00 if None or not a number
-                try:
-                    donation_val = float(sponsor_row['donation']) if sponsor_row['donation'] not in (None, '', 0, '0', 'nan', 'NaN') else 0.0
-                except Exception:
-                    donation_val = 0.0
-                st.markdown(f"""
-<table border='1' cellpadding='6' cellspacing='0' style='border-collapse:collapse;'>
-    <tr><th style='{TABLE_HEADER_STYLE}'>Name</th><td>{sponsor_row['name']}</td></tr>
-    <tr><th style='{TABLE_HEADER_STYLE}'>Email</th><td>{sponsor_row['email']}</td></tr>
-    <tr><th style='{TABLE_HEADER_STYLE}'>Gothram</th><td>{sponsor_row['gothram']}</td></tr>
-    <tr><th style='{TABLE_HEADER_STYLE}'>Mobile</th><td>{sponsor_row['mobile']}</td></tr>
-    <tr><th style='{TABLE_HEADER_STYLE}'>Apartment</th><td>{sponsor_row['apartment']}</td></tr>
-    <tr><th style='{TABLE_HEADER_STYLE}'>Sponsorship Item</th><td>{sponsor_row['sponsorship'] if sponsor_row['sponsorship'] else 'N/A'}</td></tr>
-    <tr><th style='{TABLE_HEADER_STYLE}'>Donation</th><td>${donation_val:,.2f}</td></tr>
-</table>
-""", unsafe_allow_html=True)
-                st.warning(f"To confirm deletion, enter the name '{sponsor_row['name']}' below and click Delete.")
-                confirm_name = st.text_input("Enter this name to delete the record:", "", key=f"delete_confirm_{sponsor_id}")
-                if st.button("Delete Sponsorship Record"):
-                    if confirm_name.strip() == sponsor_row['name']:
-                        try:
-                            # Fetch notification emails
-                            cursor.execute("SELECT email FROM notification_emails")
-                            notification_emails = [row[0] for row in cursor.fetchall() if row[0]]
-                            # Get admin full name for audit trail
-                            admin_full_name = st.session_state.get('admin_full_name', 'Unknown')
-                            # Prepare deleted record details with audit trail
-                            deleted_details = f"""
-<b>Sponsorship Record Deleted</b><br><br>
-<table border='1' cellpadding='6' cellspacing='0' style='border-collapse:collapse;'>
-    <tr><th style='{TABLE_HEADER_STYLE}'>Name</th><td>{sponsor_row['name']}</td></tr>
-    <tr><th style='{TABLE_HEADER_STYLE}'>Email</th><td>{sponsor_row['email']}</td></tr>
-    <tr><th style='{TABLE_HEADER_STYLE}'>Gothram</th><td>{sponsor_row['gothram']}</td></tr>
-    <tr><th style='{TABLE_HEADER_STYLE}'>Mobile</th><td>{sponsor_row['mobile']}</td></tr>
-    <tr><th style='{TABLE_HEADER_STYLE}'>Apartment</th><td>{sponsor_row['apartment']}</td></tr>
-    <tr><th style='{TABLE_HEADER_STYLE}'>Sponsorship Item</th><td>{sponsor_row['sponsorship'] if sponsor_row['sponsorship'] else 'N/A'}</td></tr>
-    <tr><th style='{TABLE_HEADER_STYLE}'>Donation</th><td>${float(sponsor_row['donation'] or 0):,.2f}</td></tr>
-</table>
-<br><b>Modified By:</b> {admin_full_name}
-"""
-                            cursor.execute("DELETE FROM sponsors WHERE id=%s", (sponsor_id,))
-                            conn.commit()
-                            st.cache_data.clear()
-                            # Send email to notification_emails
-                            if notification_emails:
-                                send_email(
-                                    "Ganesh Chaturthi Sponsorship Record Deleted",
-                                    deleted_details,
-                                    notification_emails
-                                )
-                            st.success("🗑️ Sponsorship record deleted!")
-                            st.rerun()
-                        except Exception as e:
-                            conn.rollback()
-                            st.error(f"❌ Failed to delete sponsorship record: {e}")
-                    else:
-                        st.error("Name entered does not match. Record not deleted.")
-        else:
-            st.info("No sponsorship records found.")
+                                conn.commit()
+                                notification_emails = get_notification_emails(cursor)
+                                if notification_emails:
+                                    send_email(
+                                        "Ganesh Chaturthi Sponsorship Record Updated",
+                                        f"Sponsorship record updated for {edit_name.strip()} by {st.session_state.get('admin_full_name', 'Admin')}.",
+                                        notification_emails,
+                                    )
+                                st.session_state[record_action_key] = None
+                                st.session_state.pop("sponsorship_record_edit_loaded_id", None)
+                                st.session_state["sponsorship_record_notice"] = "Sponsorship record updated."
+                                st.rerun()
+                            except Exception as e:
+                                conn.rollback()
+                                st.error(f"Failed to update sponsorship record: {e}")
+                    if st.button("Cancel", key="sponsorship_record_cancel_edit"):
+                        st.session_state[record_action_key] = None
+                        st.session_state.pop("sponsorship_record_edit_loaded_id", None)
+                        st.rerun()
+
+                else:
+                    st.write(f"Name: **{sponsor_row['name']}**")
+                    st.write(f"Sponsorship Item: **{sponsor_row['sponsorship'] or 'Donation'}**")
+                    st.write(f"Email: **{sponsor_row['email'] or 'Not provided'}**")
+                    st.warning(f"To confirm deletion, enter the name '{sponsor_row['name']}' below.")
+                    confirm_name = st.text_input("Confirm member name", key=f"sponsorship_record_delete_confirm_{record_id}")
+                    delete_col, cancel_col = st.columns(2)
+                    if delete_col.button("Delete Record", key="sponsorship_record_confirm_delete", type="primary"):
+                        if confirm_name.strip() != str(sponsor_row["name"]):
+                            st.error("Name entered does not match. Record not deleted.")
+                        else:
+                            try:
+                                notification_emails = get_notification_emails(cursor)
+                                cursor.execute("DELETE FROM sponsors WHERE id=%s", (int(record_id),))
+                                conn.commit()
+                                st.cache_data.clear()
+                                if notification_emails:
+                                    send_email(
+                                        "Ganesh Chaturthi Sponsorship Record Deleted",
+                                        f"Sponsorship record for {sponsor_row['name']} was deleted by {st.session_state.get('admin_full_name', 'Admin')}.",
+                                        notification_emails,
+                                    )
+                                st.session_state[record_action_key] = None
+                                st.session_state["sponsorship_record_notice"] = "Sponsorship record deleted."
+                                st.rerun()
+                            except Exception as e:
+                                conn.rollback()
+                                st.error(f"Failed to delete sponsorship record: {e}")
+                    if cancel_col.button("Cancel", key="sponsorship_record_cancel_delete"):
+                        st.session_state[record_action_key] = None
+                        st.rerun()
     if menu == "Committee Members":
-        st.markdown("<h2 style='color: #6A1B9A;'>👥 Committee Members</h2>", unsafe_allow_html=True)
         try:
+            cursor.execute("ALTER TABLE committee_members ADD COLUMN IF NOT EXISTS email TEXT")
+            cursor.execute(
+                "ALTER TABLE committee_members ADD COLUMN IF NOT EXISTS "
+                "email_notification_enabled BOOLEAN NOT NULL DEFAULT FALSE"
+            )
+            cursor.execute("ALTER TABLE committee_members ALTER COLUMN email_notification_enabled SET DEFAULT FALSE")
             member_cols = pd.read_sql("SELECT * FROM committee_members LIMIT 0", conn).columns.str.lower().tolist()
-            select_cols = ["id", "name", "apartment", "recieve_cash_enable"]
+            select_cols = ["id", "name", "apartment", "email", "email_notification_enabled", "recieve_cash_enable"]
             if "zelle_enable" in member_cols:
                 select_cols.append("zelle_enable")
             df_members = pd.read_sql(f"SELECT {', '.join(select_cols)} FROM committee_members ORDER BY name", conn)
@@ -949,224 +1110,222 @@ def admin_tab(menu="Sponsorship Items"):
             st.error(f"Unable to load committee members: {e}")
             return
 
-        member_tabs = st.tabs(["Members List", "Add Member", "Edit Member", "Delete Member"])
-        with member_tabs[1]:
+        action_key = "committee_member_action"
+        if st.session_state.get(action_key) not in (None, "add", "edit", "delete"):
+            st.session_state[action_key] = None
+        member_notice = st.session_state.pop("committee_member_notice", None)
+        if member_notice:
+            st.success(member_notice)
+
+        st.markdown(
+            """
+            <style>
+            .st-key-committee_member_actions [data-testid="stHorizontalBlock"] {
+                display: grid !important;
+                grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+                gap: 0.5rem !important;
+                width: 100% !important;
+            }
+            .st-key-committee_member_actions [data-testid="column"],
+            .st-key-committee_member_actions [data-testid="stColumn"] {
+                min-width: 0 !important;
+                width: auto !important;
+                flex: initial !important;
+            }
+            .st-key-committee_member_actions button {
+                min-height: 2.65rem !important;
+                width: 100% !important;
+                padding: 0.45rem 0.35rem !important;
+                border: 1px solid transparent !important;
+                border-radius: 8px !important;
+                color: #ffffff !important;
+                font-size: 0.82rem !important;
+                font-weight: 800 !important;
+                white-space: nowrap !important;
+                box-shadow: 0 4px 10px rgba(44, 58, 48, 0.16) !important;
+                transition: transform 140ms ease, box-shadow 140ms ease;
+            }
+            .st-key-committee_member_add button {
+                background: linear-gradient(110deg, #225b40, #347a55) !important;
+                border-color: #b38a43 !important;
+            }
+            .st-key-committee_member_edit button {
+                background: linear-gradient(110deg, #176c70, #268b83) !important;
+                border-color: #8bb7a8 !important;
+            }
+            .st-key-committee_member_delete button {
+                background: linear-gradient(110deg, #803b52, #a84d5e) !important;
+                border-color: #c79782 !important;
+            }
+            .st-key-committee_member_actions button:hover {
+                transform: translateY(-1px);
+                box-shadow: 0 6px 14px rgba(44, 58, 48, 0.2) !important;
+                color: #ffffff !important;
+            }
+            @media (max-width: 520px) {
+                .st-key-committee_member_actions [data-testid="stHorizontalBlock"] {
+                    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+                    gap: 0.35rem !important;
+                }
+                .st-key-committee_member_actions button {
+                    min-height: 2.45rem !important;
+                    padding: 0.35rem 0.15rem !important;
+                    font-size: 0.7rem !important;
+                }
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+        with st.container(key="committee_member_actions"):
+            action_columns = st.columns(3)
+            if action_columns[0].button("➕ Add", key="committee_member_add", use_container_width=True):
+                st.session_state[action_key] = "add"
+                st.rerun()
+            if action_columns[1].button("✏️ Edit", key="committee_member_edit", disabled=df_members.empty, use_container_width=True):
+                st.session_state[action_key] = "edit"
+                st.session_state.pop("committee_member_edit_loaded_id", None)
+                st.rerun()
+            if action_columns[2].button("🗑️ Delete", key="committee_member_delete", disabled=df_members.empty, use_container_width=True):
+                st.session_state[action_key] = "delete"
+                st.rerun()
+
+        member_action = st.session_state.get(action_key)
+        if member_action is None:
+            if df_members.empty:
+                st.info("No committee members found.")
+            else:
+                display_members = df_members[
+                    ["name", "apartment", "email", "email_notification_enabled", "recieve_cash_enable", "zelle_enable"]
+                ].rename(columns={
+                    "name": "Name",
+                    "apartment": "Apartment",
+                    "email": "Email",
+                    "email_notification_enabled": "Notify",
+                    "recieve_cash_enable": "Cash",
+                    "zelle_enable": "Zelle",
+                })
+                st.dataframe(
+                    display_members,
+                    hide_index=True,
+                    use_container_width=True,
+                    column_config={
+                        "Notify": st.column_config.CheckboxColumn("Notify", help="Email notifications enabled"),
+                        "Cash": st.column_config.CheckboxColumn("Cash"),
+                        "Zelle": st.column_config.CheckboxColumn("Zelle"),
+                    },
+                )
+
+        elif member_action == "add":
+            st.subheader("Add Committee Member")
             with st.form("add_committee_member_form"):
                 new_member_name = st.text_input("Member Name")
                 new_member_apartment = st.text_input("Apartment Number")
-                new_member_email = st.text_input("Email Address (for receiving reports)", placeholder="member@example.com")
+                new_member_email = st.text_input("Email Address", placeholder="member@example.com")
+                new_member_email_notification_enabled = st.checkbox("Enable email notifications", value=False)
                 new_member_cash_enable = st.checkbox("Enable for cash collection", value=False)
                 new_member_zelle_enable = st.checkbox("Enable for Zelle collection", value=False)
-                if st.form_submit_button("Add Member"):
-                    if not new_member_name.strip() or not new_member_apartment.strip():
-                        st.warning("Member name and apartment number are required.")
-                    else:
-                        try:
-                            # Ensure email column exists
-                            try:
-                                cursor.execute("ALTER TABLE committee_members ADD COLUMN email TEXT")
-                                conn.commit()
-                            except Exception:
-                                pass  # Column might already exist
-                            
-                            cursor.execute(
-                                "INSERT INTO committee_members (name, apartment, email, recieve_cash_enable, zelle_enable) VALUES (%s, %s, %s, %s, %s)",
-                                (new_member_name.strip(), new_member_apartment.strip(), new_member_email.strip() if new_member_email else None, new_member_cash_enable, new_member_zelle_enable)
-                            )
-                            conn.commit()
-                            st.success("✅ Committee member added!")
-                            st.rerun()
-                        except Exception as e:
-                            conn.rollback()
-                            st.error(f"❌ Failed to add committee member: {e}")
-
-        with member_tabs[0]:
-            # Load and display members including email if it exists
-            try:
-                cursor.execute("SELECT * FROM committee_members LIMIT 0")
-                member_cols = [column[0].lower() for column in cursor.description]
-                if "email" in member_cols:
-                    display_members = df_members.rename(columns={
-                        "name": "Name",
-                        "apartment": "Apartment Number",
-                        "email": "Email",
-                        "recieve_cash_enable": "Cash Collection Enabled",
-                        "zelle_enable": "Zelle Collection Enabled"
-                    })
+                add_member = st.form_submit_button("Add Member", use_container_width=True)
+            if add_member:
+                if not new_member_name.strip() or not new_member_apartment.strip():
+                    st.warning("Member name and apartment number are required.")
+                elif new_member_email_notification_enabled and not new_member_email.strip():
+                    st.warning("An email address is required when email notifications are enabled.")
                 else:
-                    display_members = df_members.rename(columns={
-                        "name": "Name",
-                        "apartment": "Apartment Number",
-                        "recieve_cash_enable": "Cash Collection Enabled",
-                        "zelle_enable": "Zelle Collection Enabled"
-                    })
-            except Exception:
-                display_members = df_members.rename(columns={
-                    "name": "Name",
-                    "apartment": "Apartment Number",
-                    "recieve_cash_enable": "Cash Collection Enabled",
-                    "zelle_enable": "Zelle Collection Enabled"
-                })
-            
-            display_members = display_members.drop(columns=["id"], errors="ignore")
-            display_members.index = display_members.index + 1
-            st.dataframe(display_members, use_container_width=True)
+                    try:
+                        cursor.execute(
+                            "INSERT INTO committee_members (name, apartment, email, email_notification_enabled, recieve_cash_enable, zelle_enable) VALUES (%s, %s, %s, %s, %s, %s)",
+                            (new_member_name.strip(), new_member_apartment.strip(), new_member_email.strip() or None, new_member_email_notification_enabled, new_member_cash_enable, new_member_zelle_enable),
+                        )
+                        conn.commit()
+                        st.session_state[action_key] = None
+                        st.session_state["committee_member_notice"] = "Committee member added."
+                        st.rerun()
+                    except Exception as e:
+                        conn.rollback()
+                        st.error(f"Failed to add committee member: {e}")
+            if st.button("Cancel", key="committee_member_cancel_add"):
+                st.session_state[action_key] = None
+                st.rerun()
 
-        with member_tabs[2]:
+        elif member_action == "edit":
             if df_members.empty:
                 st.info("No committee members found.")
             else:
-                member_options = df_members["name"].tolist()
-                updated_member = st.session_state.pop("updated_committee_member", None)
-                if updated_member in member_options:
-                    st.session_state["edit_committee_member_selection"] = updated_member
-                    st.session_state["edit_committee_member_name"] = updated_member
-                    updated_row = df_members[df_members["name"] == updated_member].iloc[0]
-                    st.session_state["edit_committee_member_apartment"] = str(updated_row["apartment"] or "")
-                    if "email" in df_members.columns:
-                        st.session_state["edit_committee_member_email"] = str(updated_row.get("email") or "")
-                    st.session_state["edit_committee_member_cash_enable"] = bool(updated_row["recieve_cash_enable"])
-                    st.session_state["edit_committee_member_zelle_enable"] = bool(updated_row["zelle_enable"])
-
-                def sync_member_name():
-                    selected_name = st.session_state["edit_committee_member_selection"]
-                    selected_row = df_members[df_members["name"] == selected_name].iloc[0]
-                    st.session_state["edit_committee_member_name"] = selected_name
-                    st.session_state["edit_committee_member_apartment"] = str(selected_row["apartment"] or "")
-                    if "email" in df_members.columns:
-                        st.session_state["edit_committee_member_email"] = str(selected_row.get("email") or "")
-                    st.session_state["edit_committee_member_cash_enable"] = bool(selected_row["recieve_cash_enable"])
-                    st.session_state["edit_committee_member_zelle_enable"] = bool(selected_row["zelle_enable"])
-                    st.session_state["edit_committee_member_last_selection"] = selected_name
-
-                selected_member = st.selectbox(
-                    "Select Member to Edit",
-                    member_options,
-                    key="edit_committee_member_selection",
-                    on_change=sync_member_name
+                st.subheader("Edit Committee Member")
+                selected_member_id = st.selectbox(
+                    "Select Member",
+                    df_members["id"].tolist(),
+                    format_func=lambda member_id: df_members.loc[df_members["id"] == member_id, "name"].iloc[0],
+                    key="committee_member_edit_id",
                 )
-                member_row = df_members[df_members["name"] == selected_member].iloc[0]
-                if st.session_state.get("edit_committee_member_last_selection") != selected_member:
-                    st.session_state["edit_committee_member_name"] = member_row["name"]
-                    st.session_state["edit_committee_member_apartment"] = str(member_row["apartment"] or "")
-                    if "email" in df_members.columns:
-                        st.session_state["edit_committee_member_email"] = str(member_row.get("email") or "")
-                    st.session_state["edit_committee_member_cash_enable"] = bool(member_row["recieve_cash_enable"])
-                    st.session_state["edit_committee_member_zelle_enable"] = bool(member_row["zelle_enable"])
-                    st.session_state["edit_committee_member_last_selection"] = selected_member
-                member_name = st.text_input("Member Name", key="edit_committee_member_name")
-                member_apartment = st.text_input("Apartment Number", key="edit_committee_member_apartment")
-                member_email = st.text_input("Email Address (for receiving reports)", key="edit_committee_member_email", placeholder="member@example.com")
-                member_cash_enable = st.checkbox("Enable for cash collection", key="edit_committee_member_cash_enable")
-                member_zelle_enable = st.checkbox("Enable for Zelle collection", key="edit_committee_member_zelle_enable")
-                if st.button("Update Committee Member"):
+                member_row = df_members[df_members["id"] == selected_member_id].iloc[0]
+                if st.session_state.get("committee_member_edit_loaded_id") != selected_member_id:
+                    st.session_state["committee_member_edit_name"] = str(member_row["name"] or "")
+                    st.session_state["committee_member_edit_apartment"] = str(member_row["apartment"] or "")
+                    st.session_state["committee_member_edit_email"] = str(member_row["email"] or "")
+                    st.session_state["committee_member_edit_notify"] = bool(member_row["email_notification_enabled"])
+                    st.session_state["committee_member_edit_cash"] = bool(member_row["recieve_cash_enable"])
+                    st.session_state["committee_member_edit_zelle"] = bool(member_row["zelle_enable"])
+                    st.session_state["committee_member_edit_loaded_id"] = selected_member_id
+                with st.form("edit_committee_member_form"):
+                    member_name = st.text_input("Member Name", key="committee_member_edit_name")
+                    member_apartment = st.text_input("Apartment Number", key="committee_member_edit_apartment")
+                    member_email = st.text_input("Email Address", key="committee_member_edit_email", placeholder="member@example.com")
+                    member_email_notification_enabled = st.checkbox("Enable email notifications", key="committee_member_edit_notify")
+                    member_cash_enable = st.checkbox("Enable for cash collection", key="committee_member_edit_cash")
+                    member_zelle_enable = st.checkbox("Enable for Zelle collection", key="committee_member_edit_zelle")
+                    update_member = st.form_submit_button("Update Member", use_container_width=True)
+                if update_member:
                     if not member_name.strip() or not member_apartment.strip():
                         st.warning("Member name and apartment number are required.")
+                    elif member_email_notification_enabled and not member_email.strip():
+                        st.warning("An email address is required when email notifications are enabled.")
                     else:
                         try:
-                            # Ensure email column exists
-                            try:
-                                cursor.execute("ALTER TABLE committee_members ADD COLUMN email TEXT")
-                                conn.commit()
-                            except Exception:
-                                pass  # Column might already exist
-                            
                             cursor.execute(
-                                "UPDATE committee_members SET name=%s, apartment=%s, email=%s, recieve_cash_enable=%s, zelle_enable=%s WHERE id=%s",
-                                (member_name.strip(), member_apartment.strip(), member_email.strip() if member_email else None, member_cash_enable, member_zelle_enable, int(member_row["id"]))
+                                "UPDATE committee_members SET name=%s, apartment=%s, email=%s, email_notification_enabled=%s, recieve_cash_enable=%s, zelle_enable=%s WHERE id=%s",
+                                (member_name.strip(), member_apartment.strip(), member_email.strip() or None, member_email_notification_enabled, member_cash_enable, member_zelle_enable, int(member_row["id"])),
                             )
                             conn.commit()
-                            st.session_state["updated_committee_member"] = member_name.strip()
-                            st.success("✅ Committee member updated!")
+                            st.session_state[action_key] = None
+                            st.session_state.pop("committee_member_edit_loaded_id", None)
+                            st.session_state["committee_member_notice"] = "Committee member updated."
                             st.rerun()
                         except Exception as e:
                             conn.rollback()
-                            st.error(f"❌ Failed to update committee member: {e}")
+                            st.error(f"Failed to update committee member: {e}")
+                if st.button("Cancel", key="committee_member_cancel_edit"):
+                    st.session_state[action_key] = None
+                    st.session_state.pop("committee_member_edit_loaded_id", None)
+                    st.rerun()
 
-        with member_tabs[3]:
+        elif member_action == "delete":
             if df_members.empty:
                 st.info("No committee members found.")
             else:
-                member_options = df_members["name"].tolist()
-                selected_member = st.selectbox("Select Member to Delete", member_options)
-                member_row = df_members[df_members["name"] == selected_member].iloc[0]
+                st.subheader("Delete Committee Member")
+                selected_member_id = st.selectbox(
+                    "Select Member",
+                    df_members["id"].tolist(),
+                    format_func=lambda member_id: df_members.loc[df_members["id"] == member_id, "name"].iloc[0],
+                    key="committee_member_delete_id",
+                )
+                member_row = df_members[df_members["id"] == selected_member_id].iloc[0]
                 st.write(f"Member: **{member_row['name']}**")
-                st.write(f"Apartment Number: **{member_row['apartment']}**")
-                st.write(f"Cash Collection Enabled: **{bool(member_row['recieve_cash_enable'])}**")
-                st.write(f"Zelle Collection Enabled: **{bool(member_row['zelle_enable'])}**")
-                if st.button("Delete Committee Member"):
+                st.write(f"Apartment: **{member_row['apartment']}**")
+                st.write(f"Email: **{member_row.get('email') or 'Not set'}**")
+                delete_col, cancel_col = st.columns(2)
+                if delete_col.button("Delete Member", key="committee_member_confirm_delete", type="primary"):
                     try:
                         cursor.execute("DELETE FROM committee_members WHERE id=%s", (int(member_row["id"]),))
                         conn.commit()
-                        st.success("✅ Committee member deleted!")
+                        st.session_state[action_key] = None
+                        st.session_state["committee_member_notice"] = "Committee member deleted."
                         st.rerun()
                     except Exception as e:
                         conn.rollback()
-                        st.error(f"❌ Failed to delete committee member: {e}")
-
-    if menu == "Manage Notification Emails":
-        st.markdown("<h2 style='color: #6A1B9A;'>✉️ Manage Notification Emails</h2>", unsafe_allow_html=True)
-        df_emails = pd.read_sql("SELECT * FROM notification_emails ORDER BY id", conn)
-        df_emails.columns = [c.lower() for c in df_emails.columns]
-        tabs = ["Add Notification Email", "Notification Emails List", "Edit Notification Email", "Delete Notification Email"]
-        tab_add, tab_list, tab_edit, tab_delete = st.tabs(tabs)
-
-        with tab_add:
-            st.markdown("<h3 style='color: #6A1B9A;'>➕ Add Notification Email</h3>", unsafe_allow_html=True)
-            with st.form("add_notification_email_form"):
-                new_email = st.text_input("New Email Address")
-                if st.form_submit_button("Add Email"):
-                    try:
-                        cursor.execute("INSERT INTO notification_emails (email) VALUES (%s)", (new_email.strip(),))
-                        conn.commit()
-                        st.success("✅ Notification email added!")
-                        st.rerun()
-                    except Exception as e:
-                        conn.rollback()
-                        st.error(f"❌ Failed to add notification email: {e}")
-
-        with tab_list:
-            st.markdown("<h3 style='color: #6A1B9A;'>📋 Notification Emails List</h3>", unsafe_allow_html=True)
-            display_emails = df_emails.drop(columns=["id"])
-            display_emails.index = display_emails.index + 1
-            st.dataframe(display_emails, use_container_width=True)
-
-        with tab_edit:
-            st.markdown("<h3 style='color: #6A1B9A;'>✏️ Edit Notification Email</h3>", unsafe_allow_html=True)
-            email_list = df_emails["email"].tolist()
-            selected_email = st.selectbox("Select Email to Edit", email_list)
-            email_row = df_emails[df_emails.email == selected_email].iloc[0]
-            email_id = int(email_row["id"])
-            edit_email_val = st.text_input("Edit Email", value=email_row["email"], key="edit_notification_email")
-            if st.button("Update Notification Email"):
-                try:
-                    cursor.execute("UPDATE notification_emails SET email=%s WHERE id=%s", (edit_email_val.strip(), email_id))
-                    conn.commit()
-                    st.success("✅ Notification email updated!")
+                        st.error(f"Failed to delete committee member: {e}")
+                if cancel_col.button("Cancel", key="committee_member_cancel_delete"):
+                    st.session_state[action_key] = None
                     st.rerun()
-                except Exception as e:
-                    conn.rollback()
-                    st.error(f"❌ Failed to update notification email: {e}")
-
-        with tab_delete:
-            st.markdown("<h3 style='color: #6A1B9A;'>🗑️ Delete Notification Email</h3>", unsafe_allow_html=True)
-            email_list = df_emails["email"].tolist()
-            selected_email = st.selectbox("Select Email to Delete", email_list)
-            email_row = df_emails[df_emails.email == selected_email].iloc[0]
-            email_id = int(email_row["id"])
-            st.write(f"Email: {email_row['email']}")
-            if st.button("Delete Notification Email"):
-                try:
-                    cursor.execute("DELETE FROM notification_emails WHERE id=%s", (email_id,))
-                    conn.commit()
-                    st.success("🗑️ Notification email deleted!")
-                    st.rerun()
-                except Exception as e:
-                    conn.rollback()
-                    st.error(f"❌ Failed to delete notification email: {e}")
-                    st.success("✅ New notification email added!")
-                    st.rerun()
-                except Exception as e:
-                    conn.rollback()
-                    st.error(f"❌ Failed to add notification email: {e}")
-

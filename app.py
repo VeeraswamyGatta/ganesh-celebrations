@@ -3,8 +3,14 @@ from streamlit_option_menu import option_menu
 import datetime
 import time
 import base64
+import hmac
+import re
+import secrets
 from io import BytesIO
+from html import escape
 
+from app.db import get_connection
+from app.email_utils import send_email
 from app.login_audit import (
     end_login_audit,
     get_today_visit_count,
@@ -33,6 +39,75 @@ def get_admin_password():
     now_cst = now_utc.astimezone(cst)
     today_day = now_cst.strftime('%d')
     return f"{ADMIN_PASSWORD_BASE}{today_day}"
+
+
+ALLOWED_ADMIN_EMAIL_PATTERN = re.compile(r"[A-Za-z0-9._%+-]+@(gmail\.com|zoho\.com|yahoo\.com)", re.IGNORECASE)
+
+
+def send_admin_login_otp(email, is_resend=False):
+    normalized_email = email.strip().lower()
+    if not ALLOWED_ADMIN_EMAIL_PATTERN.fullmatch(normalized_email):
+        st.error("Use an email ending in @gmail.com, @zoho.com, or @yahoo.com.")
+        return False
+    if is_resend:
+        seconds_until_resend = st.session_state.get("admin_otp_resend_available_at", 0) - time.monotonic()
+        if seconds_until_resend > 0:
+            st.error(f"You can resend the code in {int(seconds_until_resend) + 1} seconds.")
+            return False
+
+    cursor = get_connection().cursor()
+    try:
+        cursor.execute(
+            "SELECT 1 FROM committee_members WHERE LOWER(TRIM(email)) = %s LIMIT 1",
+            (normalized_email,),
+        )
+        if cursor.fetchone() is None:
+            st.error("This email is not allowed to access admin login.")
+            return False
+    finally:
+        cursor.close()
+
+    otp = f"{secrets.randbelow(1_000_000):06d}"
+    body = f"Your admin sign-in verification code is <b>{otp}</b>. It expires in 5 minutes."
+    if not send_email("Ganesh Celebrations Login Verification Code", body, [normalized_email]):
+        st.error("Unable to send the verification code. Check the email service configuration and try again.")
+        return False
+
+    st.session_state.admin_otp_code = otp
+    st.session_state.admin_otp_email = normalized_email
+    st.session_state.admin_otp_expires_at = time.monotonic() + 5 * 60
+    st.session_state.admin_otp_resend_available_at = time.monotonic() + 2 * 60
+    st.session_state.admin_otp_stage = "verify"
+    st.session_state.admin_otp_attempts = 0
+    return True
+
+
+def clear_admin_login_otp():
+    for key in (
+        "admin_otp_code",
+        "admin_otp_email",
+        "admin_otp_expires_at",
+        "admin_otp_resend_available_at",
+        "admin_otp_stage",
+        "admin_otp_attempts",
+    ):
+        st.session_state.pop(key, None)
+
+
+@st.fragment(run_every=1)
+def render_admin_otp_resend_button():
+    seconds_until_resend = max(
+        0,
+        int(st.session_state.get("admin_otp_resend_available_at", 0) - time.monotonic()) + 1,
+    )
+    if seconds_until_resend:
+        minutes, seconds = divmod(seconds_until_resend, 60)
+        st.caption(f"Resend available in {minutes}:{seconds:02d}")
+    if st.button("Resend OTP", disabled=seconds_until_resend > 0, key="admin_otp_resend_button"):
+        with st.spinner("Sending verification code..."):
+            sent = send_admin_login_otp(st.session_state.admin_otp_email, is_resend=True)
+        if sent:
+            st.success("A new verification code was sent.")
 
 # ---------- Styling ----------
 st.markdown("""
@@ -427,14 +502,103 @@ st.markdown("""
     }
     .login-panel-title {
         margin: 0;
-        color: #3e2723;
-        font-size: 1.55rem;
+        color: #80384f !important;
+        font-size: 1.05rem !important;
         font-weight: 800;
+        line-height: 1.2;
     }
     .login-panel-copy {
-        margin: 0.25rem 0 1rem;
-        color: #546e7a;
-        font-size: 0.92rem;
+        display: inline-flex;
+        align-items: center;
+        margin: 0.42rem 0 0;
+        padding: 0.28rem 0.55rem;
+        border: 1px solid #ead5b7;
+        border-radius: 6px;
+        background: #fbf3e6;
+        color: #80523c !important;
+        font-size: 0.74rem !important;
+        font-weight: 700;
+        line-height: 1.35;
+    }
+    .login-brand-kicker {
+        margin: 0 0 0.4rem;
+        color: #28736d;
+        font-size: 0.62rem;
+        font-weight: 800;
+        text-transform: uppercase;
+    }
+    .login-brand {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 0.15rem 0 1.05rem;
+        border-bottom: 1px solid #d9e4d8;
+    }
+    .login-brand-image {
+        flex: 0 0 4.6rem;
+        width: 4.6rem;
+        height: 4.6rem;
+        padding: 0.2rem;
+        border: 1px solid #d2a457;
+        border-radius: 12px;
+        background: #ffffff;
+        object-fit: cover;
+        box-shadow: 0 4px 10px rgba(60, 72, 49, 0.12);
+    }
+    [data-testid="stVerticalBlock"]:has(> .stElementContainer .login-brand) {
+        width: min(100%, 34rem);
+        margin: 0 auto;
+        padding: 1.4rem 1.5rem 1.25rem;
+        gap: 0.8rem;
+        border: 1px solid #d4ddce;
+        border-top: 4px solid #c28b39;
+        border-radius: 12px;
+        background: linear-gradient(145deg, #fffdf7 0%, #eef4e9 72%, #f7eee4 100%);
+        box-shadow: 0 15px 34px rgba(36, 56, 43, 0.15);
+    }
+    [data-testid="stVerticalBlock"]:has(> .stElementContainer .login-brand) [data-testid="stForm"] {
+        padding: 0.25rem 0 0 !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+    }
+    [data-testid="stVerticalBlock"]:has(> .stElementContainer .login-brand) [data-testid="stRadio"] div[role="radiogroup"] {
+        gap: 0.4rem;
+        padding: 0.3rem 0.4rem;
+        border: 1px solid #d9e4d8;
+        border-radius: 9px;
+        background: rgba(255, 255, 255, 0.72);
+    }
+    [data-testid="stVerticalBlock"]:has(> .stElementContainer .login-brand) [data-testid="stTextInput"] input {
+        min-height: 2.8rem;
+        border-color: #c9d7ca !important;
+        border-radius: 8px !important;
+    }
+    [data-testid="stVerticalBlock"]:has(> .stElementContainer .login-brand) [data-testid="stFormSubmitButton"] button {
+        min-height: 2.9rem !important;
+        border: 1px solid #b88636 !important;
+        border-radius: 8px !important;
+        background: linear-gradient(115deg, #174632 0%, #286949 65%, #3b8054 100%) !important;
+        box-shadow: 0 5px 12px rgba(29, 79, 51, 0.2) !important;
+    }
+    [data-testid="stVerticalBlock"]:has(> .stElementContainer .login-brand) [data-testid="stFormSubmitButton"] button:hover {
+        background: linear-gradient(115deg, #123a29 0%, #205a3d 65%, #34744b 100%) !important;
+        transform: translateY(-1px);
+    }
+    @media (max-width: 640px) {
+        [data-testid="stVerticalBlock"]:has(> .stElementContainer .login-brand) {
+            padding: 1rem 0.9rem 0.9rem;
+            border-radius: 12px;
+        }
+        .login-brand-image {
+            flex-basis: 3.8rem;
+            width: 3.8rem;
+            height: 3.8rem;
+        }
+        .login-panel-title {
+            font-size: 1rem !important;
+        }
     }
     [data-testid="stForm"] {
         border: 1px solid #d7ccc8 !important;
@@ -750,8 +914,17 @@ SESSION_IDLE_TIMEOUT_SECONDS = int(st.secrets.get("session_idle_timeout_seconds"
 
 def end_session():
     end_login_audit(st.session_state.get("login_audit_session_id"))
+    clear_admin_login_otp()
     st.session_state.user_logged_in = False
     st.session_state.admin_logged_in = False
+    for key in (
+        "admin_login_role",
+        "admin_identity",
+        "admin_committee_member_name",
+        "admin_cash_enabled",
+        "admin_zelle_enabled",
+    ):
+        st.session_state.pop(key, None)
     st.session_state.pop("admin_full_name", None)
     st.session_state.pop("admin_audit_name_pending", None)
     st.session_state.pop("last_activity_at", None)
@@ -871,23 +1044,23 @@ if not st.session_state.user_logged_in and not st.session_state.admin_logged_in:
                         selected_landing_navigation = label
                         st.session_state.scroll_to_top = True
 
-        # Then show the landing hero section below
-        st.markdown(
-            f"""
-            <section class="landing-hero">
-                <div class="landing-event-label">Ganesh Celebrations 2026</div>
-                <div class="landing-showcase">
-                    <img class="landing-image" src="data:image/png;base64,{ganesh_image_base64}" alt="Lord Ganesh">
-                    <div class="landing-details">
-                        <span class="landing-detail">🗓️ 14–20 September 2026</span>
-                        <span class="landing-detail">📍 3C Garage</span>
-                        <span class="landing-detail">🙏 Austin, Texas</span>
+        if selected_landing_navigation != "Login":
+            st.markdown(
+                f"""
+                <section class="landing-hero">
+                    <div class="landing-event-label">Ganesh Celebrations 2026</div>
+                    <div class="landing-showcase">
+                        <img class="landing-image" src="data:image/png;base64,{ganesh_image_base64}" alt="Lord Ganesh">
+                        <div class="landing-details">
+                            <span class="landing-detail">🗓️ 14–20 September 2026</span>
+                            <span class="landing-detail">📍 3C Garage</span>
+                            <span class="landing-detail">🙏 Austin, Texas</span>
+                        </div>
                     </div>
-                </div>
-            </section>
-            """,
-            unsafe_allow_html=True,
-        )
+                </section>
+                """,
+                unsafe_allow_html=True,
+            )
 
     st.session_state.pop("scroll_to_top", None)
 
@@ -917,6 +1090,10 @@ if show_login_form:
     if st.session_state.get("admin_audit_name_pending", False):
         login_left, login_center, login_right = st.columns([1, 1.15, 1])
         with login_center:
+            st.markdown(
+                f"<div class='login-brand'><img class='login-brand-image' src='data:image/png;base64,{ganesh_image_base64}' alt='Ganesh'><div><div class='login-brand-kicker'>Terrazzo · Austin · 2026</div><div class='login-panel-title'>Ganesh Celebrations</div><div class='login-panel-copy'>Complete administrator sign-in</div></div></div>",
+                unsafe_allow_html=True,
+            )
             with st.form("admin_audit_name_form"):
                 full_name = st.text_input(
                     "📝 Your Full Name (for audit trail) *",
@@ -933,64 +1110,147 @@ if show_login_form:
                 st.session_state.admin_logged_in = True
                 st.session_state.admin_audit_name_pending = False
                 st.session_state.page_loading_message = "Loading celebration details"
-                st.session_state.login_audit_session_id = start_login_audit("Admin", ADMIN_USERNAME)
+                audit_username = st.session_state.get("admin_identity", ADMIN_USERNAME)
+                st.session_state.login_audit_session_id = start_login_audit("Admin", audit_username)
                 st.session_state.last_activity_at = time.monotonic()
                 st.rerun()
     else:
         login_left, login_center, login_right = st.columns([1, 1.15, 1])
         with login_center:
-            with st.form("login_form"):
-                user = st.text_input("👤 Username")
-                pwd = st.text_input("🔒 Password", type="password")
-                login_error = st.empty()
-                login_button = st.empty()
-                login = login_button.form_submit_button("Login", use_container_width=True)
-            if login:
-                username = user.strip().lower()
-                password = pwd.strip()
-                if username == ADMIN_USERNAME.lower() and password == get_admin_password():
-                    login_button.form_submit_button(":material/hourglass_top: Logging in...", disabled=True, use_container_width=True)
-                    st.session_state.admin_audit_name_pending = True
-                    st.rerun()
-                elif username == USER_USERNAME.lower() and password == USER_PASSWORD:
-                    login_button.form_submit_button(":material/hourglass_top: Logging in...", disabled=True, use_container_width=True)
-                    st.session_state.page_loading_message = "Loading celebration details"
-                    st.session_state.user_logged_in = True
-                    st.session_state.user_apartment = ""
-                    st.session_state.login_audit_session_id = start_login_audit("User", USER_USERNAME)
-                    st.session_state.last_activity_at = time.monotonic()
-                    st.rerun()
+            st.markdown(
+                f"<div class='login-brand'><img class='login-brand-image' src='data:image/png;base64,{ganesh_image_base64}' alt='Ganesh'><div><div class='login-brand-kicker'>Terrazzo · Austin · 2026</div><div class='login-panel-title'>Ganesh Celebrations</div><div class='login-panel-copy'>Sign in to continue</div></div></div>",
+                unsafe_allow_html=True,
+            )
+            otp_stage = st.session_state.get("admin_otp_stage")
+            if otp_stage == "verify" and time.monotonic() >= st.session_state.get("admin_otp_expires_at", 0):
+                clear_admin_login_otp()
+                otp_stage = "email"
+                st.warning("The verification code expired. Generate a new code to continue.")
+
+            if otp_stage == "verify":
+                st.markdown("### Administrator verification")
+                st.info(f"Enter the six-digit code sent to {st.session_state.admin_otp_email}.")
+                with st.form("admin_otp_verify_form"):
+                    otp_input = st.text_input("Verification code", max_chars=6)
+                    verify_otp = st.form_submit_button("Verify OTP", use_container_width=True)
+                if verify_otp:
+                    if time.monotonic() >= st.session_state.get("admin_otp_expires_at", 0):
+                        clear_admin_login_otp()
+                        st.warning("The verification code expired. Generate a new code to continue.")
+                    elif hmac.compare_digest(otp_input.strip(), st.session_state.admin_otp_code):
+                        verified_email = st.session_state.admin_otp_email
+                        member_cursor = get_connection().cursor()
+                        try:
+                            member_cursor.execute(
+                                "SELECT name, recieve_cash_enable, zelle_enable "
+                                "FROM committee_members WHERE LOWER(TRIM(email)) = %s LIMIT 1",
+                                (verified_email,),
+                            )
+                            verified_member = member_cursor.fetchone()
+                        finally:
+                            member_cursor.close()
+                        clear_admin_login_otp()
+                        if verified_member is None:
+                            st.error("This committee email is no longer allowed to access admin login.")
+                        else:
+                            admin_member_name = str(verified_member[0]).strip()
+                            st.session_state.admin_login_role = "admin_email"
+                            st.session_state.admin_identity = verified_email
+                            st.session_state.admin_committee_member_name = admin_member_name
+                            st.session_state.admin_cash_enabled = bool(verified_member[1])
+                            st.session_state.admin_zelle_enabled = bool(verified_member[2])
+                            st.session_state.admin_full_name = admin_member_name
+                            st.session_state.admin_audit_name_pending = False
+                            st.session_state.admin_logged_in = True
+                            st.session_state.page_loading_message = "Loading celebration details"
+                            st.session_state.login_audit_session_id = start_login_audit("Admin", admin_member_name)
+                            st.session_state.last_activity_at = time.monotonic()
+                            st.rerun()
+                    else:
+                        attempts = st.session_state.get("admin_otp_attempts", 0) + 1
+                        if attempts >= 5:
+                            clear_admin_login_otp()
+                            st.error("Too many incorrect codes. Restart admin login to request another code.")
+                        else:
+                            st.session_state.admin_otp_attempts = attempts
+                            st.error("Incorrect verification code. Admin access was not granted.")
+                render_admin_otp_resend_button()
+
+            elif otp_stage == "email":
+                st.markdown("### Administrator verification")
+                with st.form("admin_otp_email_form"):
+                    admin_email = st.text_input("Email", placeholder="test@gmail.com", key="admin_otp_email_input")
+                    request_otp = st.form_submit_button("Generate OTP", use_container_width=True)
+                if request_otp:
+                    with st.spinner("Sending verification code..."):
+                        otp_sent = send_admin_login_otp(admin_email)
+                    if otp_sent:
+                        st.success("A verification code was sent to your email.")
+                        st.rerun()
+
+            else:
+                login_role = st.radio(
+                    "Access type",
+                    ["User", "Admin"],
+                    horizontal=True,
+                    key="login_role",
+                    label_visibility="collapsed",
+                )
+                if login_role == "Admin":
+                    with st.form("admin_otp_email_form"):
+                        admin_email = st.text_input("Email", placeholder="test@gmail.com", key="admin_otp_email_input")
+                        admin_login = st.form_submit_button("Generate OTP", use_container_width=True)
+                    if admin_login:
+                        with st.spinner("Sending verification code..."):
+                            otp_sent = send_admin_login_otp(admin_email)
+                        if otp_sent:
+                            st.success("A verification code was sent to your email.")
+                            st.rerun()
                 else:
-                    login_error.markdown(
-                        """
-                        <div style="
-                            margin: 0.35rem 0 0.75rem;
-                            padding: 0.75rem 0.9rem;
-                            border: 1px solid #ef9a9a;
-                            border-left: 4px solid #d32f2f;
-                            border-radius: 10px;
-                            background: #ffebee;
-                            color: #b71c1c;
-                            font-size: 0.9rem;
-                            font-weight: 700;
-                            text-align: center;
-                        ">
-                            Invalid username or password.
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
+                    with st.form("login_form"):
+                        user = st.text_input("👤 Username")
+                        pwd = st.text_input("🔒 Password", type="password")
+                        login = st.form_submit_button("Login", use_container_width=True)
+                    if login:
+                        username = user.strip().lower()
+                        password = pwd.strip()
+                        if username == ADMIN_USERNAME.lower() and password == get_admin_password():
+                            st.session_state.admin_login_role = "admin"
+                            st.session_state.admin_identity = ADMIN_USERNAME
+                            st.session_state.admin_audit_name_pending = True
+                            st.rerun()
+                        elif username == USER_USERNAME.lower() and password == USER_PASSWORD:
+                            st.session_state.page_loading_message = "Loading celebration details"
+                            st.session_state.user_logged_in = True
+                            st.session_state.user_apartment = ""
+                            st.session_state.login_audit_session_id = start_login_audit("User", USER_USERNAME)
+                            st.session_state.last_activity_at = time.monotonic()
+                            st.rerun()
+                        else:
+                            st.error("Invalid username or password.")
 else:
     # Show menu based on role after successful login
     if st.session_state.admin_logged_in:
-        menu_items = ["Dashboard", "Donate", "Expenses", "Statistics", "Prasad", "Events", "Cultural", "Payments", "Admin", "Ganesh Pooja Seating"]
-        menu_icons = ["bar-chart", "gift", "cash-coin", "chart-line", "award", "calendar-event", "person-check", "credit-card", "lock", "calendar3"]
+        menu_items = ["Dashboard", "Donate", "Finance", "Statistics", "Prasad", "Events", "Cultural", "Admin", "Ganesh Pooja Seating"]
+        menu_icons = ["bar-chart", "gift", "cash-coin", "chart-line", "award", "calendar-event", "person-check", "lock", "calendar3"]
     elif st.session_state.user_logged_in:
-        menu_items = ["Dashboard", "Donate", "Expenses", "Statistics", "Prasad", "Events", "Cultural"]
+        menu_items = ["Dashboard", "Donate", "Finance", "Statistics", "Prasad", "Events", "Cultural"]
         menu_icons = ["bar-chart", "gift", "cash-coin", "chart-line", "award", "calendar-event", "person-check"]
     else:
         menu_items = []
         menu_icons = []
+    if st.session_state.admin_logged_in:
+        logged_in_name = escape(str(st.session_state.get("admin_full_name", ADMIN_USERNAME)))
+        st.markdown(
+            f"""
+            <div style="display:flex;align-items:center;gap:0.65rem;width:max-content;max-width:100%;margin:0.35rem 0 0.7rem;padding:0.42rem 0.75rem;border:1px solid #d6dfcf;border-left:3px solid #b47b35;border-radius:8px;background:linear-gradient(100deg,#f3f7ef 0%,#fff8ec 100%);box-shadow:0 2px 7px rgba(40,68,48,0.08);">
+                <span style="display:flex;align-items:center;justify-content:center;width:1.55rem;height:1.55rem;border-radius:50%;background:#24553e;color:#fff;font-size:0.75rem;font-weight:800;">{logged_in_name[:1].upper()}</span>
+                <span style="color:#687269;font-size:0.75rem;font-weight:600;">Logged in as</span>
+                <strong style="color:#783b50;font-size:0.82rem;font-weight:800;overflow-wrap:anywhere;">{logged_in_name}</strong>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
     if menu_items:
         if open_prasad_seva and st.session_state.get("last_requested_view") != requested_view:
             st.session_state.main_navigation = "Prasad"
@@ -1006,8 +1266,7 @@ else:
             "Events": ":material/event: Events",
             "Cultural": ":material/person_check: Cultural",
             "Ganesh Pooja Seating": ":material/chair_alt: Pooja",
-            "Expenses": ":material/receipt_long: Expenses",
-            "Payments": ":material/credit_card: Pay",
+            "Finance": ":material/receipt_long: Finance",
             "Admin": ":material/admin_panel_settings: Admin",
         }
         with st.container(key="main_menu_wrapper"):
@@ -1031,8 +1290,7 @@ else:
                             "Events": "Loading events",
                             "Cultural": "Loading cultural event",
                             "Ganesh Pooja Seating": "Loading ganesh pooja seating",
-                            "Expenses": "Loading expense details",
-                            "Payments": "Loading payment details",
+                            "Finance": "Loading finance details",
                             "Admin": "Loading admin tools",
                         }
                         if menu_item != previous_main_navigation:
@@ -1060,7 +1318,7 @@ else:
         if st.session_state.get("content_loading_message"):
             content_loader = show_page_loader(st.session_state.content_loading_message)
 
-        if main_menu != "Expenses":
+        if main_menu != "Finance":
             st.session_state["expense_inline_action"] = None
 
         if main_menu == "Dashboard":
@@ -1085,12 +1343,9 @@ else:
         elif main_menu == "Ganesh Pooja Seating":
             from app.events import _ganesh_pooja_seating_tab
             _ganesh_pooja_seating_tab()
-        elif main_menu == "Expenses":
+        elif main_menu == "Finance":
             from app.expenses import expenses_tab
             expenses_tab()
-        elif st.session_state.admin_logged_in and main_menu == "Payments":
-            from app.admin import admin_tab
-            admin_tab(menu="Sponsorship Payment Details")
         elif st.session_state.admin_logged_in and main_menu == "Admin":
             if 'admin_full_name' not in st.session_state:
                 st.session_state.admin_full_name = ''
@@ -1124,10 +1379,9 @@ else:
                 "Sponsorship Record",
                 "Sponsorship Items",
                 "Committee Members",
-                "Manage Notification Emails",
                 "Email Event Details",
             ]
-            admin_icons = ["pencil-square", "card-checklist", "people-fill", "envelope-paper-fill", "envelope-arrow-up"]
+            admin_icons = ["pencil-square", "card-checklist", "people-fill", "envelope-arrow-up"]
             if is_user_login_tracking_enabled():
                 admin_sections.insert(0, "User Login Activity")
                 admin_icons.insert(0, "bar-chart-fill")

@@ -55,12 +55,14 @@ TABLES = {
         """,
     },
     "committee_members": {
-        "columns": ["name", "apartment", "recieve_cash_enable", "zelle_enable"],
+        "columns": ["name", "apartment", "email", "email_notification_enabled", "recieve_cash_enable", "zelle_enable"],
         "ddl": """
             CREATE TABLE IF NOT EXISTS {schema}.committee_members (
                 id SERIAL PRIMARY KEY,
                 name TEXT NOT NULL UNIQUE,
                 apartment TEXT,
+                email TEXT,
+                email_notification_enabled BOOLEAN NOT NULL DEFAULT FALSE,
                 recieve_cash_enable BOOLEAN NOT NULL DEFAULT FALSE,
                 zelle_enable BOOLEAN NOT NULL DEFAULT FALSE
             )
