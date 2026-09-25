@@ -17,7 +17,8 @@ def expenses_tab():
         st.session_state["add_expense_subcat"] = ""
         st.session_state["add_expense_amount"] = 0.0
         st.session_state["add_expense_date"] = datetime.date.today()
-        st.session_state["add_expense_spentby"] = ""
+        if st.session_state.get("admin_login_role") != "admin_email":
+            st.session_state["add_expense_spentby"] = ""
         st.session_state["add_expense_comments"] = ""
     # File uploader cannot be cleared programmatically; do not show info to user
         st.session_state["clear_expense_form"] = False
@@ -61,6 +62,34 @@ def expenses_tab():
     # Tabs for expense management and summaries
     # Determine tabs to show based on user role
     is_admin = st.session_state.get("admin_logged_in", False)
+    is_email_admin = is_admin and st.session_state.get("admin_login_role") == "admin_email"
+    email_admin_name = str(
+        st.session_state.get("admin_committee_member_name") or st.session_state.get("admin_full_name") or ""
+    ).strip()
+    st.markdown(
+        """
+        <style>
+        .admin-name-display {
+            display: flex;
+            align-items: baseline;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+            width: 100%;
+            box-sizing: border-box;
+            margin: 0.65rem 0;
+            padding: 0.65rem 0.8rem;
+            border-left: 3px solid #315b48;
+            border-radius: 6px;
+            background: #eff6f0;
+            color: #315b48;
+            font-size: 0.86rem;
+        }
+        .admin-name-display-label { color: #706860; font-weight: 600; }
+        .admin-name-display strong { font-weight: 750; overflow-wrap: anywhere; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
     if is_admin:
         can_record_pay = (
             st.session_state.get("admin_login_role") != "admin_email"
@@ -233,11 +262,17 @@ def expenses_tab():
                 net_amount = expense_map.get(name, 0.0) - settlement_map.get(name, 0.0)
                 if net_amount != 0:
                     expense_names.append(name)
-            # Use index to control default selection, avoid setting session_state directly
-            default_index = 0
-            if "settlement_name" in st.session_state and st.session_state["settlement_name"] in expense_names:
-                default_index = expense_names.index(st.session_state["settlement_name"])
-            name = st.selectbox("Name", expense_names, index=default_index, key="settlement_name")
+            if is_email_admin:
+                default_index = 0
+                if email_admin_name in expense_names:
+                    default_index = expense_names.index(email_admin_name)
+                name = st.selectbox("Name", expense_names, index=default_index, key="settlement_name_email")
+            else:
+                # Use index to control default selection, avoid setting session_state directly
+                default_index = 0
+                if "settlement_name" in st.session_state and st.session_state["settlement_name"] in expense_names:
+                    default_index = expense_names.index(st.session_state["settlement_name"])
+                name = st.selectbox("Name", expense_names, index=default_index, key="settlement_name")
             # Set Amount field to (total expense - total settlement) for selected name
             default_amount = expense_map.get(name, 0.0) - settlement_map.get(name, 0.0)
             try:
@@ -252,7 +287,7 @@ def expenses_tab():
                 st.session_state["settlement_last_name"] = name
                 st.session_state["settlement_last_default_amount"] = default_amount
             # Remove min_value to allow negative values
-            amount = st.number_input("Amount", format="%.2f", key="settlement_amount")
+            amount = st.number_input("Pending Settlement Amount", format="%.2f", key="settlement_amount")
             with st.spinner("Loading cash collectors..."):
                 cursor.execute("SELECT * FROM payment_details LIMIT 0")
                 payment_columns = [column[0].lower() for column in cursor.description]
@@ -266,12 +301,22 @@ def expenses_tab():
                     sent_by_options = [row[0] for row in cursor.fetchall()]
                 else:
                     sent_by_options = []
-            if not sent_by_options:
-                sent_by_options = ["-- No Cash Collectors Available --"]
-            sent_by = st.selectbox("Sent By", sent_by_options, key="settlement_sent_by")
+            if is_email_admin:
+                sent_by = email_admin_name
+                st.markdown(
+                    f"<div class='admin-name-display'><span class='admin-name-display-label'>Transferred By</span>"
+                    f"<strong>{escape(sent_by)}</strong></div>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                if not sent_by_options:
+                    sent_by_options = ["-- No Cash Collectors Available --"]
+                sent_by = st.selectbox("Transferred By", sent_by_options, key="settlement_sent_by")
             comments = st.text_area("Comments", key="settlement_comments")
             if st.button("Save Reimbursement", key="add_settlement_btn"):
-                if sent_by == "-- No Cash Collectors Available --":
+                if is_email_admin and not sent_by:
+                    st.warning("Your login name is unavailable. Please sign in again.")
+                elif sent_by == "-- No Cash Collectors Available --":
                     st.warning("Add a cash payment with a collector before adding a settlement.")
                 else:
                     st.session_state["settlement_submission_in_progress"] = True
@@ -788,7 +833,15 @@ def expenses_tab():
             sub_category = expense_form.text_input("Sub Category", placeholder="e.g. Decoration, Snacks", key="add_expense_subcat")
             amount = expense_form.number_input("Amount", format="%.2f", key="add_expense_amount")
             date = expense_form.date_input("Date", value=datetime.date.today(), key="add_expense_date")
-            spent_by = expense_form.selectbox("Spent By", spent_by_options, key="add_expense_spentby")
+            if is_email_admin:
+                spent_by = email_admin_name
+                expense_form.markdown(
+                    f"<div class='admin-name-display'><span class='admin-name-display-label'>Spent By</span>"
+                    f"<strong>{escape(spent_by)}</strong></div>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                spent_by = expense_form.selectbox("Spent By", spent_by_options, key="add_expense_spentby")
             comments = expense_form.text_area("Comments", value="", placeholder="Any additional details", key="add_expense_comments")
             if expense_form.form_submit_button("Add Expense", disabled=expense_submit_disabled, type="primary"):
                 st.session_state["expense_submission_in_progress"] = True
